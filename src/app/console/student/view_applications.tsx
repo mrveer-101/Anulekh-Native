@@ -1,0 +1,407 @@
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { supabase } from '../../core/supabase';
+
+interface Application {
+  id: number;
+  request_id: number;
+  scribe_id: string;
+  scribe_name: string;
+  status: string;
+  created_at: string;
+  profile?: {
+    full_name: string;
+    phone: string;
+    education_level: string;
+    languages: string[];
+    location: string;
+    occupation: string;
+  };
+}
+
+export default function ViewApplicationsPage() {
+  const params = useLocalSearchParams<{ id: string }>();
+  
+  const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState<number | null>(null);
+  const [exam, setExam] = useState<any>(null);
+  const [applications, setApplications] = useState<Application[]>([]);
+
+  // Custom Modal States
+  const [confirmModalVisible, setConfirmModalVisible] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [actionType, setActionType] = useState<'accept' | 'reject' | null>(null);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+
+  useEffect(() => {
+    fetchApplications();
+  }, [params.id]);
+
+  const fetchApplications = async () => {
+    try {
+      // 1. Fetch Exam details
+      const { data: examData } = await supabase
+        .from('exam_requests')
+        .select('*')
+        .eq('id', params.id)
+        .single();
+      
+      setExam(examData);
+
+      if (examData) {
+        // 2. Fetch Scribe Applications for this exam
+        const { data: apps, error } = await supabase
+          .from('scribe_applications')
+          .select('*')
+          .eq('request_id', examData.id)
+          .eq('status', 'pending');
+
+        if (error) throw error;
+
+        // 3. For each application, fetch the Scribe's full profile
+        const enrichedApps = await Promise.all(
+          (apps || []).map(async (app: any) => {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', app.scribe_id)
+              .single();
+            
+            return {
+              ...app,
+              profile: profile || undefined
+            };
+          })
+        );
+
+        setApplications(enrichedApps);
+      }
+    } catch (err) {
+      console.error('Error fetching applications:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const triggerAccept = (app: Application) => {
+    setSelectedApp(app);
+    setActionType('accept');
+    setConfirmModalVisible(true);
+  };
+
+  const triggerReject = (app: Application) => {
+    setSelectedApp(app);
+    setActionType('reject');
+    setConfirmModalVisible(true);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!selectedApp || !exam || !actionType) return;
+    
+    setConfirmModalVisible(false);
+    setActioning(selectedApp.id);
+
+    try {
+      if (actionType === 'accept') {
+        // 1. Update this application to 'accepted'
+        await supabase
+          .from('scribe_applications')
+          .update({ status: 'accepted' })
+          .eq('id', selectedApp.id);
+
+        // 2. Update all other applications for this request to 'rejected'
+        await supabase
+          .from('scribe_applications')
+          .update({ status: 'rejected' })
+          .eq('request_id', exam.id)
+          .neq('id', selectedApp.id);
+
+        // 3. Update exam request to 'matched' and assign the scribe_id
+        const { error } = await supabase
+          .from('exam_requests')
+          .update({ 
+            status: 'matched',
+            scribe_id: selectedApp.scribe_id
+          })
+          .eq('id', exam.id);
+
+        if (error) throw error;
+
+        // 4. Create Notification for Accepted Scribe
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: selectedApp.scribe_id,
+            title: 'Application Accepted! 🎉',
+            message: `Your application to scribe for "${exam.subject}" has been accepted. You are now confirmed!`,
+            is_read: 0,
+            created_at: new Date().toISOString()
+          });
+
+        // 5. Create Notification for Student
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: exam.student_id,
+            title: 'Scribe Confirmed',
+            message: `You have confirmed ${selectedApp.scribe_name} as your scribe for "${exam.subject}".`,
+            is_read: 0,
+            created_at: new Date().toISOString()
+          });
+
+        // 6. Create Notifications for Rejected Scribes
+        const otherApps = applications.filter(app => app.id !== selectedApp.id);
+        for (const otherApp of otherApps) {
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: otherApp.scribe_id,
+              title: 'Application Update',
+              message: `Your application to scribe for "${exam.subject}" was not accepted.`,
+              is_read: 0,
+              created_at: new Date().toISOString()
+            });
+        }
+
+        // Show Success Overlay and route back
+        setShowSuccessOverlay(true);
+        setTimeout(() => {
+          setShowSuccessOverlay(false);
+          if (router.canGoBack()) {
+            router.back();
+          } else {
+            router.replace('/console/student' as any);
+          }
+        }, 2500);
+
+      } else {
+        // Reject Action
+        const { error } = await supabase
+          .from('scribe_applications')
+          .update({ status: 'rejected' })
+          .eq('id', selectedApp.id);
+
+        if (error) throw error;
+
+        // Create Notification for Rejected Scribe
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: selectedApp.scribe_id,
+            title: 'Application Update',
+            message: `Your application to scribe for "${exam.subject}" was not accepted.`,
+            is_read: 0,
+            created_at: new Date().toISOString()
+          });
+
+        fetchApplications();
+      }
+    } catch (err: any) {
+      console.error('Action failed:', err);
+    } finally {
+      setActioning(null);
+      setSelectedApp(null);
+      setActionType(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-white items-center justify-center">
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView className="flex-1 bg-slate-50">
+      <StatusBar style="dark" />
+      
+      {/* Header */}
+      <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
+        <TouchableOpacity 
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/console/student' as any);
+            }
+          }} 
+          className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
+        >
+          <Feather name="arrow-left" size={24} color="#334155" />
+        </TouchableOpacity>
+        <View className="flex-1">
+          <Text className="text-xl font-black text-slate-800" numberOfLines={1}>Scribe Applications</Text>
+          <Text className="text-[10px] font-semibold text-slate-400 mt-0.5">{exam?.subject || 'Exam'}</Text>
+        </View>
+      </View>
+
+      <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
+        {applications.length === 0 ? (
+          <View className="bg-white p-8 rounded-3xl border border-slate-100 items-center justify-center mt-10">
+            <Feather name="users" size={48} color="#94a3b8" />
+            <Text className="text-slate-800 text-base font-bold mt-4">No Applicants Yet</Text>
+            <Text className="text-slate-400 text-xs mt-1 text-center">
+              Scribes will appear here once they apply to assist you with this exam.
+            </Text>
+          </View>
+        ) : (
+          applications.map((app) => {
+            const isWorking = actioning === app.id;
+            return (
+              <View key={app.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-4">
+                
+                {/* Scribe Header */}
+                <View className="flex-row items-center justify-between border-b border-slate-50 pb-3 mb-3">
+                  <View className="flex-row items-center">
+                    <View className="w-9 h-9 rounded-full bg-blue-100 items-center justify-center mr-3">
+                      <Text className="text-blue-600 font-bold text-sm">
+                        {app.scribe_name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View>
+                      <Text className="text-sm font-bold text-slate-800">{app.scribe_name}</Text>
+                      <Text className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                        {app.profile?.occupation || 'Volunteer Scribe'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Scribe Profile Details */}
+                <View className="space-y-2 mb-4">
+                  <View className="flex-row items-center">
+                    <Feather name="book-open" size={12} color="#64748b" className="mr-2" />
+                    <Text className="text-slate-600 text-xs">
+                      <Text className="font-semibold text-slate-700">Education: </Text>
+                      {app.profile?.education_level || 'N/A'}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center">
+                    <Feather name="globe" size={12} color="#64748b" className="mr-2" />
+                    <Text className="text-slate-600 text-xs">
+                      <Text className="font-semibold text-slate-755 font-bold">Languages: </Text>
+                      {app.profile?.languages?.join(', ') || 'N/A'}
+                    </Text>
+                  </View>
+
+                  <View className="flex-row items-center">
+                    <Feather name="map-pin" size={12} color="#64748b" className="mr-2" />
+                    <Text className="text-slate-600 text-xs">
+                      <Text className="font-semibold text-slate-755 font-bold">Location: </Text>
+                      {app.profile?.location || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Action Buttons */}
+                <View className="flex-row space-x-3 pt-3 border-t border-slate-50">
+                  <TouchableOpacity
+                    onPress={() => triggerReject(app)}
+                    disabled={isWorking}
+                    className="flex-1 bg-red-50 border border-red-100 active:bg-red-100 py-2.5 rounded-xl items-center justify-center"
+                  >
+                    <Text className="text-red-600 font-bold text-xs">Reject</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => triggerAccept(app)}
+                    disabled={isWorking}
+                    className="flex-1 bg-blue-500 active:bg-blue-600 py-2.5 rounded-xl items-center justify-center shadow-md shadow-blue-500/20"
+                  >
+                    {isWorking ? (
+                      <ActivityIndicator color="white" size="small" />
+                    ) : (
+                      <Text className="text-white font-bold text-xs">Accept</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* 1. CUSTOM CONFIRMATION MODAL */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={confirmModalVisible}
+        onRequestClose={() => setConfirmModalVisible(false)}
+      >
+        <View className="flex-1 bg-slate-950/60 justify-center items-center px-6">
+          <View className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100">
+            <View className="items-center mb-4">
+              <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
+                actionType === 'accept' ? 'bg-blue-50' : 'bg-red-550 bg-red-50'
+              }`}>
+                <Feather 
+                  name={actionType === 'accept' ? 'check-circle' : 'alert-triangle'} 
+                  size={24} 
+                  color={actionType === 'accept' ? '#2563eb' : '#dc2626'} 
+                />
+              </View>
+              <Text className="text-lg font-black text-slate-900 text-center">
+                {actionType === 'accept' ? 'Accept Scribe?' : 'Reject Scribe?'}
+              </Text>
+              <Text className="text-xs text-slate-500 text-center mt-2 leading-relaxed px-2">
+                {actionType === 'accept' 
+                  ? `Are you sure you want to confirm ${selectedApp?.scribe_name} to scribe for your "${exam?.subject}" exam?`
+                  : `Are you sure you want to reject ${selectedApp?.scribe_name}'s application?`
+                }
+              </Text>
+            </View>
+
+            <View className="flex-row space-x-3.5 mt-2">
+              <TouchableOpacity 
+                onPress={() => setConfirmModalVisible(false)}
+                className="flex-1 bg-slate-100 border border-slate-200 py-2.5 rounded-xl items-center justify-center"
+              >
+                <Text className="text-slate-600 font-bold text-xs">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleConfirmAction}
+                className={`flex-1 py-2.5 rounded-xl items-center justify-center shadow-md ${
+                  actionType === 'accept' ? 'bg-blue-500 shadow-blue-500/20' : 'bg-red-600 shadow-red-600/20'
+                }`}
+              >
+                <Text className="text-white font-bold text-xs">Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. MATCHED SUCCESS OVERLAY */}
+      {showSuccessOverlay && (
+        <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
+          <View className="bg-white/95 p-8 rounded-3xl items-center border border-slate-200/50 shadow-2xl w-80">
+            {/* Pulsing Success Icon */}
+            <View className="w-20 h-20 bg-blue-50 rounded-full items-center justify-center mb-5 border-2 border-blue-500 shadow-lg shadow-blue-500/20">
+              <Feather name="check" size={40} color="#2563eb" />
+            </View>
+            
+            <Text className="text-2xl font-black text-slate-900 text-center tracking-tight">Scribe Confirmed!</Text>
+            <Text className="text-xs font-semibold text-slate-500 text-center mt-2 px-2 leading-relaxed">
+              {selectedApp?.scribe_name} has been matched to your exam. You can now chat and coordinate with them.
+            </Text>
+            
+            {/* Loading Indicator */}
+            <View className="flex-row space-x-1.5 mt-6 items-center">
+              <ActivityIndicator size="small" color="#2563eb" className="mr-2" />
+              <Text className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Updating Dashboard...</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+    </SafeAreaView>
+  );
+}

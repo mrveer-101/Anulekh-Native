@@ -1,0 +1,649 @@
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { router } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
+import { supabase } from '../../core/supabase';
+
+const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const EDUCATION_LEVELS = ['Secondary School (10th)', 'Higher Secondary (12th)', 'Undergraduate (Bachelor)', 'Postgraduate (Master)'];
+const LANGUAGES = ['English', 'Hindi', 'Gujarati'];
+
+export default function CompleteProfileForm() {
+  const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  
+  // Form State
+  const [officialName, setOfficialName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [dob, setDob] = useState('');
+  const [occupation, setOccupation] = useState('');
+  const [location, setLocation] = useState('');
+  const [aadharNumber, setAadharNumber] = useState('');
+  const [educationLevel, setEducationLevel] = useState('Higher Secondary (12th)');
+  const [isEduDropdownOpen, setIsEduDropdownOpen] = useState(false);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [aadharImage, setAadharImage] = useState<string | null>(null);
+  
+  const [urgentCalls, setUrgentCalls] = useState(false);
+  const [firstTime, setFirstTime] = useState(true);
+
+  // Calendar Picker State
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(2003); // Default start year for volunteers
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
+
+  const handleSimulateUpload = () => {
+    setUploadedFile('highest_qualification_marksheet.pdf');
+    Alert.alert('Upload Simulated', 'Your certificate "highest_qualification_marksheet.pdf" has been prepared for upload.');
+  };
+
+  const handleSimulateAadharUpload = () => {
+    setAadharImage('aadhar_card_copy.jpg');
+    Alert.alert('Upload Simulated', 'Your Aadhar Card image "aadhar_card_copy.jpg" has been prepared for upload.');
+  };
+
+  const toggleLanguage = (lang: string) => {
+    if (selectedLanguages.includes(lang)) {
+      setSelectedLanguages(selectedLanguages.filter(l => l !== lang));
+    } else {
+      setSelectedLanguages([...selectedLanguages, lang]);
+    }
+  };
+
+  // Calendar Helper functions
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    return new Date(year, month, 1).getDay();
+  };
+
+  const handleSelectDay = (day: number) => {
+    const formattedDay = day < 10 ? `0${day}` : day;
+    const formattedMonth = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
+    setDob(`${formattedDay}/${formattedMonth}/${calendarYear}`);
+    setShowCalendar(false);
+  };
+
+  const changeMonth = (direction: 'next' | 'prev') => {
+    if (direction === 'prev') {
+      if (calendarMonth === 0) {
+        setCalendarMonth(11);
+        setCalendarYear(calendarYear - 1);
+      } else {
+        setCalendarMonth(calendarMonth - 1);
+      }
+    } else {
+      if (calendarMonth === 11) {
+        setCalendarMonth(0);
+        setCalendarYear(calendarYear + 1);
+      } else {
+        setCalendarMonth(calendarMonth + 1);
+      }
+    }
+  };
+
+  const renderCalendarDays = () => {
+    const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
+    const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
+    const totalSlots = [];
+
+    // Empty slots for days before the 1st
+    for (let i = 0; i < firstDay; i++) {
+      totalSlots.push(<View key={`empty-${i}`} className="w-[14%] h-9 items-center justify-center" />);
+    }
+
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      totalSlots.push(
+        <TouchableOpacity 
+          key={`day-${day}`}
+          onPress={() => handleSelectDay(day)}
+          className="w-[14%] h-9 items-center justify-center rounded-full active:bg-emerald-100"
+        >
+          <Text className="text-slate-800 text-xs font-semibold">{day}</Text>
+        </TouchableOpacity>
+      );
+    }
+
+    return totalSlots;
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!officialName.trim() || !dob.trim() || !occupation.trim() || !location.trim() || !phone.trim()) {
+        Alert.alert('Missing Fields', 'Please enter your Name, Phone Number, Date of Birth, Occupation, and Location.');
+        return;
+      }
+    } else if (currentStep === 2) {
+      if (!aadharNumber.trim() || !aadharImage || !educationLevel || !uploadedFile) {
+        Alert.alert('Missing Fields', 'Please enter your Aadhar number, upload Aadhar image, select your education, and upload qualification proof.');
+        return;
+      }
+      if (aadharNumber.trim().length !== 12 || isNaN(Number(aadharNumber.trim()))) {
+        Alert.alert('Invalid ID', 'Please enter a valid 12-digit Aadhar Card number.');
+        return;
+      }
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
+  const handleSubmit = async () => {
+    if (selectedLanguages.length === 0) {
+      Alert.alert('Missing Fields', 'Please select at least one language you can scribe in.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session found.");
+
+      // Update profile in local SQLite database
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          official_name: officialName.trim(),
+          phone: phone.trim(),
+          aadhar_number: aadharNumber.trim(),
+          dob: dob.trim(),
+          occupation: occupation.trim(),
+          location: location.trim(),
+          urgent_calls: urgentCalls ? 'yes' : 'no',
+          first_time: firstTime ? 'yes' : 'no',
+          education_level: educationLevel,
+          certification_proof: uploadedFile,
+          aadhar_image_proof: aadharImage,
+          languages: selectedLanguages,
+          verification_status: 'approved' // Set directly to approved for local testing/demo
+        })
+        .eq('id', session.user.id);
+
+      if (error) throw error;
+
+      // Show the 100% completion success overlay
+      setShowSuccessOverlay(true);
+      
+      // Auto-redirect after 3 seconds
+      setTimeout(() => {
+        setShowSuccessOverlay(false);
+        router.replace('/console/scribe' as any);
+      }, 3000);
+
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStepTitle = () => {
+    switch (currentStep) {
+      case 1: return 'Personal Details';
+      case 2: return 'Identity & Proofs';
+      case 3: return 'Preferences';
+      default: return '';
+    }
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-slate-50">
+      <StatusBar style="dark" />
+      
+      {/* Header */}
+      <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
+        <TouchableOpacity 
+          onPress={() => {
+            if (currentStep > 1) {
+              setCurrentStep(currentStep - 1);
+            } else {
+              router.replace('/console/scribe' as any);
+            }
+          }} 
+          className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
+        >
+          <Feather name="arrow-left" size={24} color="#334155" />
+        </TouchableOpacity>
+        <Text className="text-xl font-black text-slate-800">Verify Scribe Profile</Text>
+      </View>
+
+      <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
+        <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          
+          {/* Progress Indicator */}
+          <View className="mb-5">
+            <View className="flex-row justify-between items-center mb-1.5">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step {currentStep} of 3</Text>
+              <Text className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">{getStepTitle()}</Text>
+            </View>
+            <View className="h-1 bg-slate-100 rounded-full w-full">
+              <View 
+                className="h-1 bg-emerald-500 rounded-full" 
+                style={{ width: `${(currentStep / 3) * 100}%` }} 
+              />
+            </View>
+          </View>
+
+          {/* STEP 1: PERSONAL DETAILS */}
+          {currentStep === 1 && (
+            <View className="space-y-4">
+              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Personal Information</Text>
+              
+              <View className="space-y-3">
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Name (as per ID) *</Text>
+                  <TextInput 
+                    value={officialName}
+                    onChangeText={setOfficialName}
+                    placeholder="e.g. Rahul Ramesh Sharma"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Phone Number *</Text>
+                  <TextInput 
+                    value={phone}
+                    onChangeText={setPhone}
+                    keyboardType="phone-pad"
+                    placeholder="Enter 10-digit Phone Number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </View>
+
+                {/* DOB with Calendar Trigger */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Date of Birth *</Text>
+                  <TouchableOpacity 
+                    onPress={() => setShowCalendar(true)}
+                    activeOpacity={0.8}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-emerald-500"
+                  >
+                    <Text className={`text-sm ${dob ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                      {dob || 'DD/MM/YYYY'}
+                    </Text>
+                    <Feather name="calendar" size={16} color="#059669" />
+                  </TouchableOpacity>
+                </View>
+
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Occupation *</Text>
+                  <TextInput 
+                    value={occupation}
+                    onChangeText={setOccupation}
+                    placeholder="e.g. Student, Software Engineer"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </View>
+
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Location (City / Area) *</Text>
+                  <TextInput 
+                    value={location}
+                    onChangeText={setLocation}
+                    placeholder="e.g. Andheri, Mumbai"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* STEP 2: IDENTITY & EDUCATION PROOFS */}
+          {currentStep === 2 && (
+            <View className="space-y-4">
+              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Verification Documents</Text>
+              
+              <View className="space-y-3.5">
+                {/* Aadhar Input */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Aadhar Card Number *</Text>
+                  <TextInput 
+                    value={aadharNumber}
+                    onChangeText={setAadharNumber}
+                    keyboardType="numeric"
+                    maxLength={12}
+                    placeholder="12-digit Aadhar Number"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                  />
+                </View>
+
+                {/* Aadhar Upload */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image *</Text>
+                  <TouchableOpacity 
+                    onPress={handleSimulateAadharUpload}
+                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
+                      aadharImage ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    {aadharImage ? (
+                      <View className="items-center">
+                        <Feather name="image" size={24} color="#059669" />
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{aadharImage}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change image</Text>
+                      </View>
+                    ) : (
+                      <View className="items-center">
+                        <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Aadhar Card Image</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Education Dropdown */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Highest Education Level *</Text>
+                  <View className="w-full">
+                    <TouchableOpacity 
+                      onPress={() => setIsEduDropdownOpen(!isEduDropdownOpen)}
+                      className={`w-full bg-slate-50 border border-slate-200 px-3 py-2.5 flex-row items-center justify-between transition-all ${
+                        isEduDropdownOpen ? 'rounded-t-xl border-b-0' : 'rounded-xl'
+                      }`}
+                    >
+                      <Text className="text-slate-800 text-sm font-semibold">{educationLevel}</Text>
+                      <Feather name={isEduDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+                    </TouchableOpacity>
+
+                    {isEduDropdownOpen && (
+                      <View className="w-full bg-white border border-slate-200 rounded-b-xl overflow-hidden shadow-sm">
+                        {EDUCATION_LEVELS.map((level, index) => (
+                          <TouchableOpacity
+                            key={level}
+                            onPress={() => {
+                              setEducationLevel(level);
+                              setIsEduDropdownOpen(false);
+                            }}
+                            className={`px-3 py-2.5 border-b border-slate-100 ${
+                              educationLevel === level ? 'bg-emerald-50' : 'bg-white active:bg-slate-50'
+                            } ${index === EDUCATION_LEVELS.length - 1 ? 'border-b-0' : ''}`}
+                          >
+                            <View className="flex-row items-center justify-between">
+                              <Text className={`text-sm font-semibold ${educationLevel === level ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                {level}
+                              </Text>
+                              {educationLevel === level && <Feather name="check" size={14} color="#059669" />}
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Certificate Upload */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Certificate Proof *</Text>
+                  <TouchableOpacity 
+                    onPress={handleSimulateUpload}
+                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
+                      uploadedFile ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    {uploadedFile ? (
+                      <View className="items-center">
+                        <Feather name="file-text" size={24} color="#059669" />
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{uploadedFile}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change file</Text>
+                      </View>
+                    ) : (
+                      <View className="items-center">
+                        <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Certificate File</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">PDF, PNG, or JPG up to 5MB</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* STEP 3: PREFERENCES & LANGUAGES */}
+          {currentStep === 3 && (
+            <View className="space-y-4">
+              {/* Languages */}
+              <View>
+                <Text className="text-xs font-bold text-slate-800 mb-2 uppercase tracking-wider">Communication</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">Preferred Languages to Scribe *</Text>
+                <View className="flex-row flex-wrap gap-1.5">
+                  {LANGUAGES.map((lang) => {
+                    const isSelected = selectedLanguages.includes(lang);
+                    return (
+                      <TouchableOpacity 
+                        key={lang}
+                        onPress={() => toggleLanguage(lang)}
+                        className={`px-3.5 py-1.5 rounded-full border flex-row items-center ${
+                          isSelected 
+                            ? 'bg-emerald-500 border-emerald-500 shadow-sm shadow-emerald-500/30' 
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <Text className={`font-semibold text-xs ${isSelected ? 'text-white' : 'text-slate-600'}`}>
+                          {lang}
+                        </Text>
+                        {isSelected && <Feather name="check" size={12} color="white" className="ml-1" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="h-px bg-slate-100 w-full my-1" />
+
+              {/* Preferences */}
+              <View>
+                <Text className="text-xs font-bold text-slate-800 mb-2 uppercase tracking-wider">Preferences & History</Text>
+                
+                <View className="space-y-3.5">
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-4">
+                      <Text className="text-xs font-semibold text-slate-800">Available for Urgent Calls?</Text>
+                      <Text className="text-slate-400 text-[9px] mt-0.5">Can we contact you for last-minute exam requests?</Text>
+                    </View>
+                    <View className="flex-row bg-slate-100 rounded-lg p-0.5">
+                      <TouchableOpacity 
+                        onPress={() => setUrgentCalls(true)}
+                        className={`px-3.5 py-1 rounded-md ${urgentCalls ? 'bg-emerald-500' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-bold ${urgentCalls ? 'text-white' : 'text-slate-600'}`}>Yes</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => setUrgentCalls(false)}
+                        className={`px-3.5 py-1 rounded-md ${!urgentCalls ? 'bg-slate-200' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-bold ${!urgentCalls ? 'text-slate-700' : 'text-slate-500'}`}>No</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View className="h-px bg-slate-50 w-full" />
+
+                  <View className="flex-row items-center justify-between">
+                    <View className="flex-1 pr-4">
+                      <Text className="text-xs font-semibold text-slate-800">First Time as Scribe?</Text>
+                      <Text className="text-slate-400 text-[9px] mt-0.5">Is this your first time volunteering as a scribe?</Text>
+                    </View>
+                    <View className="flex-row bg-slate-100 rounded-lg p-0.5">
+                      <TouchableOpacity 
+                        onPress={() => setFirstTime(true)}
+                        className={`px-3.5 py-1 rounded-md ${firstTime ? 'bg-emerald-500' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-bold ${firstTime ? 'text-white' : 'text-slate-600'}`}>Yes</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        onPress={() => setFirstTime(false)}
+                        className={`px-3.5 py-1 rounded-md ${!firstTime ? 'bg-slate-200' : ''}`}
+                      >
+                        <Text className={`text-[9px] font-bold ${!firstTime ? 'text-slate-700' : 'text-slate-500'}`}>No</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Bottom Navigation Buttons */}
+          <View className="flex-row gap-3 mt-6 pt-4 border-t border-slate-100">
+            {currentStep > 1 && (
+              <TouchableOpacity 
+                onPress={() => setCurrentStep(currentStep - 1)}
+                className="flex-1 bg-slate-100 py-2.5 rounded-xl items-center justify-center border border-slate-200"
+              >
+                <Text className="text-slate-700 font-bold text-sm">Back</Text>
+              </TouchableOpacity>
+            )}
+            
+            {currentStep < 3 ? (
+              <TouchableOpacity 
+                onPress={handleNextStep}
+                className="flex-1 bg-emerald-500 py-2.5 rounded-xl items-center justify-center shadow-md shadow-emerald-500/20"
+              >
+                <Text className="text-white font-bold text-sm">Next</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={handleSubmit}
+                disabled={loading}
+                className="flex-1 bg-emerald-500 py-2.5 rounded-xl items-center justify-center shadow-md shadow-emerald-500/30"
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text className="text-white font-bold text-sm">Submit Profile</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+        </View>
+      </ScrollView>
+
+      {/* CUSTOM CALENDAR MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showCalendar}
+        onRequestClose={() => setShowCalendar(false)}
+      >
+        <View className="flex-1 bg-slate-950/50 justify-center items-center px-6">
+          <View className="bg-white w-full max-w-sm rounded-3xl p-5 border border-slate-100 shadow-2xl">
+            
+            {/* Calendar Header */}
+            <View className="flex-row items-center justify-between mb-4">
+              <TouchableOpacity onPress={() => changeMonth('prev')} className="p-2 bg-slate-50 rounded-xl">
+                <Feather name="chevron-left" size={16} color="#334155" />
+              </TouchableOpacity>
+              
+              <View className="flex-row items-center">
+                {/* Month Name */}
+                <Text className="text-sm font-bold text-slate-800 mr-1.5">{MONTHS[calendarMonth]}</Text>
+                
+                {/* Year Dropdown Trigger */}
+                <TouchableOpacity 
+                  onPress={() => setShowYearDropdown(!showYearDropdown)}
+                  className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg flex-row items-center"
+                >
+                  <Text className="text-xs font-bold text-slate-700 mr-1">{calendarYear}</Text>
+                  <Feather name={showYearDropdown ? "chevron-up" : "chevron-down"} size={10} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity onPress={() => changeMonth('next')} className="p-2 bg-slate-50 rounded-xl">
+                <Feather name="chevron-right" size={16} color="#334155" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Year Selector Dropdown */}
+            {showYearDropdown ? (
+              <View className="h-48 mb-4 border border-slate-100 rounded-2xl overflow-hidden bg-slate-50">
+                <FlatList
+                  data={YEARS}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setCalendarYear(parseInt(item));
+                        setShowYearDropdown(false);
+                      }}
+                      className={`py-3 items-center border-b border-slate-100 ${
+                        calendarYear.toString() === item ? 'bg-emerald-50' : 'bg-transparent'
+                      }`}
+                    >
+                      <Text className={`text-xs font-bold ${calendarYear.toString() === item ? 'text-emerald-600' : 'text-slate-700'}`}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                />
+              </View>
+            ) : (
+              <>
+                {/* Weekdays Header */}
+                <View className="flex-row flex-wrap mb-2">
+                  {WEEKDAYS.map((day) => (
+                    <View key={day} className="w-[14.28%] items-center py-1">
+                      <Text className="text-[10px] font-bold text-slate-400 uppercase">{day}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Calendar Days Grid */}
+                <View className="flex-row flex-wrap mb-4">
+                  {renderCalendarDays()}
+                </View>
+              </>
+            )}
+
+            {/* Cancel Button */}
+            <TouchableOpacity 
+              onPress={() => {
+                setShowCalendar(false);
+                setShowYearDropdown(false);
+              }}
+              className="w-full bg-slate-100 py-3 rounded-2xl items-center justify-center"
+            >
+              <Text className="text-slate-600 font-bold text-xs">Cancel</Text>
+            </TouchableOpacity>
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* 100% PROFILE COMPLETION SUCCESS OVERLAY */}
+      {showSuccessOverlay && (
+        <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
+          <View className="bg-white/95 p-8 rounded-3xl items-center border border-slate-200/50 shadow-2xl w-80">
+            {/* Pulsing Success Icon */}
+            <View className="w-20 h-20 bg-emerald-50 rounded-full items-center justify-center mb-5 border-2 border-emerald-500 shadow-lg shadow-emerald-500/20">
+              <Feather name="check" size={40} color="#059669" />
+            </View>
+            
+            <Text className="text-2xl font-black text-slate-900 text-center tracking-tight">Profile Completed 100%</Text>
+            <Text className="text-xs font-semibold text-slate-500 text-center mt-2 px-2 leading-relaxed">
+              Your volunteer scribe profile has been successfully updated and submitted for verification!
+            </Text>
+            
+            {/* Loading Indicator */}
+            <View className="flex-row space-x-1.5 mt-6 items-center">
+              <ActivityIndicator size="small" color="#059669" className="mr-2" />
+              <Text className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Entering Dashboard...</Text>
+            </View>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}

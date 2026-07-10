@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Web: prevent overscroll / body-level scroll ── */
+html,
+body,
+#root {
+  height: 100%;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+:root {
+  /* Typography */
+  --font-display: Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Light glassmorphic palette */
+  --color-bg:         #f0f4ff;    /* page background — soft blue-white */
+  --color-bg-green:   #f0fdf4;    /* scribe page background — soft green-white */
+  --color-surface:    rgba(255,255,255,0.82);   /* frosted glass surface */
+  --color-surface-sm: rgba(255,255,255,0.72);   /* lighter glass */
+  --color-border:     rgba(0,0,0,0.07);
+
+  /* Primary — Blue */
+  --color-brand:     #2563eb;
+  --color-brand-bg:  rgba(37,99,235,0.09);
+  --color-brand-bd:  rgba(37,99,235,0.22);
+
+  /* Supporting — Green */
+  --color-green:     #16a34a;
+  --color-green-bg:  rgba(22,163,74,0.09);
+  --color-green-bd:  rgba(22,163,74,0.22);
+
+  /* Accent — Orange */
+  --color-orange:    #ea580c;
+  --color-orange-bg: rgba(234,88,12,0.08);
+
+  /* Text */
+  --color-text:      #0f172a;
+  --color-muted:     #64748b;
+  --color-placeholder: #94a3b8;
+}

@@ -1,0 +1,78 @@
+import React, { useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Animated,
+  Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Redirect, router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './core/supabase';
+
+const { width, height } = Dimensions.get('window');
+
+/**
+ * App Entry Point
+ * 
+ * Checks if the user has an active session. If yes, routes to their dashboard.
+ * If no session, routes to the Landing screen.
+ */
+export default function AppEntry() {
+  const [checked, setChecked] = React.useState(false);
+  const [destination, setDestination] = React.useState<string | null>(null);
+
+  useEffect(() => {
+    checkSession();
+  }, []);
+
+  const checkSession = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile?.role === 'scribe') {
+          setDestination('/console/scribe');
+        } else {
+          setDestination('/console/student');
+        }
+      } else {
+        setDestination('/landing');
+      }
+    } catch (_) {
+      setDestination('/landing');
+    } finally {
+      setChecked(true);
+    }
+  };
+
+  if (!checked) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f0f4ff', alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar style="dark" />
+        <View style={{
+          width: 72, height: 72, borderRadius: 22,
+          backgroundColor: 'rgba(37,99,235,0.1)',
+          borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
+          alignItems: 'center', justifyContent: 'center',
+          marginBottom: 14,
+          shadowColor: '#2563eb', shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2, shadowRadius: 20, elevation: 8,
+        }}>
+          <Text style={{ fontSize: 34, color: '#2563eb', fontWeight: '900' }}>अ</Text>
+        </View>
+        <Text style={{ fontSize: 22, color: '#0f172a', fontWeight: '800', letterSpacing: -0.5 }}>Anulekh</Text>
+        <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>अनुलेख</Text>
+      </View>
+    );
+  }
+
+  return <Redirect href={destination as any} />;
+}
