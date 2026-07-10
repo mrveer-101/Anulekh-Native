@@ -1,98 +1,100 @@
-# Anulekh - Sharing & Testing Guide
+# Anulekh - Sharing & Testing Guide (FastAPI + Supabase PostgreSQL)
 
-This guide explains how to share the **Anulekh** application with others for testing, coordination, and review. Since the app consists of a **React Native (Expo) Frontend** and a **Node.js + SQLite Backend**, you can choose from three different sharing methods depending on your needs.
+This guide explains how to package, host, and test the **Anulekh** application. The project is split into two directories:
+1. **`Anulekh Backend`**: FastAPI backend server supporting SQLite (locally) and Supabase PostgreSQL (remotely).
+2. **`Native-Mobile`**: Expo (React Native) mobile/web frontend.
 
 ---
 
-## Option 1: Share the Project Folder (For Local Developers)
-If your friend or reviewer has Node.js installed on their machine, they can run the application locally.
+## 🛠️ Step 1: Set Up your Supabase Database
+1. Go to [Supabase.com](https://supabase.com) and sign up for a free account.
+2. Create a new project named **Anulekh**.
+3. Under **Project Settings** -> **Database**, copy your **URI Connection String** (select the Transaction or Session pooler, typically starts with `postgresql://...`). Make sure to replace `[YOUR-PASSWORD]` with your actual project database password.
 
-### Steps:
-1. **Zip the Project**: Compress the `Anulekh` project folder.
-   * *Note: Be sure to **exclude** the `node_modules` and `.expo` folders to keep the ZIP file small (under 5MB).*
-2. **Include the Database**: You can include the `database.sqlite` file in the root. This ensures your friend already has the pre-configured test profiles:
-   * **Student Account**: `Cloud` (Aadhar Verified)
-   * **Scribe Account**: `Aditya` (Auto-Approved)
-3. **Running the App**:
-   Your friend needs to unzip the folder, open a terminal in the directory, and run:
+---
+
+## 🚀 Step 2: Deploy the FastAPI Backend to Render (Free)
+1. Push the `Anulekh Backend` folder to your GitHub repository.
+2. Sign up/log in to [Render.com](https://render.com) (free).
+3. Click **New +** -> **Web Service**.
+4. Connect your GitHub repository.
+5. Configure the service settings:
+   * **Language**: `Python`
+   * **Build Command**: `pip install -r requirements.txt`
+   * **Start Command**: `uvicorn main:app --host 0.0.0.0 --port 10000`
+6. Add the Database Environment Variable:
+   * Under **Environment**, click **Add Environment Variable**.
+   * **Key**: `DATABASE_URL`
+   * **Value**: Your Supabase PostgreSQL Connection String (copied in Step 1).
+7. Deploy the service. Once built, Render will give you a public URL (e.g. `https://anulekh-backend.onrender.com`).
+   * *Note: Render automatically runs `Base.metadata.create_all` on startup, creating all tables directly on Supabase.*
+
+---
+
+## 📱 Step 3: Configure the Frontend for your Tester
+When sending the project to your friend:
+1. **Create the Environment File**:
+   In the `Native-Mobile` directory, create a file named `.env` and insert your public backend API URL:
+   ```env
+   EXPO_PUBLIC_API_URL=https://anulekh-backend.onrender.com
+   ```
+2. **Package the Project**:
+   Zip the entire parent directory containing `Native-Mobile` and `Anulekh Backend`.
+   * *Important: To keep the zip file tiny (under 5MB), make sure to **exclude** the `node_modules`, `.expo`, `dist`, and python `venv` / `__pycache__` folders.*
+
+---
+
+## 🧑‍💻 How your Friend Runs the Application
+When your friend receives the zip file and extracts it:
+
+### 1. Run the Frontend (Locally)
+They only need to run the frontend since the backend and database are hosted online:
+1. Open a terminal in the `Native-Mobile` directory.
+2. Run the following commands:
    ```bash
    # Install dependencies
    npm install
 
-   # Start the SQLite Backend API Server
-   node server.js
-
-   # Start the Expo Web/Mobile Frontend
+   # Start the Expo web/mobile client
    npm run web
    ```
+3. The app will open in their browser at `http://localhost:8081` and automatically connect to your hosted Supabase/Render server over the internet.
 
----
-
-## Option 2: Expose via Ngrok (Instant Public Testing – No Install Required!)
-If you want your friend to test the app **instantly on their own phone or computer** without them needing to install Node.js or download any code, you can tunnel your local servers to the internet.
-
-### Steps:
-1. **Download Ngrok**: Download and install [ngrok](https://ngrok.com/) on your machine.
-2. **Expose the Backend (Port 3000)**:
-   Open a terminal and run:
+### 2. Run the Backend & DB (For Local Override)
+If they want to run the FastAPI backend locally using SQLite:
+1. Open a terminal in the `Anulekh Backend` directory.
+2. Run the following commands:
    ```bash
-   ngrok http 3000
+   # Create and activate a python virtual environment
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On macOS/Linux:
+   source venv/bin/activate
+
+   # Install requirements
+   pip install -r requirements.txt
+
+   # Start local FastAPI server
+   uvicorn main:app --reload --port 3000
    ```
-   Ngrok will generate a public URL (e.g., `https://1234-abcd.ngrok-free.app`).
-3. **Update Frontend API URL**:
-   In your project, open `src/lib/supabase.ts` and change the `API_URL` variable to your new ngrok URL:
-   ```typescript
-   // src/lib/supabase.ts
-   const API_URL = 'https://1234-abcd.ngrok-free.app';
+3. In `Native-Mobile/.env`, change the variable to point to localhost:
+   ```env
+   EXPO_PUBLIC_API_URL=http://localhost:3000
    ```
-4. **Expose the Frontend (Port 8081)**:
-   Open another terminal and start Expo with the tunnel flag:
-   ```bash
-   npx expo start --tunnel
-   ```
-5. **Share the Links**:
-   * **For Web Testing**: Share the tunnel web link generated by Expo. Your friend can open this in any browser.
-   * **For Mobile Testing**: Your friend can download the free **Expo Go** app on their phone (iOS or Android) and scan the QR code displayed in your terminal.
-
-Both of you can now interact, register accounts, apply for scribe requests, and chat in real-time across different devices!
-
----
-
-## Option 3: Permanent Online Hosting (Vercel + Render)
-To make the application permanently accessible online so anyone can access it at any time.
-
-### Steps:
-1. **Deploy the Backend to Render (Free)**:
-   * Push your project (including `server.js` and `database.sqlite`) to a GitHub repository.
-   * Create a free account on [Render.com](https://render.com/).
-   * Create a new **Web Service**, connect your GitHub repository, set the environment to **Node**, and set the start command to `node server.js`.
-   * Render will provide a permanent public URL (e.g., `https://anulekh-backend.onrender.com`).
-2. **Connect the Frontend**:
-   * Update the `API_URL` in `src/lib/supabase.ts` to your new Render URL:
-     ```typescript
-     const API_URL = 'https://anulekh-backend.onrender.com';
-     ```
-3. **Build & Deploy the Frontend to Vercel (Free)**:
-   * Generate the static web build by running:
-     ```bash
-     npx expo export --platform web
-     ```
-     This will create a compiled production-ready website in the `dist` folder.
-   * Import the `dist` folder into [Vercel](https://vercel.com/) or [Netlify](https://www.netlify.com/) to host it online.
-   * You will receive a permanent public link (e.g., `https://anulekh.vercel.app`) that is ready for production testing.
 
 ---
 
 ## 📋 End-to-End Testing Checklist
-Once the app is running, you can guide your tester through the core user flow:
-1. **Register**: Create a new account (confirming no phone number is requested on sign-up).
-2. **Onboard**: Complete the 2-part onboarding profile (collecting DOB with the Calendar Picker, phone numbers, and Aadhar).
-3. **Approve**: Click the **"Auto Approve"** button on the home screen.
-4. **Request Scribe (Student)**: Click **+ Request** and fill out the form using the custom Date/Time picker, Map location picker, and Searchable Exam dropdown.
-5. **Apply (Scribe)**: Log in as a Scribe, view the student's request, inspect the **Admit Card**, and click **"Apply as Scribe"**.
-6. **Accept (Student)**: Log back in as the Student, tap the **round blue application badge**, and click **"Accept"** in the custom confirmation modal.
-7. **Coordinate (Both)**:
-   * Go to the **Plan** tab (available on both portals).
-   * Tap **Call** to view the phone number.
-   * Tap **Chat** to open the WhatsApp-style chat room and send messages.
-   * Tap **View Declaration** to inspect the printable authorization form.
+Once running, you and your friend can test the entire coordination flow in real-time:
+1. **Register**: Go to sign up and create a student account (e.g. `Cloud`) and a scribe account (e.g. `Aditya`).
+2. **Onboard**: Complete the student profile onboarding (Aadhar, DOB, phone numbers).
+3. **Approve**: Click **Auto-Approve** on the dashboard.
+4. **Request Scribe**: Create a new scribe request (e.g. "Physics-I") with exam dates and venue.
+5. **Apply**: Log in as a Scribe on another tab or browser, find the request under "Local Exam Invites", and apply.
+6. **Accept**: Log back in as a Student, click the blue pending applications count bubble next to your request, and click **Accept**.
+7. **Coordinate**:
+   * Switch to the **Plan** tab on both portals.
+   * Tap **Call** to see the phone number.
+   * Tap **Chat** to chat in real-time (using SQLite/PostgreSQL messaging).
+   * Tap **View Declaration** to see the digital signature and form.
