@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 
 interface Application {
   id: number;
@@ -62,7 +62,7 @@ export default function ViewApplicationsPage() {
 
         if (error) throw error;
 
-        // 3. For each application, fetch the Scribe's full profile
+        // 3. For each application, fetch the Scribe's full profile and calculate review rating
         const enrichedApps = await Promise.all(
           (apps || []).map(async (app: any) => {
             const { data: profile } = await supabase
@@ -71,9 +71,29 @@ export default function ViewApplicationsPage() {
               .eq('id', app.scribe_id)
               .single();
             
+            const { data: reviews } = await supabase
+              .from('scribe_reviews')
+              .select('*')
+              .eq('scribe_id', app.scribe_id);
+
+            let finalRating = 0;
+            if (reviews && reviews.length > 0) {
+              let sumExamAverages = 0;
+              reviews.forEach(r => {
+                const punct = r.rating_punctuality || 0;
+                const comm = r.rating_communication || 0;
+                const speed = r.rating_speed || 0;
+                const behavior = r.rating_behavior || 0;
+                const overall = r.rating_overall || 0;
+                sumExamAverages += (punct + comm + speed + behavior + overall) / 5.0;
+              });
+              finalRating = sumExamAverages / reviews.length;
+            }
+
             return {
               ...app,
-              profile: profile || undefined
+              profile: profile || undefined,
+              rating: finalRating
             };
           })
         );
@@ -271,6 +291,14 @@ export default function ViewApplicationsPage() {
                       </Text>
                     </View>
                   </View>
+                  
+                  {/* Scribe Rating Badge */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef9c3', borderWidth: 1, borderColor: '#fef08a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 }}>
+                    <Feather name="star" size={11} color="#ca8a04" style={{ fill: '#ca8a04' }} />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#854d0e' }}>
+                      {app.rating && app.rating > 0 ? app.rating.toFixed(1) : 'New'}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Scribe Profile Details */}
@@ -287,7 +315,19 @@ export default function ViewApplicationsPage() {
                     <Feather name="globe" size={12} color="#64748b" className="mr-2" />
                     <Text className="text-slate-600 text-xs">
                       <Text className="font-semibold text-slate-755 font-bold">Languages: </Text>
-                      {app.profile?.languages?.join(', ') || 'N/A'}
+                      {(() => {
+                        const langs = app.profile?.languages;
+                        if (!langs) return 'N/A';
+                        if (Array.isArray(langs)) return langs.join(', ');
+                        if (typeof langs === 'string') {
+                          try {
+                            const parsed = JSON.parse(langs);
+                            if (Array.isArray(parsed)) return parsed.join(', ');
+                          } catch (_) {}
+                          return langs;
+                        }
+                        return 'N/A';
+                      })()}
                     </Text>
                   </View>
 

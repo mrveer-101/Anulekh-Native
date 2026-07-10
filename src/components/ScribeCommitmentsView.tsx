@@ -33,6 +33,7 @@ export default function ScribeCommitmentsView() {
   const [refreshing, setRefreshing] = useState(false);
   const [applications, setApplications] = useState<EnrichedApplication[]>([]);
   const [scribeProfile, setScribeProfile] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -68,6 +69,13 @@ export default function ScribeCommitmentsView() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch Scribe Reviews
+      const { data: reviewsData } = await supabase
+        .from('scribe_reviews')
+        .select('*')
+        .eq('scribe_id', session.user.id);
+      setReviews(reviewsData || []);
 
       // Enrich with Exam Details
       const enriched = await Promise.all(
@@ -115,11 +123,28 @@ export default function ScribeCommitmentsView() {
     );
   }
 
+  const StarDisplay = ({ rating }: { rating: number }) => {
+    return (
+      <View style={{ flexDirection: 'row', gap: 2 }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Feather 
+            key={star} 
+            name="star" 
+            size={12} 
+            color={star <= rating ? '#eab308' : '#cbd5e1'} 
+            style={{ fill: star <= rating ? '#eab308' : 'none' }} 
+          />
+        ))}
+      </View>
+    );
+  };
+
   const pendingApps = applications.filter(app => app.status === 'pending');
-  const confirmedApps = applications.filter(app => app.status === 'accepted');
+  const confirmedApps = applications.filter(app => app.status === 'accepted' && app.examDetails?.status === 'matched');
+  const completedApps = applications.filter(app => app.status === 'accepted' && app.examDetails?.status === 'completed');
   const rejectedApps = applications.filter(app => app.status === 'rejected');
 
-  const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected') => {
+  const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed') => {
     const exam = app.examDetails;
     if (!exam) return null;
 
@@ -133,12 +158,19 @@ export default function ScribeCommitmentsView() {
       badgeBorder = 'rgba(5,150,105,0.2)';
       badgeText = '#059669';
       statusLabel = t('status_matched');
+    } else if (type === 'completed') {
+      badgeBg = 'rgba(16,185,129,0.08)';
+      badgeBorder = 'rgba(16,185,129,0.2)';
+      badgeText = '#10b981';
+      statusLabel = 'Completed';
     } else if (type === 'rejected') {
       badgeBg = 'rgba(220,38,38,0.08)';
       badgeBorder = 'rgba(220,38,38,0.2)';
       badgeText = '#dc2626';
       statusLabel = t('status_cancelled');
     }
+
+    const review = reviews.find(r => r.request_id === app.request_id);
 
     return (
       <View key={app.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}>
@@ -215,6 +247,42 @@ export default function ScribeCommitmentsView() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* If Completed and Review exists, render Star Feedback */}
+        {type === 'completed' && review && (
+          <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Ratings</Text>
+            
+            <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Punctuality:</Text>
+                <StarDisplay rating={review.rating_punctuality} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Communication:</Text>
+                <StarDisplay rating={review.rating_communication} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Writing Speed:</Text>
+                <StarDisplay rating={review.rating_speed} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Politeness & Behavior:</Text>
+                <StarDisplay rating={review.rating_behavior} />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, marginTop: 2 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>Overall Rating:</Text>
+                <StarDisplay rating={review.rating_overall} />
+              </View>
+              {review.remark ? (
+                <View style={{ marginTop: 4, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 6 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Remark</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>"{review.remark}"</Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -252,7 +320,19 @@ export default function ScribeCommitmentsView() {
           )}
         </View>
 
-        {/* 3. SECTION: REJECTED APPLICATIONS */}
+        {/* 3. SECTION: COMPLETED EXAMS & REVIEWS */}
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>Completed Exams & Reviews</Text>
+          {completedApps.length === 0 ? (
+            <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>No completed exams yet.</Text>
+            </View>
+          ) : (
+            completedApps.map(app => renderCard(app, 'completed'))
+          )}
+        </View>
+
+        {/* 4. SECTION: REJECTED APPLICATIONS */}
         <View style={{ marginBottom: 20 }}>
           <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('rejected_applications')}</Text>
           {rejectedApps.length === 0 ? (

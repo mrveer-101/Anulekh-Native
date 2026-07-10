@@ -3,11 +3,11 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingVi
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { supabase } from '../../core/supabase';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { supabase } from '@/app/core/supabase';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { useLanguage } from '../../core/translation';
+import { useLanguage } from '@/app/core/translation';
 
 interface Message {
   id: number;
@@ -303,10 +303,11 @@ export default function ChatRoomScreen() {
   }
 
   const isStudent = profile?.role === 'student';
-  const themeColor = isStudent ? '#2563eb' : '#059669';
-  const headerBg = isStudent ? '#2563eb' : '#059669';
-  const bubbleBg = isStudent ? '#2563eb' : '#059669';
-  const bubbleBgLight = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(5,150,105,0.08)';
+  const themeColor = isStudent ? '#2481cc' : '#00a884'; // Telegram Blue / WhatsApp Green
+  const headerBg = isStudent ? '#2481cc' : '#00a884';
+  const bubbleBg = isStudent ? '#2481cc' : '#00a884';
+  const bubbleBgLight = isStudent ? 'rgba(36,129,204,0.08)' : 'rgba(0,168,132,0.08)';
+  const inputBarBg = isStudent ? '#e7ebf0' : '#efeae2'; // Telegram light blue-grey / WhatsApp beige
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -317,19 +318,19 @@ export default function ChatRoomScreen() {
   };
 
   const TABS = isStudent ? [
-    { id: 'home',     icon: 'home' as const,     label: 'Home'     },
-    { id: 'requests', icon: 'list' as const,     label: 'Requests' },
-    { id: 'plan',     icon: 'calendar' as const, label: 'Plan'     },
-    { id: 'settings', icon: 'user' as const,     label: 'Account'  },
+    { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home'     },
+    { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+    { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan'     },
+    { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account'  },
   ] : [
-    { id: 'home',        icon: 'home' as const,     label: 'Home'    },
-    { id: 'commitments', icon: 'list' as const,     label: 'Applied' },
-    { id: 'plan',        icon: 'calendar' as const, label: 'Plan'    },
-    { id: 'settings',    icon: 'user' as const,     label: 'Account' },
+    { id: 'home',        iconActive: 'home',          iconInactive: 'home',          label: 'Home'    },
+    { id: 'explore',     iconActive: 'search',        iconInactive: 'search',        label: 'Search'  },
+    { id: 'commitments', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Applied' },
+    { id: 'settings',    iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f1f5f9' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: isStudent ? '#d4e3ed' : '#efeae2' }}>
       <StatusBar style="light" />
       
       <View style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: headerBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}>
@@ -357,10 +358,32 @@ export default function ChatRoomScreen() {
           </View>
         </View>
 
-        <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-          <Text style={{ fontFamily: 'Roboto', color: 'white', fontSize: 9, fontWeight: '800' }} numberOfLines={1}>
-            {t('exam_level')}: {exam?.subject || 'Exam'}
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          {/* Call Icon Button */}
+          <TouchableOpacity 
+            onPress={() => {
+              if (otherPartyPhone) {
+                Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
+                  Alert.alert(t('error'), 'આ ઉપકરણ પર કૉલ શરૂ કરી શકાયો નથી.');
+                });
+              } else {
+                Alert.alert(t('error'), 'કૉલ કરવા માટે ફોન નંબર ઉપલબ્ધ નથી.');
+              }
+            }}
+            style={{ padding: 4 }}
+          >
+            <Feather name="phone" size={20} color="white" />
+          </TouchableOpacity>
+
+          {/* Docs Icon Button (View Declaration) */}
+          {exam?.scribe_id ? (
+            <TouchableOpacity 
+              onPress={() => setIsDeclarationOpen(true)}
+              style={{ padding: 4 }}
+            >
+              <Feather name="file-text" size={20} color="white" />
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
@@ -369,10 +392,36 @@ export default function ChatRoomScreen() {
         style={{ flex: 1 }}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
+        {/* Chat Wallpaper Decorative Background */}
+        <View style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: isStudent ? '#d4e3ed' : '#efeae2',
+          zIndex: -1,
+          opacity: 0.8
+        }}>
+          {isStudent ? (
+            // Telegram Ambient Gradients
+            <View style={{ flex: 1 }}>
+              <View style={{ position: 'absolute', top: -50, left: -50, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(36,129,204,0.18)' }} />
+              <View style={{ position: 'absolute', bottom: 100, right: -50, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(5,150,105,0.12)' }} />
+              <View style={{ position: 'absolute', top: '40%', left: '20%', width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(234,179,8,0.06)' }} />
+            </View>
+          ) : (
+            // WhatsApp Doodle Pattern Overlay
+            <View style={{ flex: 1, opacity: 0.05, flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
+              {Array.from({ length: 80 }).map((_, i) => (
+                <View key={i} style={{ width: '20%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
+                  <Feather name={['heart', 'message-circle', 'star', 'smile', 'phone', 'video', 'music', 'image', 'compass', 'award'][i % 10] as any} size={18} color="#000" />
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         <ScrollView
           ref={scrollViewRef}
-          style={{ flex: 1, paddingHorizontal: 16, paddingVertical: 12 }}
-          contentContainerStyle={{ paddingBottom: 16 }}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 16 }}
         >
           {messages.length === 0 ? (
             <View style={{ justifyContent: 'center', paddingVertical: 10, marginTop: 40, alignItems: 'center' }}>
@@ -485,11 +534,11 @@ export default function ChatRoomScreen() {
           )}
         </ScrollView>
 
-        <View style={{ backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingBottom: Platform.OS === 'ios' ? 4 : 8, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 }}>
+        <View style={{ backgroundColor: inputBarBg, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingBottom: Platform.OS === 'ios' ? 4 : 8, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 }}>
           {/* 1. INPUT ROW */}
           <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}>
             {isRecording ? (
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0' }}>
+              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 12, fontWeight: '600' }}>
@@ -501,7 +550,7 @@ export default function ChatRoomScreen() {
                     <Feather name="trash-2" size={18} color="#ef4444" />
                   </TouchableOpacity>
                   <TouchableOpacity onPress={stopAndSendRecording} style={{ padding: 4 }}>
-                    <Feather name="check-circle" size={18} color="#059669" />
+                    <Feather name="check-circle" size={18} color={themeColor} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -510,9 +559,9 @@ export default function ChatRoomScreen() {
                 {/* Attachment Button */}
                 <TouchableOpacity
                   onPress={() => setIsAttachmentModalOpen(true)}
-                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}
+                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
                 >
-                  <Feather name="paperclip" size={17} color="#475569" />
+                  <Feather name="paperclip" size={17} color={themeColor} />
                 </TouchableOpacity>
 
                 {/* Text Input */}
@@ -521,16 +570,16 @@ export default function ChatRoomScreen() {
                   onChangeText={setNewMessage}
                   placeholder={t('type_message')}
                   placeholderTextColor="#94a3b8"
-                  style={{ flex: 1, fontFamily: 'Roboto', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: '#1e293b', maxHeight: 80 }}
+                  style={{ flex: 1, fontFamily: 'Roboto', backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: '#1e293b', maxHeight: 80, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
                   multiline={true}
                 />
 
                 {/* Voice Record Button */}
                 <TouchableOpacity
                   onPress={startRecording}
-                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9' }}
+                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
                 >
-                  <Feather name="mic" size={16} color="#475569" />
+                  <Feather name="mic" size={16} color={themeColor} />
                 </TouchableOpacity>
 
                 {/* Send Button */}
@@ -547,46 +596,6 @@ export default function ChatRoomScreen() {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
-
-          {/* 2. DIVIDER */}
-          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginHorizontal: 16 }} />
-
-          {/* 3. OPTIONS BAR */}
-          <View style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 10, gap: 10, justifyContent: 'space-around' }}>
-            <TouchableOpacity 
-              onPress={() => {
-                if (otherPartyPhone) {
-                  Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
-                    Alert.alert(t('error'), 'આ ઉપકરણ પર કૉલ શરૂ કરી શકાયો નથી.');
-                  });
-                } else {
-                  Alert.alert(t('error'), 'કૉલ કરવા માટે ફોન નંબર ઉપલબ્ધ નથી.');
-                }
-              }}
-              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isStudent ? 'rgba(5,150,105,0.08)' : 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: isStudent ? 'rgba(5,150,105,0.18)' : 'rgba(37,99,235,0.18)' }}
-            >
-              <Feather name="phone" size={14} color={isStudent ? '#059669' : '#2563eb'} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: isStudent ? '#059669' : '#2563eb' }}>{t('call')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              onPress={() => setIsDetailsOpen(true)}
-              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: isStudent ? 'rgba(37,99,235,0.18)' : 'rgba(5,150,105,0.18)' }}
-            >
-              <Feather name="info" size={14} color={isStudent ? '#2563eb' : '#059669'} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: isStudent ? '#2563eb' : '#059669' }}>{t('exam_details')}</Text>
-            </TouchableOpacity>
-
-            {exam?.scribe_id ? (
-              <TouchableOpacity 
-                onPress={() => setIsDeclarationOpen(true)}
-                style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(234,88,12,0.08)', borderWidth: 1, borderColor: 'rgba(234,88,12,0.18)' }}
-              >
-                <Feather name="file-text" size={14} color="#ea580c" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#ea580c' }} numberOfLines={1}>{t('view_declaration')}</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -714,20 +723,29 @@ export default function ChatRoomScreen() {
       </Modal>
       {/* ── DEFAULT BOTTOM NAV BAR ── */}
       <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: 'rgba(255,255,255,0.95)',
+        backgroundColor: '#fff',
         borderTopLeftRadius: 20,
         borderTopRightRadius: 20,
         shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
-        borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.07)'
       }}>
         <View style={{
           flexDirection: 'row',
           paddingVertical: 8,
           paddingHorizontal: 8,
           gap: 4,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,0,0,0.07)',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
         }}>
           {TABS.map((tab) => {
+            const translationKey = tab.id === 'home' ? 'nav_home' :
+                                   tab.id === 'explore' ? 'nav_explore' :
+                                   tab.id === 'requests' ? 'nav_requests' :
+                                   tab.id === 'commitments' ? 'nav_applied' :
+                                   tab.id === 'plan' ? 'nav_plan' : 'nav_account';
+            const translatedLabel = t(translationKey as any);
             return (
               <TouchableOpacity
                 key={tab.id}
@@ -743,12 +761,13 @@ export default function ChatRoomScreen() {
                   backgroundColor: 'transparent',
                 }}
               >
-                <Feather name={tab.icon} size={20} color={'#94a3b8'} />
+                <Ionicons name={tab.iconInactive as any} size={24} color={'#94a3b8'} />
                 <Text style={{
-                  fontSize: 10, fontWeight: '500',
-                  marginTop: 4, color: '#94a3b8',
+                  fontFamily: 'Roboto',
+                  fontSize: 11, fontWeight: '600',
+                  marginTop: 3, color: '#94a3b8',
                 }}>
-                  {tab.label}
+                  {translatedLabel}
                 </Text>
               </TouchableOpacity>
             );

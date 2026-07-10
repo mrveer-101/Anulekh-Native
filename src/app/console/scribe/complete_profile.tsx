@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 
 const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -119,8 +119,8 @@ export default function CompleteProfileForm() {
 
   const handleNextStep = () => {
     if (currentStep === 1) {
-      if (!officialName.trim() || !dob.trim() || !occupation.trim() || !location.trim() || !phone.trim()) {
-        Alert.alert('Missing Fields', 'Please enter your Name, Phone Number, Date of Birth, Occupation, and Location.');
+      if (!officialName.trim() || !dob.trim() || !occupation.trim() || !location.trim()) {
+        Alert.alert('Missing Fields', 'Please enter your Name, Date of Birth, Occupation, and Location.');
         return;
       }
     } else if (currentStep === 2) {
@@ -153,7 +153,6 @@ export default function CompleteProfileForm() {
         .from('profiles')
         .update({
           official_name: officialName.trim(),
-          phone: phone.trim(),
           aadhar_number: aadharNumber.trim(),
           dob: dob.trim(),
           occupation: occupation.trim(),
@@ -239,23 +238,12 @@ export default function CompleteProfileForm() {
               <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Personal Information</Text>
               
               <View className="space-y-3">
-                <View>
+                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Name (as per ID) *</Text>
                   <TextInput 
                     value={officialName}
                     onChangeText={setOfficialName}
                     placeholder="e.g. Rahul Ramesh Sharma"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Phone Number *</Text>
-                  <TextInput 
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    placeholder="Enter 10-digit Phone Number"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
                   />
                 </View>

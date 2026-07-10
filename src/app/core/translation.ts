@@ -17,7 +17,7 @@ export const dictionary = {
     auto_approve: "⚡ Auto Approve",
     verified_scribe_profile: "Verified Scribe Profile",
     verified_student_profile: "Verified Student Profile",
-    commitments: "Commitments",
+    commitments: "Contributions",
     applications: "Applications",
     available: "Available",
     upcoming_exams: "Your Upcoming Exams (Schedule)",
@@ -97,6 +97,26 @@ export const dictionary = {
     recording: "Recording...",
     subject_label: "Subject:",
     exam_volunteer: "volunteer for the exam",
+    nav_home: "Home",
+    nav_explore: "Search",
+    nav_requests: "Requests",
+    nav_applied: "Applied",
+    nav_plan: "Plan",
+    nav_account: "Account",
+    nav_settings: "Settings",
+    occupation_label: "Occupation: ",
+    student_scribe_fallback: "Student Scribe",
+    verified_scribe_badge: "✓ Verified Scribe",
+    exam_fallback: "Exam",
+    exam_student_suffix: "exam student",
+    exam_volunteer_suffix: "exam volunteer",
+    subject_prefix: "Subject: ",
+    profile_approved_desc: "Your profile has been successfully approved! Now you can manage exams.",
+    approval_failed: "Failed to approve profile.",
+    call_unsupported: "Calling is not supported on this device.",
+    call_error: "Error starting call.",
+    verify_first_error: "Please complete your profile verification first before managing exams.",
+    scribe_profile_approved_desc: "Your profile has been successfully approved! Now you can accept exams.",
   },
   Hindi: {
     welcome_scribe_portal: "🤝 स्वयंसेवक लेखक पोर्टल (VOLUNTEER SCRIBE PORTAL)",
@@ -110,7 +130,7 @@ export const dictionary = {
     auto_approve: "⚡ ऑटो स्वीकृत",
     verified_scribe_profile: "सत्यापित लेखक प्रोफ़ाइल",
     verified_student_profile: "सत्यापित छात्र प्रोफ़ाइल",
-    commitments: "प्रतिबद्धताएं",
+    commitments: "योगदान (Contributions)",
     applications: "आवेदन",
     available: "उपलब्ध",
     upcoming_exams: "आपकी आगामी परीक्षाएं (योजना)",
@@ -190,6 +210,26 @@ export const dictionary = {
     recording: "रिकॉर्डिंग...",
     subject_label: "विषय:",
     exam_volunteer: "परीक्षा के स्वयंसेवक",
+    nav_home: "होम",
+    nav_explore: "खोजें",
+    nav_requests: "अनुरोध",
+    nav_applied: "लागू किया",
+    nav_plan: "योजना",
+    nav_account: "खाता",
+    nav_settings: "सेटिंग्स",
+    occupation_label: "व्यवसाय: ",
+    student_scribe_fallback: "छात्र लेखक",
+    verified_scribe_badge: "✓ सत्यापित लेखक",
+    exam_fallback: "परीक्षा",
+    exam_student_suffix: "परीक्षा के छात्र",
+    exam_volunteer_suffix: "परीक्षा के स्वयंसेवक",
+    subject_prefix: "विषय: ",
+    profile_approved_desc: "आपकी प्रोफ़ाइल सफलतापूर्वक स्वीकृत हो गई है! अब आप परीक्षाओं का प्रबंधन कर सकते हैं।",
+    approval_failed: "प्रोफ़ाइल स्वीकृत करने में विफल।",
+    call_unsupported: "इस डिवाइस पर कॉल करना संभव नहीं है।",
+    call_error: "कॉल शुरू करने में त्रुटि।",
+    verify_first_error: "कृपया परीक्षा का प्रबंधन करने से पहले अपनी प्रोफ़ाइल सत्यापन पूरा करें।",
+    scribe_profile_approved_desc: "आपकी प्रोफ़ाइल सफलतापूर्वक स्वीकृत हो गई है! अब आप परीक्षाएं स्वीकार कर सकते हैं।",
   },
   Gujarati: {
     welcome_scribe_portal: "🤝 સ્વયંસેવક લખિયા પોર્ટલ (VOLUNTEER SCRIBE PORTAL)",
@@ -203,7 +243,7 @@ export const dictionary = {
     auto_approve: "⚡ ઓટો મંજૂર",
     verified_scribe_profile: "ચકાસાયેલ લખિયા પ્રોફાઇલ",
     verified_student_profile: "ચકાસાયેલ વિદ્યાર્થી પ્રોફાઇલ",
-    commitments: "જોડાણો",
+    commitments: "યોગદાન (Contributions)",
     applications: "અરજીઓ",
     available: "ઉપલબ્ધ",
     upcoming_exams: "તમારી આગામી પરીક્ષાઓ (આયોજન)",
@@ -283,12 +323,41 @@ export const dictionary = {
     recording: "રેકોર્ડિંગ...",
     subject_label: "વિષય:",
     exam_volunteer: "પરીક્ષાના સ્વયંસેવક",
+    nav_home: "હોમ",
+    nav_explore: "શોધો",
+    nav_requests: "વિનંતીઓ",
+    nav_applied: "અરજીઓ",
+    nav_plan: "આયોજન",
+    nav_account: "પ્રોફાઇલ",
+    nav_settings: "સેટિંગ્સ",
+    occupation_label: "વ્યવસાય: ",
+    student_scribe_fallback: "વિદ્યાર્થી લખિયો",
+    verified_scribe_badge: "✓ ચકાસાયેલ લખિયો",
+    exam_fallback: "પરીક્ષા",
+    exam_student_suffix: "પરીક્ષાના વિદ્યાર્થી",
+    exam_volunteer_suffix: "પરીક્ષાના સ્વયંસેવક",
+    subject_prefix: "વિષય: ",
+    profile_approved_desc: "તમારી પ્રોફાઇલ સફળતાપૂર્વક મંજૂર થઈ ગઈ છે! હવે તમે પરીક્ષાઓ મેનેજ કરી શકો છો.",
+    approval_failed: "પ્રોફાઇલ મંજૂર કરવામાં નિષ્ફળતા.",
+    call_unsupported: "આ ઉપકરણથી કૉલ કરવો શક્ય નથી.",
+    call_error: "કૉલ શરૂ કરવામાં ભૂલ આવી.",
+    verify_first_error: "પરીક્ષા મેનેજ કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.",
+    scribe_profile_approved_desc: "તમારી પ્રોફાઇલ સફળતાપૂર્વક મંજૂર થઈ ગઈ છે! હવે તમે પરીક્ષા સ્વીકારી શકો છો.",
   }
 };
 
+type LanguageCallback = (newLang: LanguageType) => void;
+const listeners = new Set<LanguageCallback>();
+
+export function subscribeLanguageChange(cb: LanguageCallback) {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
 export function useLanguage() {
   const [lang, setLangState] = useState<LanguageType>('Gujarati');
-  const navigation = useNavigation();
 
   const loadLang = async () => {
     try {
@@ -303,15 +372,20 @@ export function useLanguage() {
 
   useEffect(() => {
     loadLang();
-    // Refresh language settings when screen comes into focus
-    const unsubscribe = navigation.addListener('focus', loadLang);
+    const unsubscribe = subscribeLanguageChange((newLang) => {
+      setLangState(newLang);
+    });
     return unsubscribe;
-  }, [navigation]);
+  }, []);
 
   const changeLanguage = async (newLang: LanguageType) => {
     try {
       setLangState(newLang);
       await AsyncStorage.setItem('app_language', newLang);
+      // Notify all other mounted instances of useLanguage
+      listeners.forEach(cb => {
+        cb(newLang);
+      });
     } catch (e) {
       console.log('Error writing language to storage:', e);
     }

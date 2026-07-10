@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
@@ -40,6 +40,17 @@ export default function StudentRequestsView() {
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
   const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
+
+  // Rating Modal State
+  const [ratingExam, setRatingExam] = useState<any>(null);
+  const [isRatingOpen, setIsRatingOpen] = useState(false);
+  const [ratingPunctuality, setRatingPunctuality] = useState(5);
+  const [ratingCommunication, setRatingCommunication] = useState(5);
+  const [ratingSpeed, setRatingSpeed] = useState(5);
+  const [ratingBehavior, setRatingBehavior] = useState(5);
+  const [ratingOverall, setRatingOverall] = useState(5);
+  const [remark, setRemark] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
 
   // Call Modal State
   const [callExam, setCallExam] = useState<any>(null);
@@ -122,6 +133,8 @@ export default function StudentRequestsView() {
         return { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', text: '#d97706', label: t('status_pending') };
       case 'matched':
         return { bg: 'rgba(5,150,105,0.08)', border: 'rgba(5,150,105,0.2)', text: '#059669', label: t('status_matched') };
+      case 'completed':
+        return { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', text: '#10b981', label: 'Completed' };
       case 'cancelled':
         return { bg: '#f1f5f9', border: '#e2e8f0', text: '#64748b', label: t('status_cancelled') };
       default:
@@ -136,6 +149,55 @@ export default function StudentRequestsView() {
       month: 'short',
       year: 'numeric',
     });
+  };
+
+  const openRatingModal = (exam: any) => {
+    setRatingExam(exam);
+    setRatingPunctuality(5);
+    setRatingCommunication(5);
+    setRatingSpeed(5);
+    setRatingBehavior(5);
+    setRatingOverall(5);
+    setRemark('');
+    setIsRatingOpen(true);
+  };
+
+  const submitRating = async () => {
+    if (!ratingExam) return;
+    setSubmittingRating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session.");
+
+      // 1. Insert review into scribe_reviews
+      const { error: reviewError } = await supabase.from('scribe_reviews').insert({
+        request_id: ratingExam.id,
+        student_id: session.user.id,
+        scribe_id: ratingExam.scribe_id,
+        rating_punctuality: ratingPunctuality,
+        rating_communication: ratingCommunication,
+        rating_speed: ratingSpeed,
+        rating_behavior: ratingBehavior,
+        rating_overall: ratingOverall,
+        remark: remark.trim(),
+      });
+      if (reviewError) throw reviewError;
+
+      // 2. Update status to completed in exam_requests
+      const { error: requestUpdateError } = await supabase
+        .from('exam_requests')
+        .update({ status: 'completed' })
+        .eq('id', ratingExam.id);
+      if (requestUpdateError) throw requestUpdateError;
+
+      Alert.alert("Success", "Exam request marked as completed and review submitted successfully!");
+      setIsRatingOpen(false);
+      fetchRequests();
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to submit rating.");
+    } finally {
+      setSubmittingRating(false);
+    }
   };
 
   const openCallSheet = (exam: any) => {
@@ -183,6 +245,7 @@ export default function StudentRequestsView() {
             switch (item.status.toLowerCase()) {
               case 'pending': return 'NOT ASSIGNED';
               case 'matched': return 'ASSIGNED';
+              case 'completed': return 'COMPLETED';
               case 'cancelled': return 'CANCELLED';
               default: return item.status.toUpperCase();
             }
@@ -191,6 +254,7 @@ export default function StudentRequestsView() {
             switch (item.status.toLowerCase()) {
               case 'pending': return { text: '#475569', border: '#cbd5e1', bg: '#fff' };
               case 'matched': return { text: '#059669', border: '#6ee7b7', bg: '#f0fdf4' };
+              case 'completed': return { text: '#10b981', border: '#a7f3d0', bg: '#ecfdf5' };
               case 'cancelled': return { text: '#ef4444', border: '#fca5a5', bg: '#fff7f7' };
               default: return { text: '#2563eb', border: '#bfdbfe', bg: '#eff6ff' };
             }
@@ -345,7 +409,7 @@ export default function StudentRequestsView() {
               {/* ── Action Buttons ── */}
               <View style={{ paddingHorizontal: 18, paddingBottom: 18, gap: 10 }}>
 
-                {/* Find a Scribe — only when pending */}
+                {/* View Scribes — only when pending */}
                 {item.status === 'pending' && (
                   <TouchableOpacity
                     onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
@@ -358,31 +422,52 @@ export default function StudentRequestsView() {
                     }}
                     activeOpacity={0.85}
                   >
-                    <Feather name="user-plus" size={18} color="#fff" />
+                    <Feather name="users" size={18} color="#fff" />
                     <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.2 }}>
-                      Find a Scribe
+                      View Scribes ({item.applicationCount ?? 0})
                     </Text>
                   </TouchableOpacity>
                 )}
 
                 {/* Matched actions: Call + Chat */}
                 {isMatched && (
-                  <TouchableOpacity
-                    onPress={() => openCallSheet(item)}
-                    style={{
-                      backgroundColor: '#2563eb',
-                      borderRadius: 14, paddingVertical: 14,
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-                      shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="phone-call" size={18} color="#fff" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff' }}>
-                      Call Scribe
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ gap: 10 }}>
+                    {/* Mark Completed */}
+                    <TouchableOpacity
+                      onPress={() => openRatingModal(item)}
+                      style={{
+                        backgroundColor: '#10b981',
+                        borderRadius: 14, paddingVertical: 14,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="check-circle" size={18} color="#fff" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff' }}>
+                        Mark Completed
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Call Scribe */}
+                    <TouchableOpacity
+                      onPress={() => openCallSheet(item)}
+                      style={{
+                        backgroundColor: '#2563eb',
+                        borderRadius: 14, paddingVertical: 14,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="phone-call" size={18} color="#fff" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff' }}>
+                        Call Scribe
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
 
                 {/* Bottom row: View Details + Delete */}
@@ -498,8 +583,8 @@ export default function StudentRequestsView() {
 
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>વ્યવસાય: {selectedExam?.scribeProfile?.occupation || 'વિદ્યાર્થી લખિયો'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name || t('volunteer_scribe')}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('occupation_label')}{selectedExam?.scribeProfile?.occupation || t('student_scribe_fallback')}</Text>
                 </View>
               </View>
 
@@ -514,7 +599,7 @@ export default function StudentRequestsView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('status')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>✓ ચકાસાયેલ લખિયો</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>{t('verified_scribe_badge')}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('official_stamp')}</Text>
@@ -709,6 +794,144 @@ export default function StudentRequestsView() {
           >
             <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ═══════════════════════════════════════════════════
+          RATING / FEEDBACK MODAL
+      ═══════════════════════════════════════════════════ */}
+      <Modal
+        animationType="slide"
+        transparent
+        visible={isRatingOpen}
+        onRequestClose={() => setIsRatingOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 380, borderRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>Rate your Scribe</Text>
+              <TouchableOpacity onPress={() => setIsRatingOpen(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }} contentContainerStyle={{ paddingBottom: 10 }}>
+              
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                Please provide feedback for <Text style={{ fontWeight: '700', color: '#0f172a' }}>{ratingExam?.scribeProfile?.full_name || 'Volunteer Scribe'}</Text> across 5 fields.
+              </Text>
+
+              {/* 1. Punctuality */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>1. Punctuality (Time Management)</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setRatingPunctuality(star)}>
+                      <Feather name="star" size={20} color={star <= ratingPunctuality ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingPunctuality ? '#eab308' : 'none' }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* 2. Communication */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>2. Communication (Interaction)</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setRatingCommunication(star)}>
+                      <Feather name="star" size={20} color={star <= ratingCommunication ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingCommunication ? '#eab308' : 'none' }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* 3. Writing Speed */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>3. Scribing Speed & Accuracy</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setRatingSpeed(star)}>
+                      <Feather name="star" size={20} color={star <= ratingSpeed ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingSpeed ? '#eab308' : 'none' }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* 4. Behavior */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>4. Conduct & Behavior</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setRatingBehavior(star)}>
+                      <Feather name="star" size={20} color={star <= ratingBehavior ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingBehavior ? '#eab308' : 'none' }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* 5. Overall */}
+              <View style={{ marginVertical: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>5. Overall Experience</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <TouchableOpacity key={star} onPress={() => setRatingOverall(star)}>
+                      <Feather name="star" size={20} color={star <= ratingOverall ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingOverall ? '#eab308' : 'none' }} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Remark */}
+              <View style={{ marginVertical: 8 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Remarks & Feedback</Text>
+                <TextInput
+                  value={remark}
+                  onChangeText={setRemark}
+                  placeholder="Write a brief review about your experience with this scribe..."
+                  multiline
+                  numberOfLines={4}
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: '#e2e8f0',
+                    borderRadius: 14,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 13,
+                    color: '#0f172a',
+                    minHeight: 80,
+                    textAlignVertical: 'top'
+                  }}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={{ marginTop: 14 }}>
+              <TouchableOpacity
+                onPress={submitRating}
+                disabled={submittingRating}
+                style={{
+                  backgroundColor: '#10b981',
+                  borderRadius: 16,
+                  paddingVertical: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#10b981',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 10,
+                  elevation: 4
+                }}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color="white" size="small" />
+                ) : (
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>Submit & Mark Complete</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 

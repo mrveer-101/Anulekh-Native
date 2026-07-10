@@ -221,16 +221,13 @@ export default function SharedSettingsView() {
           {/* Phone Number */}
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Feather name="phone" size={12} color="#2563eb" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Mobile Number</Text>
+              <Feather name="phone" size={12} color="#94a3b8" style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>Mobile Number (Non-editable)</Text>
             </View>
             <TextInput
               value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              placeholder="Phone Number"
-              placeholderTextColor="#94a3b8"
-              style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
+              editable={false}
+              style={{ backgroundColor: '#f1f5f9', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#94a3b8', fontWeight: '600' }}
             />
           </View>
 

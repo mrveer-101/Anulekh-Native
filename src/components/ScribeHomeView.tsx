@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
@@ -20,6 +20,9 @@ export default function ScribeHomeView() {
   const [availableExams, setAvailableExams] = useState<any[]>([]);
   const [scribeCommitments, setScribeCommitments] = useState<any[]>([]);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
+  const [completedExamsCount, setCompletedExamsCount] = useState(0);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [showRatingDetails, setShowRatingDetails] = useState(false);
 
   useEffect(() => {
     fetchSession();
@@ -68,6 +71,23 @@ export default function ScribeHomeView() {
       
       setPendingApplicationsCount(apps ? apps.length : 0);
 
+      // 5. Fetch Scribe's Completed Exam Requests
+      const { data: completed } = await supabase
+        .from('exam_requests')
+        .select('id')
+        .eq('status', 'completed')
+        .eq('scribe_id', session.user.id);
+
+      setCompletedExamsCount(completed ? completed.length : 0);
+
+      // 6. Fetch Scribe's Reviews
+      const { data: reviewsData } = await supabase
+        .from('scribe_reviews')
+        .select('*')
+        .eq('scribe_id', session.user.id);
+
+      setReviews(reviewsData || []);
+
     } catch (err: any) {
       console.log('Error fetching volunteer session:', err.message);
     } finally {
@@ -100,6 +120,47 @@ export default function ScribeHomeView() {
         <ActivityIndicator size="large" color="#059669" />
       </View>
     );
+  }
+
+  // Compute rating stats
+  let finalRating = 0;
+  let avgPunctuality = 0;
+  let avgCommunication = 0;
+  let avgSpeed = 0;
+  let avgBehavior = 0;
+  let avgOverall = 0;
+
+  if (reviews && reviews.length > 0) {
+    let sumExamAverages = 0;
+    let sumPunctuality = 0;
+    let sumCommunication = 0;
+    let sumSpeed = 0;
+    let sumBehavior = 0;
+    let sumOverall = 0;
+
+    reviews.forEach(r => {
+      const punctuality = r.rating_punctuality || 0;
+      const communication = r.rating_communication || 0;
+      const speed = r.rating_speed || 0;
+      const behavior = r.rating_behavior || 0;
+      const overall = r.rating_overall || 0;
+
+      const examAvg = (punctuality + communication + speed + behavior + overall) / 5.0;
+      sumExamAverages += examAvg;
+
+      sumPunctuality += punctuality;
+      sumCommunication += communication;
+      sumSpeed += speed;
+      sumBehavior += behavior;
+      sumOverall += overall;
+    });
+
+    finalRating = sumExamAverages / reviews.length;
+    avgPunctuality = sumPunctuality / reviews.length;
+    avgCommunication = sumCommunication / reviews.length;
+    avgSpeed = sumSpeed / reviews.length;
+    avgBehavior = sumBehavior / reviews.length;
+    avgOverall = sumOverall / reviews.length;
   }
 
   const isVerified = profile?.verification_status === 'approved';
@@ -179,6 +240,171 @@ export default function ScribeHomeView() {
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>{availableExams.length}</Text>
           <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('available')}</Text>
         </View>
+      </View>
+
+      {/* My Contributions Block */}
+      <View style={{ marginBottom: 24 }}>
+        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Contributions 🤝</Text>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {/* Card 1: Hours Contributed */}
+          <View style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderRadius: 24, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Feather name="clock" size={16} color="#059669" />
+              <View style={{ backgroundColor: 'rgba(5,150,105,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#059669' }}>HOURS</Text>
+              </View>
+            </View>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a' }}>{completedExamsCount * 3} hrs</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', marginTop: 4 }}>Hours contributed</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Based on 3 hrs/exam</Text>
+          </View>
+
+          {/* Card 2: Requests Completed */}
+          <View style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderRadius: 24, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Feather name="award" size={16} color="#d97706" />
+              <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>EXAMS</Text>
+              </View>
+            </View>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a' }}>{completedExamsCount} requests</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', marginTop: 4 }}>Requests completed</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Successfully completed</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Your Rating Summary Card */}
+      <View style={{ marginBottom: 24 }}>
+        <TouchableOpacity 
+          onPress={() => setShowRatingDetails(!showRatingDetails)}
+          activeOpacity={0.9}
+          style={{ 
+            backgroundColor: '#fff', 
+            borderWidth: 1, 
+            borderColor: 'rgba(0,0,0,0.05)', 
+            borderRadius: 24, 
+            padding: 18, 
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 4 }, 
+            shadowOpacity: 0.04, 
+            shadowRadius: 10, 
+            elevation: 2,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(234,179,8,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="star" size={20} color="#eab308" style={{ fill: '#eab308' }} />
+            </View>
+            <View style={{ flexShrink: 1 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>Your Rating ⭐️</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                {reviews.length === 0 ? 'No reviews yet' : `Average from ${reviews.length} exam${reviews.length > 1 ? 's' : ''}`}
+              </Text>
+            </View>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a' }}>
+              {finalRating > 0 ? finalRating.toFixed(1) : '—'}
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', marginTop: 2 }}>
+              {showRatingDetails ? 'TAP TO COLLAPSE ▲' : 'TAP TO EXPAND ▼'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Expandable Rating Details */}
+        {showRatingDetails && (
+          <View style={{ 
+            backgroundColor: '#fff', 
+            borderWidth: 1, 
+            borderColor: 'rgba(0,0,0,0.05)', 
+            borderTopWidth: 0,
+            borderBottomLeftRadius: 24, 
+            borderBottomRightRadius: 24, 
+            marginTop: -12,
+            paddingTop: 24,
+            paddingHorizontal: 20, 
+            paddingBottom: 20,
+            gap: 10,
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 4 }, 
+            shadowOpacity: 0.04, 
+            shadowRadius: 10, 
+            elevation: 2 
+          }}>
+            {reviews.length === 0 ? (
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#94a3b8', textAlign: 'center', paddingVertical: 10 }}>
+                Complete exams and receive reviews from students to view your rating breakdowns.
+              </Text>
+            ) : (
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Punctuality:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgPunctuality.toFixed(1)}</Text>
+                    <View style={{ flexDirection: 'row', gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons key={star} name={star <= Math.round(avgPunctuality) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgPunctuality) ? '#eab308' : '#cbd5e1'} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Communication:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgCommunication.toFixed(1)}</Text>
+                    <View style={{ flexDirection: 'row', gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons key={star} name={star <= Math.round(avgCommunication) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgCommunication) ? '#eab308' : '#cbd5e1'} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Writing Speed:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgSpeed.toFixed(1)}</Text>
+                    <View style={{ flexDirection: 'row', gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons key={star} name={star <= Math.round(avgSpeed) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgSpeed) ? '#eab308' : '#cbd5e1'} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Behavior & Politeness:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgBehavior.toFixed(1)}</Text>
+                    <View style={{ flexDirection: 'row', gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons key={star} name={star <= Math.round(avgBehavior) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgBehavior) ? '#eab308' : '#cbd5e1'} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Overall Rating:</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgOverall.toFixed(1)}</Text>
+                    <View style={{ flexDirection: 'row', gap: 1 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Ionicons key={star} name={star <= Math.round(avgOverall) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgOverall) ? '#eab308' : '#cbd5e1'} />
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Available Opportunities List */}

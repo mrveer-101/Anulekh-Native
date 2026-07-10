@@ -14,24 +14,26 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '@/app/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import ScribeHomeView from '../../../components/ScribeHomeView';
+import ScribeExploreView from '../../../components/ScribeExploreView';
 import ScribeCommitmentsView from '../../../components/ScribeCommitmentsView';
 import ScribeProfileView from '../../../components/ScribeProfileView';
 import SharedSettingsView from '../../../components/SharedSettingsView';
 import SharedNotificationsView from '../../../components/SharedNotificationsView';
 import ScribePlanView from '../../../components/ScribePlanView';
 
-type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications';
+type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 
 const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }[] = [
-  { id: 'home',        iconActive: 'home',     iconInactive: 'home-outline',     label: 'Home'    },
-  { id: 'commitments', iconActive: 'list',     iconInactive: 'list-outline',     label: 'Applied' },
-  { id: 'plan',        iconActive: 'calendar', iconInactive: 'calendar-outline', label: 'Plan'    },
-  { id: 'settings',    iconActive: 'person',   iconInactive: 'person-outline',   label: 'Account' },
+  { id: 'home',        iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
+  { id: 'explore',     iconActive: 'search',        iconInactive: 'search',        label: 'Search' },
+  { id: 'commitments', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+  { id: 'settings',    iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
 ];
 
 // ── Design tokens (light theme — green accent for scribe) ──────
@@ -45,6 +47,7 @@ const TEXT       = '#0f172a';
 const MUTED      = '#64748b';
 
 export default function ScribeDashboard() {
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
@@ -142,7 +145,7 @@ export default function ScribeDashboard() {
       }}>
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 20, paddingVertical: 18,
+          paddingHorizontal: 20, paddingVertical: 12,
           borderBottomWidth: 1, borderBottomColor: BORDER,
           borderBottomLeftRadius: 20,
           borderBottomRightRadius: 20,
@@ -150,7 +153,7 @@ export default function ScribeDashboard() {
           {/* Logo */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 44, height: 44, borderRadius: 12,
               backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
               alignItems: 'center', justifyContent: 'center',
               overflow: 'hidden',
@@ -161,12 +164,12 @@ export default function ScribeDashboard() {
                 resizeMode="cover"
               />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
             <View style={{
               backgroundColor: ACCENT_BG, borderWidth: 1, borderColor: ACCENT_BD,
               borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3,
             }}>
-              <Text style={{ color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>SCRIBE</Text>
+              <Text style={{ fontFamily: 'Roboto', color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>SCRIBE</Text>
             </View>
           </View>
 
@@ -175,16 +178,16 @@ export default function ScribeDashboard() {
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               style={{
-                width: 38, height: 38, borderRadius: 11,
+                width: 44, height: 44, borderRadius: 12,
                 backgroundColor: activeTab === 'notifications' ? ACCENT_BG : 'rgba(255,255,255,0.8)',
                 borderWidth: 1, borderColor: activeTab === 'notifications' ? ACCENT_BD : BORDER,
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Ionicons name={activeTab === 'notifications' ? "notifications" : "notifications-outline"} size={17} color={activeTab === 'notifications' ? ACCENT : MUTED} />
+              <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? ACCENT : MUTED} />
               {unreadNotifs > 0 && (
                 <View style={{
-                  position: 'absolute', top: 5, right: 5,
+                  position: 'absolute', top: 6, right: 6,
                   width: 8, height: 8, borderRadius: 4,
                   backgroundColor: '#f97316', borderWidth: 1.5, borderColor: '#fff',
                 }} />
@@ -194,14 +197,14 @@ export default function ScribeDashboard() {
             <TouchableOpacity
               onPress={() => setActiveTab('settings')}
               style={{
-                width: 38, height: 38, borderRadius: 11,
+                width: 44, height: 44, borderRadius: 22,
                 backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
                 alignItems: 'center', justifyContent: 'center',
                 shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
               }}
             >
-              <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 15 }}>
+              <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
                 {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
               </Text>
             </TouchableOpacity>
@@ -212,10 +215,9 @@ export default function ScribeDashboard() {
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
         {activeTab === 'home'          && <ScribeHomeView />}
+        {activeTab === 'explore'       && <ScribeExploreView />}
         {activeTab === 'commitments'   && <ScribeCommitmentsView />}
-        {activeTab === 'plan'          && <ScribePlanView />}
-        {activeTab === 'profile'       && <ScribeProfileView />}
-        {activeTab === 'settings'      && <ScribeProfileView />}
+        {activeTab === 'settings'      && <SharedSettingsView />}
         {activeTab === 'notifications' && <SharedNotificationsView />}
       </View>
 
@@ -239,6 +241,10 @@ export default function ScribeDashboard() {
         }}>
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
+            const translationKey = tab.id === 'home' ? 'nav_home' :
+                                   tab.id === 'explore' ? 'nav_explore' :
+                                   tab.id === 'commitments' ? 'nav_applied' : 'nav_account';
+            const translatedLabel = t(translationKey as any);
             return (
               <TouchableOpacity
                 key={tab.id}
@@ -249,16 +255,17 @@ export default function ScribeDashboard() {
                   backgroundColor: active ? ACCENT_BG : 'transparent',
                 }}
               >
-                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={20} color={active ? ACCENT : '#94a3b8'} />
+                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? ACCENT : '#94a3b8'} />
                 <Text style={{
-                  fontSize: 10, fontWeight: active ? '700' : '500',
-                  marginTop: 4, color: active ? ACCENT : '#94a3b8',
+                  fontFamily: 'Roboto',
+                  fontSize: 11, fontWeight: active ? '800' : '600',
+                  marginTop: 3, color: active ? ACCENT : '#94a3b8',
                 }}>
-                  {tab.label}
+                  {translatedLabel}
                 </Text>
                 {active && (
                   <View style={{
-                    position: 'absolute', bottom: 4,
+                    position: 'absolute', bottom: 2,
                     width: 4, height: 4, borderRadius: 2, backgroundColor: ACCENT,
                   }} />
                 )}

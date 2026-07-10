@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 
 const EXAM_TYPES = ['School', 'College', 'Competitive'];
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];

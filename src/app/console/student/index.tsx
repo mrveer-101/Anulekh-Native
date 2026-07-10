@@ -14,8 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '@/app/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import StudentHomeView from '../../../components/StudentHomeView';
@@ -28,10 +29,10 @@ import StudentPlanView from '../../../components/StudentPlanView';
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
 
 const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }[] = [
-  { id: 'home',     iconActive: 'home',     iconInactive: 'home-outline',     label: 'Home'     },
-  { id: 'requests', iconActive: 'list',     iconInactive: 'list-outline',     label: 'Requests' },
-  { id: 'plan',     iconActive: 'calendar', iconInactive: 'calendar-outline', label: 'Plan'     },
-  { id: 'settings', iconActive: 'person',   iconInactive: 'person-outline',   label: 'Account'  },
+  { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
+  { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+  { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
+  { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
@@ -45,6 +46,7 @@ const TEXT       = '#0f172a';
 const MUTED      = '#64748b';
 
 export default function StudentDashboard() {
+  const { t } = useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
@@ -144,7 +146,7 @@ export default function StudentDashboard() {
       }}>
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 20, paddingVertical: 18,
+          paddingHorizontal: 20, paddingVertical: 12,
           borderBottomWidth: 1, borderBottomColor: BORDER,
           borderBottomLeftRadius: 20,
           borderBottomRightRadius: 20,
@@ -152,7 +154,7 @@ export default function StudentDashboard() {
           {/* Logo */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{
-              width: 36, height: 36, borderRadius: 10,
+              width: 44, height: 44, borderRadius: 12,
               backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
               alignItems: 'center', justifyContent: 'center',
               overflow: 'hidden',
@@ -163,7 +165,7 @@ export default function StudentDashboard() {
                 resizeMode="cover"
               />
             </View>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
           </View>
 
           {/* Right icons */}
@@ -171,16 +173,16 @@ export default function StudentDashboard() {
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               style={{
-                width: 38, height: 38, borderRadius: 11,
+                width: 44, height: 44, borderRadius: 12,
                 backgroundColor: activeTab === 'notifications' ? ACCENT_BG : 'rgba(255,255,255,0.8)',
                 borderWidth: 1, borderColor: activeTab === 'notifications' ? ACCENT_BD : BORDER,
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Ionicons name={activeTab === 'notifications' ? "notifications" : "notifications-outline"} size={17} color={activeTab === 'notifications' ? ACCENT : MUTED} />
+              <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? ACCENT : MUTED} />
               {unreadNotifs > 0 && (
                 <View style={{
-                  position: 'absolute', top: 5, right: 5,
+                  position: 'absolute', top: 6, right: 6,
                   width: 8, height: 8, borderRadius: 4,
                   backgroundColor: '#f97316', borderWidth: 1.5, borderColor: '#fff',
                 }} />
@@ -190,14 +192,14 @@ export default function StudentDashboard() {
             <TouchableOpacity
               onPress={() => setActiveTab('settings')}
               style={{
-                width: 38, height: 38, borderRadius: 11,
+                width: 44, height: 44, borderRadius: 22,
                 backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
                 alignItems: 'center', justifyContent: 'center',
                 shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
               }}
             >
-              <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 15 }}>
+              <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
                 {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'U'}
               </Text>
             </TouchableOpacity>
@@ -235,6 +237,10 @@ export default function StudentDashboard() {
         }}>
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
+            const translationKey = tab.id === 'home' ? 'nav_home' :
+                                   tab.id === 'requests' ? 'nav_requests' :
+                                   tab.id === 'plan' ? 'nav_plan' : 'nav_account';
+            const translatedLabel = t(translationKey as any);
             return (
               <TouchableOpacity
                 key={tab.id}
@@ -245,16 +251,17 @@ export default function StudentDashboard() {
                   backgroundColor: active ? ACCENT_BG : 'transparent',
                 }}
               >
-                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={20} color={active ? ACCENT : '#94a3b8'} />
+                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? ACCENT : '#94a3b8'} />
                 <Text style={{
-                  fontSize: 10, fontWeight: active ? '700' : '500',
-                  marginTop: 4, color: active ? ACCENT : '#94a3b8',
+                  fontFamily: 'Roboto',
+                  fontSize: 11, fontWeight: active ? '800' : '600',
+                  marginTop: 3, color: active ? ACCENT : '#94a3b8',
                 }}>
-                  {tab.label}
+                  {translatedLabel}
                 </Text>
                 {active && (
                   <View style={{
-                    position: 'absolute', bottom: 4,
+                    position: 'absolute', bottom: 2,
                     width: 4, height: 4, borderRadius: 2, backgroundColor: ACCENT,
                   }} />
                 )}

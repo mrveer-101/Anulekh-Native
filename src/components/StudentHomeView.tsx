@@ -102,10 +102,10 @@ export default function StudentHomeView() {
 
       if (error) throw error;
 
-      Alert.alert(t('success'), 'તમારી પ્રોફાઇલ સફળતાપૂર્વક મંજૂર થઈ ગઈ છે! હવે તમે પરીક્ષા ઉમેરી શકો છો.');
+      Alert.alert(t('success'), t('profile_approved_desc'));
       await fetchSession();
     } catch (err: any) {
-      Alert.alert(t('error'), err.message || 'મંજૂર કરવામાં નિષ્ફળતા.');
+      Alert.alert(t('error'), err.message || t('approval_failed'));
     } finally {
       setLoading(false);
     }
@@ -126,10 +126,10 @@ export default function StudentHomeView() {
       if (supported) {
         await Linking.openURL(url);
       } else {
-        Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+        Alert.alert(t('error'), t('call_unsupported'));
       }
     } catch (_) {
-      Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+      Alert.alert(t('error'), t('call_error'));
     }
   };
 
@@ -240,7 +240,7 @@ export default function StudentHomeView() {
                 if (isVerified) {
                   router.push('/console/student/request_form' as any);
                 } else {
-                  Alert.alert(t('error'), 'પરીક્ષા ઉમેરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                  Alert.alert(t('error'), t('verify_first_error'));
                 }
               }}
               style={{ backgroundColor: BLUE, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12, marginTop: 14 }}
@@ -256,7 +256,7 @@ export default function StudentHomeView() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: TEXT }}>{exam.subject || 'ਪਰੀਖਿਆ'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: TEXT }}>{exam.subject || t('exam_fallback')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
                 </View>
                 <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: BLUE_BG_LIGHT, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
@@ -268,7 +268,7 @@ export default function StudentHomeView() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="user" size={12} color={BLUE} style={{ marginRight: 8 }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || 'લખિયો'}
+                    {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -416,14 +416,14 @@ export default function StudentHomeView() {
 
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: MUTED, textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: TEXT, fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>વ્યવસાય: {selectedExam?.scribeProfile?.occupation || 'વિદ્યાર્થી લખિયો'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: TEXT, fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name || t('volunteer_scribe')}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>{t('occupation_label')}{selectedExam?.scribeProfile?.occupation || t('student_scribe_fallback')}</Text>
                 </View>
               </View>
 
               {/* 3. Formal Declaration Text */}
-              <View style={{ backgroundColor: 'rgba(37,99,235,0.05)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', padding: 12, borderRadius: 16, marginTop: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#1d4ed8', lineHeight: 16, fontStyle: 'italic', textAlign: 'center' }}>
+              <View style={{ backgroundColor: 'rgba(5,150,105,0.05)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', padding: 12, borderRadius: 16, marginTop: 4 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: GREEN, lineHeight: 16, fontStyle: 'italic', textAlign: 'center' }}>
                   {t('declaration_agreement_text')}
                 </Text>
               </View>
@@ -432,7 +432,7 @@ export default function StudentHomeView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: MUTED, textTransform: 'uppercase' }}>{t('status')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: GREEN, fontWeight: '800', marginTop: 2 }}>✓ ચકાસાયેલ લખિયો</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: GREEN, fontWeight: '800', marginTop: 2 }}>{t('verified_scribe_badge')}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: MUTED, textTransform: 'uppercase' }}>{t('official_stamp')}</Text>
@@ -544,8 +544,8 @@ export default function StudentHomeView() {
                 </Text>
               </View>
               <View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: TEXT }}>
-                  {callExam?.scribeProfile?.full_name ?? 'લખિયો'}
+                <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: TEXT }}>
+                  {callExam?.scribeProfile?.full_name ?? t('volunteer_scribe')}
                 </Text>
                 <View style={{
                   marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)',

@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../../core/supabase';
+import { supabase } from '@/app/core/supabase';
 
 const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -115,8 +115,8 @@ export default function StudentCompleteProfileForm() {
 
   const handleNextStep = () => {
     if (currentStep === 1) {
-      if (!phone.trim() || !emergencyPhone.trim() || !dob.trim()) {
-        Alert.alert('Missing Fields', 'Please enter your Phone Number, Emergency Contact, and Date of Birth.');
+      if (!emergencyPhone.trim() || !dob.trim()) {
+        Alert.alert('Missing Fields', 'Please enter your Emergency Contact and Date of Birth.');
         return;
       }
     }
@@ -154,7 +154,6 @@ export default function StudentCompleteProfileForm() {
         .from('profiles')
         .update({
           official_name: officialName.trim(),
-          phone: phone.trim(),
           dob: dob.trim(),
           aadhar_number: aadharNumber.trim(),
           aadhar_image_proof: aadharImage,
@@ -239,16 +238,6 @@ export default function StudentCompleteProfileForm() {
               <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Personal Information</Text>
               
               <View className="space-y-3">
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Phone Number *</Text>
-                  <TextInput 
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    placeholder="Enter 10-digit Phone Number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                  />
-                </View>
 
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Emergency Contact Number *</Text>
