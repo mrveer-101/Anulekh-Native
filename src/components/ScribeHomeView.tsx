@@ -247,6 +247,50 @@ export default function ScribeHomeView() {
         )}
       </View>
 
+      {/* Need Help? Contact Support Card */}
+      <TouchableOpacity 
+        onPress={() => router.push('/console/common/support' as any)}
+        style={{
+          backgroundColor: '#fff',
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          padding: 20,
+          borderRadius: 24,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.03,
+          shadowRadius: 10,
+          elevation: 1.5,
+          marginTop: 10,
+          marginBottom: 20,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}
+      >
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={{
+            width: 44,
+            height: 44,
+            borderRadius: 14,
+            backgroundColor: '#ecfdf5',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Feather name="life-buoy" size={20} color="#059669" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+              Need Help?
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 2 }}>
+              Contact support to resolve application or profile issues
+            </Text>
+          </View>
+        </View>
+        <Feather name="chevron-right" size={18} color="#64748b" />
+      </TouchableOpacity>
+
     </ScrollView>
   );
 }

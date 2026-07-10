@@ -1,53 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '../../core/supabase';
 
-interface FAQItem {
-  question: string;
-  answer: string;
-}
-
-const FAQ_DATA: FAQItem[] = [
-  {
-    question: "How do I request a scribe?",
-    answer: "Go to your dashboard, click on the '+ Request' button under Active Requests, fill out the exam details (Type of exam, languages, date of birth, grade, and Aadhar Card number), and click 'Generate Request'."
-  },
-  {
-    question: "Is an Aadhar Card mandatory?",
-    answer: "Yes, to ensure the security and authenticity of both students and scribes, a valid Aadhar Card number is required to submit a request."
-  },
-  {
-    question: "How long does it take to find a scribe?",
-    answer: "Once you generate a request, it becomes visible to all eligible volunteer scribes in your area. Scribes will review and accept the request based on language match and location. You will see the status change to 'Matched' on your dashboard as soon as someone accepts."
-  },
-  {
-    question: "Can I choose multiple languages for my exam?",
-    answer: "Yes! In the scribe request form, you can select one or more languages (English, Hindi, Gujarati) if your exam contains bilingual or trilingual sections."
-  },
-  {
-    question: "How can I cancel a request?",
-    answer: "Currently, you can view your active requests in the 'My Requests' tab in the sidebar. To cancel or modify a request, please contact our helpdesk directly."
-  }
+const ISSUE_TYPES = [
+  'App bug / Crash',
+  'Verification issue',
+  'Exam request problem',
+  'Scribe matching help',
+  'Other / Suggestions'
 ];
 
 export default function SupportScreen() {
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'student' | 'scribe'>('student');
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
   
-  // Feedback Form State
-  const [message, setMessage] = useState('');
+  // Ticket Form State
+  const [issueType, setIssueType] = useState('Select Issue Type');
+  const [description, setDescription] = useState('');
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    fetchUserRole();
+    fetchUserData();
   }, []);
 
-  const fetchUserRole = async () => {
+  const fetchUserData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -55,40 +40,90 @@ export default function SupportScreen() {
         return;
       }
 
+      setUserId(session.user.id);
+      setEmail(session.user.email || '');
+
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('role')
+        .select('*')
         .eq('id', session.user.id)
         .single();
 
       if (error) throw error;
       if (profile) {
         setRole(profile.role || 'student');
+        setPhone(profile.phone || '');
       }
     } catch (error) {
-      console.error('Error fetching user role for support:', error);
+      console.error('Error fetching user profile for support:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSendFeedback = async () => {
-    if (!message.trim()) {
-      Alert.alert('Empty Message', 'Please write something before sending.');
+  const handleSimulateAttachment = () => {
+    // Simulated base64 mockup screenshot of the app
+    setReferenceImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAMklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBC1iAAEJf8pIAAAAAElFTkSuQmCC');
+    Alert.alert('Image Attached', 'Mock reference screenshot "support_screenshot.png" attached to ticket.');
+  };
+
+  const handleRemoveAttachment = () => {
+    setReferenceImage(null);
+  };
+
+  const handleSubmitTicket = async () => {
+    if (issueType === 'Select Issue Type') {
+      Alert.alert('Required Field', 'Please select the type of issue you are facing.');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Required Field', 'Please describe your issue in the text area.');
       return;
     }
 
     setSending(true);
-    // Simulate sending feedback
-    setTimeout(() => {
-      setSending(false);
-      setMessage('');
-      Alert.alert('Message Sent', 'Thank you for contacting us! Our team will get back to you shortly.');
-    }, 1500);
-  };
 
-  const toggleFaq = (index: number) => {
-    setOpenFaqIndex(openFaqIndex === index ? null : index);
+    try {
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${API_URL}/api/support/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: userId,
+          email,
+          phone,
+          issue_type: issueType,
+          description: description.trim(),
+          reference_image: referenceImage
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to submit ticket to admin server.');
+      }
+
+      Alert.alert(
+        'Ticket Created',
+        'Your support ticket has been submitted successfully. Our admin team will inspect and resolve this shortly!',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Clear form
+              setIssueType('Select Issue Type');
+              setDescription('');
+              setReferenceImage(null);
+              // Navigate back
+              handleBack();
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert('Submission Error', error.message || 'Unable to reach support server.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleBack = () => {
@@ -100,9 +135,10 @@ export default function SupportScreen() {
   };
 
   const isStudent = role === 'student';
-  const themeColorClass = isStudent ? 'bg-blue-500 active:bg-blue-600' : 'bg-emerald-500 active:bg-emerald-600';
+  const themeColorClass = isStudent ? 'bg-blue-600 active:bg-blue-700' : 'bg-emerald-600 active:bg-emerald-700';
   const themeTextClass = isStudent ? 'text-blue-600' : 'text-emerald-600';
   const themeBgClass = isStudent ? 'bg-blue-50' : 'bg-emerald-50';
+  const themeBorderClass = isStudent ? 'focus:border-blue-500' : 'focus:border-emerald-500';
 
   if (loading) {
     return (
@@ -125,88 +161,165 @@ export default function SupportScreen() {
           >
             <Feather name="arrow-left" size={24} color="#334155" />
           </TouchableOpacity>
-          <Text className="text-xl font-black text-slate-800">Help & Support</Text>
+          <Text className="text-xl font-black text-slate-800">Contact Support</Text>
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-6 py-6" contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView className="flex-1 px-6 py-6" contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
         
-        {/* Contact Cards */}
-        <View className="flex-row gap-4 mb-6">
-          <View className="flex-1 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm items-center">
-            <View className={`w-10 h-10 rounded-full ${themeBgClass} items-center justify-center mb-3`}>
-              <Feather name="mail" size={20} color={isStudent ? '#2563eb' : '#059669'} />
-            </View>
-            <Text className="font-bold text-slate-800">Email Us</Text>
-            <Text className="text-slate-400 text-xs mt-1 text-center">support@anulekh.org</Text>
+        {/* Support Card Information */}
+        <View className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm mb-6 flex-row items-center space-x-4">
+          <View className={`w-12 h-12 rounded-2xl ${themeBgClass} items-center justify-center`}>
+            <Feather name="life-buoy" size={24} color={isStudent ? '#2563eb' : '#059669'} />
           </View>
-
-          <View className="flex-1 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm items-center">
-            <View className={`w-10 h-10 rounded-full ${themeBgClass} items-center justify-center mb-3`}>
-              <Feather name="phone" size={20} color={isStudent ? '#2563eb' : '#059669'} />
-            </View>
-            <Text className="font-bold text-slate-800">Call Support</Text>
-            <Text className="text-slate-400 text-xs mt-1 text-center">+91 1800-123-456</Text>
+          <View className="flex-1">
+            <Text className="font-black text-slate-800 text-base">Helpdesk Ticket Form</Text>
+            <Text className="text-slate-400 text-xs mt-0.5">Please specify your issue category and details below.</Text>
           </View>
         </View>
 
-        {/* FAQs */}
-        <View className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-6">
-          <Text className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4">Frequently Asked Questions</Text>
+        {/* 1-Slide Ticket Creation Form */}
+        <View className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-4">
           
-          <View className="space-y-3">
-            {FAQ_DATA.map((faq, index) => {
-              const isOpen = openFaqIndex === index;
-              return (
-                <View key={index} className="border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
-                  <TouchableOpacity 
-                    onPress={() => toggleFaq(index)}
-                    className="flex-row items-center justify-between py-2"
-                  >
-                    <Text className="text-base font-semibold text-slate-800 flex-1 pr-4">{faq.question}</Text>
-                    <Feather name={isOpen ? "chevron-up" : "chevron-down"} size={20} color="#94a3b8" />
-                  </TouchableOpacity>
-                  
-                  {isOpen && (
-                    <Text className="text-slate-500 text-sm mt-2 leading-relaxed">
-                      {faq.answer}
-                    </Text>
-                  )}
+          {/* User ID (Prefilled & Readonly) */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">User ID (Auto-filled)</Text>
+            <View className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3">
+              <Text className="text-slate-500 font-semibold text-sm">{userId}</Text>
+            </View>
+          </View>
+
+          {/* Email (Prefilled & Readonly) */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Address (Auto-filled)</Text>
+            <View className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3">
+              <Text className="text-slate-500 font-semibold text-sm">{email}</Text>
+            </View>
+          </View>
+
+          {/* Phone Number (Prefilled & Readonly) */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Phone Number (Auto-filled)</Text>
+            <View className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3">
+              <Text className="text-slate-500 font-semibold text-sm">{phone || 'Not Specified'}</Text>
+            </View>
+          </View>
+
+          {/* Issue Type Selector */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Type of Issue</Text>
+            <TouchableOpacity 
+              onPress={() => setIsDropdownOpen(true)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 flex-row justify-between items-center"
+            >
+              <Text className={`font-semibold text-sm ${issueType === 'Select Issue Type' ? 'text-slate-400' : 'text-slate-800'}`}>
+                {issueType}
+              </Text>
+              <Feather name="chevron-down" size={18} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Description Text Area */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Describe your Issue</Text>
+            <TextInput 
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={5}
+              placeholder="Provide a detailed description of the error, bug or matching issue..."
+              textAlignVertical="top"
+              className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-800 h-32 focus:bg-white ${themeBorderClass}`}
+            />
+          </View>
+
+          {/* Reference Image upload (Optional) */}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Reference Screenshot (Optional)</Text>
+            {referenceImage ? (
+              <View className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex-row items-center justify-between">
+                <View className="flex-row items-center space-x-3">
+                  <View className="w-12 h-12 bg-slate-200 rounded-lg overflow-hidden border border-slate-300">
+                    <Image source={{ uri: referenceImage }} className="w-full h-full" resizeMode="cover" />
+                  </View>
+                  <Text className="text-xs font-bold text-slate-600">support_screenshot.png</Text>
                 </View>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Contact Form */}
-        <View className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <Text className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-1">Send us a Message</Text>
-          <Text className="text-slate-400 text-xs mb-4">Have an issue or suggestion? Drop us a line below.</Text>
-          
-          <TextInput 
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            numberOfLines={4}
-            placeholder="Type your query or feedback here..."
-            textAlignVertical="top"
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3.5 text-slate-800 focus:border-blue-500 focus:bg-white h-32 mb-4"
-          />
-
-          <TouchableOpacity 
-            onPress={handleSendFeedback}
-            disabled={sending}
-            className={`w-full ${themeColorClass} py-4 rounded-xl items-center justify-center shadow-lg`}
-          >
-            {sending ? (
-              <ActivityIndicator color="white" />
+                <TouchableOpacity onPress={handleRemoveAttachment} className="p-2 rounded-full bg-rose-50 active:bg-rose-100">
+                  <Feather name="trash-2" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
             ) : (
-              <Text className="text-white font-bold text-base">Send Message</Text>
+              <TouchableOpacity 
+                onPress={handleSimulateAttachment}
+                className="w-full border border-slate-200 rounded-xl p-4 bg-slate-50 flex-row justify-center items-center space-x-2 border-dashed"
+              >
+                <Feather name="image" size={18} color={isStudent ? '#2563eb' : '#059669'} />
+                <Text className={`font-bold text-xs ${themeTextClass}`}>Attach Screenshot / Photo</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
+
+          {/* Submit Button */}
+          <View className="pt-2">
+            <TouchableOpacity 
+              onPress={handleSubmitTicket}
+              disabled={sending}
+              className={`w-full ${themeColorClass} py-4 rounded-xl items-center justify-center shadow-lg flex-row space-x-2`}
+            >
+              {sending ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <>
+                  <Feather name="send" size={16} color="white" />
+                  <Text className="text-white font-black text-base">Submit Support Ticket</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+
         </View>
 
       </ScrollView>
+
+      {/* CUSTOM ISSUE TYPE DROPDOWN MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isDropdownOpen}
+        onRequestClose={() => setIsDropdownOpen(false)}
+      >
+        <View className="flex-1 bg-slate-950/50 justify-end">
+          <View className="bg-white rounded-t-3xl p-6 shadow-2xl">
+            <View className="flex-row justify-between items-center mb-4 pb-2 border-b border-slate-100">
+              <Text className="text-base font-black text-slate-800">Select Issue Category</Text>
+              <TouchableOpacity onPress={() => setIsDropdownOpen(false)} className="p-2">
+                <Feather name="x" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={ISSUE_TYPES}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  onPress={() => {
+                    setIssueType(item);
+                    setIsDropdownOpen(false);
+                  }}
+                  className="py-4 border-b border-slate-50 flex-row items-center justify-between"
+                >
+                  <Text className={`font-semibold text-sm ${issueType === item ? themeTextClass : 'text-slate-700'}`}>
+                    {item}
+                  </Text>
+                  {issueType === item && <Feather name="check" size={18} color={isStudent ? '#2563eb' : '#059669'} />}
+                </TouchableOpacity>
+              )}
+              contentContainerStyle={{ paddingBottom: 20 }}
+            />
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
