@@ -14,6 +14,7 @@ interface ExamRequest {
   exam_language: string;
   student_name: string;
   education_grade: string;
+  is_prebooking?: string;
 }
 
 export default function ScribeExploreView() {
@@ -27,6 +28,9 @@ export default function ScribeExploreView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('All');
   const [selectedType, setSelectedType] = useState('All');
+  const [selectedSlot, setSelectedSlot] = useState('All');
+  const [selectedDay, setSelectedDay] = useState('All');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     fetchSession();
@@ -69,16 +73,74 @@ export default function ScribeExploreView() {
 
   const isVerified = scribeProfile?.verification_status === 'approved';
 
+  // Derive the time-of-day slot from a free-text exam_date like "24/07/2026 | 12:00 PM".
+  // Returns 'Morning' | 'Afternoon' | 'Evening' or null when no time can be parsed.
+  const getExamSlot = (examDate: string): 'Morning' | 'Afternoon' | 'Evening' | null => {
+    if (!examDate) return null;
+    const m = examDate.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!m) return null;
+    let hour = parseInt(m[1], 10);
+    const ampm = m[3].toUpperCase();
+    if (ampm === 'PM' && hour !== 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+    if (hour >= 5 && hour < 12) return 'Morning';
+    if (hour >= 12 && hour < 17) return 'Afternoon';
+    return 'Evening';
+  };
+
+  // Derive the weekday from the DD/MM/YYYY portion of a free-text exam_date.
+  // Returns 'Mon'..'Sun' or null when the date can't be parsed.
+  const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const getExamDay = (examDate: string): string | null => {
+    if (!examDate) return null;
+    const m = examDate.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    const year = parseInt(m[3], 10);
+    const d = new Date(year, month, day);
+    if (isNaN(d.getTime())) return null;
+    return WEEKDAY_LABELS[d.getDay()];
+  };
+
+  const LANGUAGE_OPTIONS = ['All', 'English', 'Hindi', 'Gujarati'];
+  const TYPE_OPTIONS = ['All', 'School', 'College', 'Competitive'];
+  const SLOT_OPTIONS = ['All', 'Morning', 'Afternoon', 'Evening'];
+  const DAY_OPTIONS = ['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  // Count of non-default (active) filters, shown on the collapsed filter bar.
+  const activeFilterCount = [selectedLanguage, selectedType, selectedSlot, selectedDay]
+    .filter(v => v !== 'All').length;
+
+  const clearFilters = () => {
+    setSelectedLanguage('All');
+    setSelectedType('All');
+    setSelectedSlot('All');
+    setSelectedDay('All');
+  };
+
   // Apply search query and filters
   const filteredExams = availableExams.filter(exam => {
-    const matchesSearch = 
+    const matchesSearch =
       (exam.subject || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (exam.exam_venue || '').toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesLanguage = selectedLanguage === 'All' || exam.exam_language === selectedLanguage;
-    const matchesType = selectedType === 'All' || exam.exam_type === selectedType;
 
-    return matchesSearch && matchesLanguage && matchesType;
+    // exam_language may be a comma list (e.g. "English, Hindi") — match by substring.
+    const matchesLanguage = selectedLanguage === 'All' ||
+      (exam.exam_language || '').toLowerCase().includes(selectedLanguage.toLowerCase());
+
+    // exam_type is stored like "College (Semester End Exam)" — match by prefix.
+    const matchesType = selectedType === 'All' ||
+      (exam.exam_type || '').trim().toLowerCase().startsWith(selectedType.toLowerCase());
+
+    // Time slot / day are derived from the free-text date; if unparseable, don't exclude.
+    const slot = getExamSlot(exam.exam_date);
+    const matchesSlot = selectedSlot === 'All' || slot === null || slot === selectedSlot;
+
+    const day = getExamDay(exam.exam_date);
+    const matchesDay = selectedDay === 'All' || day === null || day === selectedDay;
+
+    return matchesSearch && matchesLanguage && matchesType && matchesSlot && matchesDay;
   });
 
   // Segment by location (Nearby vs All Other)
@@ -95,6 +157,43 @@ export default function ScribeExploreView() {
     const venue = (exam.exam_venue || '').toLowerCase();
     return !venue.includes(scribeLocation);
   });
+
+  // Renders one labelled filter section as a wrapped row of selectable chips.
+  const renderFilterSection = (
+    label: string,
+    options: string[],
+    selected: string,
+    onSelect: (value: string) => void
+  ) => (
+    <View>
+      <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {options.map(opt => {
+          const isActive = selected === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              onPress={() => onSelect(opt)}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 10,
+                backgroundColor: isActive ? '#16a34a' : '#f8fafc',
+                borderWidth: 1,
+                borderColor: isActive ? '#16a34a' : 'rgba(0,0,0,0.06)',
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#fff' : '#64748b' }}>
+                {opt}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
 
   const renderExamCard = (exam: ExamRequest) => {
     return (
@@ -127,8 +226,15 @@ export default function ScribeExploreView() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
           </View>
-          <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {exam.is_prebooking === 'yes' && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#2563eb' }}>PRE-BOOK</Text>
+              </View>
+            )}
+            <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
+            </View>
           </View>
         </View>
 
@@ -174,7 +280,7 @@ export default function ScribeExploreView() {
     <View style={{ flex: 1, backgroundColor: '#f0fdf4' }}>
       
       {/* Search Header Bar */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 16, pb: 10, gap: 10 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 10, gap: 10 }}>
         
         {/* Search Input */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 12, height: 46 }}>
@@ -193,52 +299,43 @@ export default function ScribeExploreView() {
           ) : null}
         </View>
 
-        {/* Filter Selection Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-          {/* Language filter */}
-          <View style={{ flexDirection: 'row', gap: 6, borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.08)', paddingRight: 8 }}>
-            {['All', 'English', 'Hindi', 'Gujarati'].map(lang => (
-              <TouchableOpacity
-                key={lang}
-                onPress={() => setSelectedLanguage(lang)}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 10,
-                  backgroundColor: selectedLanguage === lang ? '#16a34a' : '#fff',
-                  borderWidth: 1,
-                  borderColor: selectedLanguage === lang ? '#16a34a' : 'rgba(0,0,0,0.05)',
-                }}
-              >
-                <Text style={{ fontSize: 10, fontWeight: '700', color: selectedLanguage === lang ? '#fff' : '#64748b' }}>
-                  {lang}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Collapsible Filter Block */}
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          {/* Toggle bar */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setShowFilters(!showFilters)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Feather name="sliders" size={15} color="#16a34a" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
+              {activeFilterCount > 0 && (
+                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeFilterCount}</Text>
+                </View>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity onPress={clearFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
+                </TouchableOpacity>
+              )}
+              <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
+            </View>
+          </TouchableOpacity>
 
-          {/* Exam Type filter */}
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {['All', 'School', 'College', 'Competitive'].map(type => (
-              <TouchableOpacity
-                key={type}
-                onPress={() => setSelectedType(type)}
-                style={{
-                  paddingHorizontal: 10,
-                  paddingVertical: 5,
-                  borderRadius: 10,
-                  backgroundColor: selectedType === type ? '#16a34a' : '#fff',
-                  borderWidth: 1,
-                  borderColor: selectedType === type ? '#16a34a' : 'rgba(0,0,0,0.05)',
-                }}
-              >
-                <Text style={{ fontSize: 10, fontWeight: '700', color: selectedType === type ? '#fff' : '#64748b' }}>
-                  {type}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
+          {/* Expandable sections */}
+          {showFilters && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+              {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
+              {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
+              {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
+              {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Main Oppurtunities List */}
@@ -250,12 +347,27 @@ export default function ScribeExploreView() {
         }
       >
         
+        {/* Scribe's Preferred Availability Windows */}
+        {scribeProfile?.availability_slots ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
+            <Feather name="clock" size={13} color="#16a34a" style={{ marginRight: 2 }} />
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
+              Your Slots:
+            </Text>
+            {String(scribeProfile.availability_slots).split(',').map((slot: string) => slot.trim()).filter(Boolean).map((slot: string) => (
+              <View key={slot} style={{ paddingVertical: 3, paddingHorizontal: 9, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.18)' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a' }}>{slot}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         {/* Nearby Opportunities Segment */}
         {scribeLocation && nearbyExams.length > 0 && (
           <View style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
               <Ionicons name="location" size={15} color="#16a34a" />
-              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '950', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 Opportunities Near You ({scribeProfile?.location})
               </Text>
             </View>

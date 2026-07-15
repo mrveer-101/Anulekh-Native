@@ -8,6 +8,7 @@ import { supabase } from '@/app/core/supabase';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '@/app/core/translation';
+import { isExamToday, isExamPast } from '@/app/core/examDate';
 
 interface Message {
   id: number;
@@ -303,6 +304,13 @@ export default function ChatRoomScreen() {
   }
 
   const isStudent = profile?.role === 'student';
+
+  // Time-Restricted Calling: the call button only works on the day of the exam and
+  // is disabled once the exam has ended. Fails open if the date can't be parsed.
+  const examToday = isExamToday(exam?.exam_date);
+  const examEnded = isExamPast(exam?.exam_date);
+  const canCall = examToday && !examEnded;
+
   const themeColor = isStudent ? '#2481cc' : '#00a884'; // Telegram Blue / WhatsApp Green
   const headerBg = isStudent ? '#2481cc' : '#00a884';
   const bubbleBg = isStudent ? '#2481cc' : '#00a884';
@@ -359,21 +367,34 @@ export default function ChatRoomScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          {/* Call Icon Button */}
-          <TouchableOpacity 
-            onPress={() => {
-              if (otherPartyPhone) {
-                Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
-                  Alert.alert(t('error'), 'આ ઉપકરણ પર કૉલ શરૂ કરી શકાયો નથી.');
-                });
-              } else {
-                Alert.alert(t('error'), 'કૉલ કરવા માટે ફોન નંબર ઉપલબ્ધ નથી.');
-              }
-            }}
-            style={{ padding: 4 }}
-          >
-            <Feather name="phone" size={20} color="white" />
-          </TouchableOpacity>
+          {/* Call Icon Button — only available on the day of the exam (hidden otherwise),
+              and locked once the exam has ended. */}
+          {examToday ? (
+            canCall ? (
+              <TouchableOpacity
+                onPress={() => {
+                  if (otherPartyPhone) {
+                    Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
+                      Alert.alert(t('error'), 'આ ઉપકરણ પર કૉલ શરૂ કરી શકાયો નથી.');
+                    });
+                  } else {
+                    Alert.alert(t('error'), 'કૉલ કરવા માટે ફોન નંબર ઉપલબ્ધ નથી.');
+                  }
+                }}
+                style={{ padding: 4 }}
+              >
+                <Feather name="phone" size={20} color="white" />
+              </TouchableOpacity>
+            ) : (
+              // Exam day but already ended → locked
+              <TouchableOpacity
+                onPress={() => Alert.alert('Calling Locked', 'Calling is disabled now that the exam has ended.')}
+                style={{ padding: 4, opacity: 0.5 }}
+              >
+                <Feather name="phone-off" size={20} color="white" />
+              </TouchableOpacity>
+            )
+          ) : null}
 
           {/* Docs Icon Button (View Declaration) */}
           {exam?.scribe_id ? (

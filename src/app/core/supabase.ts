@@ -38,7 +38,8 @@ const DEFAULT_PROFILES = [
     languages: JSON.stringify(["English", "Hindi"]),
     education_level: "Undergraduate",
     occupation: "Student Scribe",
-    location: "gota"
+    location: "gota",
+    availability_slots: "Morning, Afternoon"
   }
 ];
 
@@ -112,7 +113,7 @@ class MockQueryBuilder {
   private sortAscending: boolean = true;
   private limitVal: number | null = null;
   private isSingle: boolean = false;
-  private action: 'select' | 'insert' | 'update' = 'select';
+  private action: 'select' | 'insert' | 'update' | 'delete' = 'select';
   private updateData: any = null;
   private insertData: any = null;
 

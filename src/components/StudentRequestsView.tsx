@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
@@ -827,7 +827,7 @@ export default function StudentRequestsView() {
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity key={star} onPress={() => setRatingPunctuality(star)}>
-                      <Feather name="star" size={20} color={star <= ratingPunctuality ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingPunctuality ? '#eab308' : 'none' }} />
+                      <Ionicons name={star <= ratingPunctuality ? 'star' : 'star-outline'} size={24} color={star <= ratingPunctuality ? '#eab308' : '#cbd5e1'} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -839,7 +839,7 @@ export default function StudentRequestsView() {
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity key={star} onPress={() => setRatingCommunication(star)}>
-                      <Feather name="star" size={20} color={star <= ratingCommunication ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingCommunication ? '#eab308' : 'none' }} />
+                      <Ionicons name={star <= ratingCommunication ? 'star' : 'star-outline'} size={24} color={star <= ratingCommunication ? '#eab308' : '#cbd5e1'} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -851,7 +851,7 @@ export default function StudentRequestsView() {
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity key={star} onPress={() => setRatingSpeed(star)}>
-                      <Feather name="star" size={20} color={star <= ratingSpeed ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingSpeed ? '#eab308' : 'none' }} />
+                      <Ionicons name={star <= ratingSpeed ? 'star' : 'star-outline'} size={24} color={star <= ratingSpeed ? '#eab308' : '#cbd5e1'} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -863,7 +863,7 @@ export default function StudentRequestsView() {
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity key={star} onPress={() => setRatingBehavior(star)}>
-                      <Feather name="star" size={20} color={star <= ratingBehavior ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingBehavior ? '#eab308' : 'none' }} />
+                      <Ionicons name={star <= ratingBehavior ? 'star' : 'star-outline'} size={24} color={star <= ratingBehavior ? '#eab308' : '#cbd5e1'} />
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -875,7 +875,7 @@ export default function StudentRequestsView() {
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity key={star} onPress={() => setRatingOverall(star)}>
-                      <Feather name="star" size={20} color={star <= ratingOverall ? '#eab308' : '#cbd5e1'} style={{ fill: star <= ratingOverall ? '#eab308' : 'none' }} />
+                      <Ionicons name={star <= ratingOverall ? 'star' : 'star-outline'} size={24} color={star <= ratingOverall ? '#eab308' : '#cbd5e1'} />
                     </TouchableOpacity>
                   ))}
                 </View>

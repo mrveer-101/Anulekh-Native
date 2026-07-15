@@ -11,6 +11,11 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const EDUCATION_LEVELS = ['Secondary School (10th)', 'Higher Secondary (12th)', 'Undergraduate (Bachelor)', 'Postgraduate (Master)'];
 const LANGUAGES = ['English', 'Hindi', 'Gujarati'];
+const AVAILABILITY_SLOTS = [
+  { key: 'Morning', label: 'Morning', time: '8 AM – 12 PM', icon: 'sunrise' as const },
+  { key: 'Afternoon', label: 'Afternoon', time: '12 PM – 4 PM', icon: 'sun' as const },
+  { key: 'Evening', label: 'Evening', time: '4 PM – 8 PM', icon: 'sunset' as const },
+];
 
 export default function CompleteProfileForm() {
   const [loading, setLoading] = useState(false);
@@ -27,6 +32,7 @@ export default function CompleteProfileForm() {
   const [educationLevel, setEducationLevel] = useState('Higher Secondary (12th)');
   const [isEduDropdownOpen, setIsEduDropdownOpen] = useState(false);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [availabilitySlots, setAvailabilitySlots] = useState<string[]>([]);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [aadharImage, setAadharImage] = useState<string | null>(null);
   
@@ -54,6 +60,14 @@ export default function CompleteProfileForm() {
       setSelectedLanguages(selectedLanguages.filter(l => l !== lang));
     } else {
       setSelectedLanguages([...selectedLanguages, lang]);
+    }
+  };
+
+  const toggleSlot = (slot: string) => {
+    if (availabilitySlots.includes(slot)) {
+      setAvailabilitySlots(availabilitySlots.filter(s => s !== slot));
+    } else {
+      setAvailabilitySlots([...availabilitySlots, slot]);
     }
   };
 
@@ -142,6 +156,11 @@ export default function CompleteProfileForm() {
       return;
     }
 
+    if (availabilitySlots.length === 0) {
+      Alert.alert('Missing Fields', 'Please select at least one availability window (Morning, Afternoon, or Evening).');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -163,7 +182,8 @@ export default function CompleteProfileForm() {
           certification_proof: uploadedFile,
           aadhar_image_proof: aadharImage,
           languages: selectedLanguages,
-          verification_status: 'approved' // Set directly to approved for local testing/demo
+          availability_slots: availabilitySlots.join(', '),
+          verification_status: 'pending'
         })
         .eq('id', session.user.id);
 
@@ -422,6 +442,43 @@ export default function CompleteProfileForm() {
                           {lang}
                         </Text>
                         {isSelected && <Feather name="check" size={12} color="white" className="ml-1" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className="h-px bg-slate-100 w-full my-1" />
+
+              {/* Availability Windows */}
+              <View>
+                <Text className="text-xs font-bold text-slate-800 mb-2 uppercase tracking-wider">Availability</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-2 ml-1">Preferred Daily Time Slots *</Text>
+                <View className="gap-2">
+                  {AVAILABILITY_SLOTS.map((slot) => {
+                    const isSelected = availabilitySlots.includes(slot.key);
+                    return (
+                      <TouchableOpacity
+                        key={slot.key}
+                        onPress={() => toggleSlot(slot.key)}
+                        className={`flex-row items-center justify-between px-3.5 py-2.5 rounded-xl border ${
+                          isSelected
+                            ? 'bg-emerald-50 border-emerald-500'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <View className="flex-row items-center">
+                          <Feather name={slot.icon} size={16} color={isSelected ? '#059669' : '#94a3b8'} />
+                          <View className="ml-3">
+                            <Text className={`text-xs font-bold ${isSelected ? 'text-emerald-700' : 'text-slate-700'}`}>{slot.label}</Text>
+                            <Text className="text-[9px] text-slate-400 mt-0.5">{slot.time}</Text>
+                          </View>
+                        </View>
+                        <View className={`w-5 h-5 rounded-full items-center justify-center border ${
+                          isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'
+                        }`}>
+                          {isSelected && <Feather name="check" size={12} color="white" />}
+                        </View>
                       </TouchableOpacity>
                     );
                   })}

@@ -71,7 +71,7 @@ export default function ScribeApplyDetailsPage() {
     if (profile.verification_status !== 'approved') {
       Alert.alert(
         'Verification Required',
-        'Your profile must be approved by an administrator before you can apply as a scribe. Please complete your profile or click "Auto Approve" on the home screen.'
+        'Your profile must be approved by an administrator before you can apply as a scribe. Please complete your profile and wait for admin approval.'
       );
       return;
     }

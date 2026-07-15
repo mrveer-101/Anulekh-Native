@@ -95,25 +95,6 @@ export default function ScribeHomeView() {
     }
   };
 
-  const simulateAdminApproval = async () => {
-    setLoading(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ verification_status: 'approved' })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      Alert.alert(t('success'), 'તમારી પ્રોફાઇલ સફળતાપૂર્વક મંજૂર થઈ ગઈ છે! હવે તમે પરીક્ષા સ્વીકારી શકો છો.');
-      await fetchSession();
-    } catch (err: any) {
-      Alert.alert(t('error'), err.message || 'મંજૂર કરવામાં નિષ્ફળતા.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
@@ -204,15 +185,9 @@ export default function ScribeHomeView() {
             <Feather name="clock" size={18} color="#2563eb" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#1e40af' }}>{t('verification_pending')}</Text>
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginBottom: 14, lineHeight: 18 }}>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', lineHeight: 18 }}>
             {t('verification_pending_desc')}
           </Text>
-          <TouchableOpacity 
-            onPress={simulateAdminApproval}
-            style={{ width: '100%', backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>{t('auto_approve')}</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -297,7 +272,7 @@ export default function ScribeHomeView() {
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(234,179,8,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="star" size={20} color="#eab308" style={{ fill: '#eab308' }} />
+              <Ionicons name="star" size={20} color="#eab308" />
             </View>
             <View style={{ flexShrink: 1 }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>Your Rating ⭐️</Text>

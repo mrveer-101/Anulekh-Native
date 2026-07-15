@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
@@ -24,6 +24,7 @@ interface EnrichedApplication extends Application {
     student_name: string;
     education_grade: string;
     phone?: string;
+    status?: string;
   };
 }
 
@@ -34,6 +35,16 @@ export default function ScribeCommitmentsView() {
   const [applications, setApplications] = useState<EnrichedApplication[]>([]);
   const [scribeProfile, setScribeProfile] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+
+  // Status filter for the flat applications list
+  const [selectedFilter, setSelectedFilter] = useState<'All' | 'Pending' | 'Completed' | 'Rejected'>('All');
+
+  // Track which cards are expanded (by application id) for the collapsed list / detailed view toggle
+  const [expandedIds, setExpandedIds] = useState<number[]>([]);
+
+  const toggleExpanded = (id: number) => {
+    setExpandedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  };
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -127,22 +138,42 @@ export default function ScribeCommitmentsView() {
     return (
       <View style={{ flexDirection: 'row', gap: 2 }}>
         {[1, 2, 3, 4, 5].map((star) => (
-          <Feather 
-            key={star} 
-            name="star" 
-            size={12} 
-            color={star <= rating ? '#eab308' : '#cbd5e1'} 
-            style={{ fill: star <= rating ? '#eab308' : 'none' }} 
+          <Ionicons
+            key={star}
+            name={star <= rating ? 'star' : 'star-outline'}
+            size={13}
+            color={star <= rating ? '#eab308' : '#cbd5e1'}
           />
         ))}
       </View>
     );
   };
 
-  const pendingApps = applications.filter(app => app.status === 'pending');
-  const confirmedApps = applications.filter(app => app.status === 'accepted' && app.examDetails?.status === 'matched');
-  const completedApps = applications.filter(app => app.status === 'accepted' && app.examDetails?.status === 'completed');
-  const rejectedApps = applications.filter(app => app.status === 'rejected');
+  // Classify a single application into one of the display buckets (matches renderCard's `type`).
+  const getAppType = (app: EnrichedApplication): 'pending' | 'confirmed' | 'completed' | 'rejected' | null => {
+    if (app.status === 'pending') return 'pending';
+    if (app.status === 'rejected') return 'rejected';
+    if (app.status === 'accepted' && app.examDetails?.status === 'matched') return 'confirmed';
+    if (app.status === 'accepted' && app.examDetails?.status === 'completed') return 'completed';
+    return null;
+  };
+
+  const FILTERS: { key: 'All' | 'Pending' | 'Completed' | 'Rejected'; label: string }[] = [
+    { key: 'All', label: 'All' },
+    { key: 'Pending', label: 'Pending' },
+    { key: 'Completed', label: 'Completed' },
+    { key: 'Rejected', label: 'Rejected' },
+  ];
+
+  // Apply the active filter to the (already newest-first) applications list.
+  // "Pending" covers both pending applications and confirmed commitments (accepted but not yet completed).
+  const visibleApps = applications.filter(app => {
+    const type = getAppType(app);
+    if (!type) return false;
+    if (selectedFilter === 'All') return true;
+    if (selectedFilter === 'Pending') return type === 'pending' || type === 'confirmed';
+    return type === selectedFilter.toLowerCase();
+  });
 
   const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed') => {
     const exam = app.examDetails;
@@ -171,10 +202,16 @@ export default function ScribeCommitmentsView() {
     }
 
     const review = reviews.find(r => r.request_id === app.request_id);
+    const isExpanded = expandedIds.includes(app.id);
 
     return (
       <View key={app.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        {/* Header row (tappable to expand/collapse) */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => toggleExpanded(app.id)}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <View style={{ flex: 1, marginRight: 8 }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
@@ -182,9 +219,26 @@ export default function ScribeCommitmentsView() {
           <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: badgeBg, borderWidth: 1, borderColor: badgeBorder }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: badgeText }}>{statusLabel}</Text>
           </View>
-        </View>
+          <View style={{ marginLeft: 10, width: 26, height: 26, borderRadius: 13, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+          </View>
+        </TouchableOpacity>
 
-        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 12, gap: 6 }}>
+        {/* Collapsed summary line (only when NOT expanded) */}
+        {!isExpanded && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 }}>
+            <Feather name="calendar" size={11} color="#94a3b8" />
+            <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
+              {exam.exam_date || t('date_not_specified')}
+              {exam.exam_venue ? `  •  ${exam.exam_venue}` : ''}
+            </Text>
+          </View>
+        )}
+
+        {/* Detailed view (only when expanded) */}
+        {isExpanded && (
+        <>
+        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginTop: 12, marginBottom: 12, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
             <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
@@ -274,14 +328,13 @@ export default function ScribeCommitmentsView() {
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>Overall Rating:</Text>
                 <StarDisplay rating={review.rating_overall} />
               </View>
-              {review.remark ? (
-                <View style={{ marginTop: 4, borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 6 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 2 }}>Remark</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontStyle: 'italic' }}>"{review.remark}"</Text>
-                </View>
-              ) : null}
+              {/* Review privacy: the student's written remark is intentionally NOT shown to
+                  the scribe. Scribes see numerical ratings only; remarks stay in the
+                  candidate's dashboard. */}
             </View>
           </View>
+        )}
+        </>
         )}
       </View>
     );
@@ -289,60 +342,55 @@ export default function ScribeCommitmentsView() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-      <ScrollView 
+
+      {/* Filter Selection Tabs (equal width) */}
+      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 6 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {FILTERS.map(f => (
+            <TouchableOpacity
+              key={f.key}
+              onPress={() => setSelectedFilter(f.key)}
+              style={{
+                flex: 1,
+                paddingVertical: 8,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: selectedFilter === f.key ? '#059669' : '#fff',
+                borderWidth: 1,
+                borderColor: selectedFilter === f.key ? '#059669' : 'rgba(0,0,0,0.05)',
+              }}
+            >
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: selectedFilter === f.key ? '#fff' : '#64748b' }}>
+                {f.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
       >
-        {/* 1. SECTION: MY PENDING APPLICATIONS */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('my_applications_pending')}</Text>
-          {pendingApps.length === 0 ? (
-            <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>{t('no_pending_apps')}</Text>
-            </View>
-          ) : (
-            pendingApps.map(app => renderCard(app, 'pending'))
-          )}
-        </View>
-
-        {/* 2. SECTION: MY CONFIRMED COMMITMENTS */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('my_confirmed_exams')}</Text>
-          {confirmedApps.length === 0 ? (
-            <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>{t('no_confirmed_exams')}</Text>
-            </View>
-          ) : (
-            confirmedApps.map(app => renderCard(app, 'confirmed'))
-          )}
-        </View>
-
-        {/* 3. SECTION: COMPLETED EXAMS & REVIEWS */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>Completed Exams & Reviews</Text>
-          {completedApps.length === 0 ? (
-            <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>No completed exams yet.</Text>
-            </View>
-          ) : (
-            completedApps.map(app => renderCard(app, 'completed'))
-          )}
-        </View>
-
-        {/* 4. SECTION: REJECTED APPLICATIONS */}
-        <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('rejected_applications')}</Text>
-          {rejectedApps.length === 0 ? (
-            <View style={{ backgroundColor: '#fff', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>{t('no_rejected_apps')}</Text>
-            </View>
-          ) : (
-            rejectedApps.map(app => renderCard(app, 'rejected'))
-          )}
-        </View>
+        {visibleApps.length === 0 ? (
+          <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+            <Feather name="inbox" size={28} color="#94a3b8" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>
+              {selectedFilter === 'All' ? 'No applications yet' : `No ${selectedFilter.toLowerCase()} applications`}
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
+              {selectedFilter === 'All'
+                ? 'Apply to exams from the Explore tab to see them here.'
+                : 'Try selecting a different filter above.'}
+            </Text>
+          </View>
+        ) : (
+          visibleApps.map(app => renderCard(app, getAppType(app) as 'pending' | 'confirmed' | 'rejected' | 'completed'))
+        )}
       </ScrollView>
 
       {/* FORMAL SCRIBE DECLARATION MODAL */}

@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
+import { hoursUntilExam } from '../app/core/examDate';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -131,6 +132,65 @@ export default function StudentHomeView() {
     } catch (_) {
       Alert.alert(t('error'), t('call_error'));
     }
+  };
+
+  // SOS Emergency Scribe Broadcast: for last-minute cancellations (within 24h of the exam),
+  // alert all approved scribes and reopen the request so a replacement can pick it up.
+  const [sosSendingId, setSosSendingId] = useState<number | null>(null);
+
+  const handleSosBroadcast = (exam: any) => {
+    Alert.alert(
+      '🚨 Emergency SOS Broadcast',
+      `Your scribe for "${exam.subject || 'your exam'}" cancelled? This sends a high-priority alert to all nearby volunteer scribes and reopens your request so someone can step in. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send SOS',
+          style: 'destructive',
+          onPress: async () => {
+            setSosSendingId(exam.id);
+            try {
+              // 1. Reopen the request so a new scribe can apply.
+              const { error: reqErr } = await supabase
+                .from('exam_requests')
+                .update({ status: 'pending', scribe_id: null })
+                .eq('id', exam.id);
+              if (reqErr) throw reqErr;
+
+              // 2. Alert all approved scribes with a high-priority notification.
+              const { data: scribes } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('role', 'scribe')
+                .eq('verification_status', 'approved');
+
+              const title = '🚨 URGENT: Scribe Needed';
+              const message = `A candidate urgently needs a scribe for "${exam.subject || 'an exam'}" on ${exam.exam_date || 'the exam day'} at ${exam.exam_venue || 'the venue'}. Open now to help.`;
+
+              for (const scribe of scribes || []) {
+                await supabase.from('notifications').insert({
+                  user_id: scribe.id,
+                  title,
+                  message,
+                  is_read: 0,
+                  created_at: new Date().toISOString(),
+                });
+              }
+
+              Alert.alert(
+                'SOS Sent',
+                `Your emergency request was broadcast to ${(scribes || []).length} available scribe(s). You'll be notified as soon as someone applies.`
+              );
+              await fetchSession();
+            } catch (err: any) {
+              Alert.alert(t('error'), err.message || 'Failed to send SOS broadcast.');
+            } finally {
+              setSosSendingId(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -310,7 +370,7 @@ export default function StudentHomeView() {
                   </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => {
                     setSelectedExam(exam);
                     setIsDeclarationOpen(true);
@@ -320,6 +380,30 @@ export default function StudentHomeView() {
                   <Feather name="file-text" size={12} color="white" />
                   <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
                 </TouchableOpacity>
+
+                {/* SOS Emergency Broadcast — only within 24h of the exam (last-minute cancellations) */}
+                {(() => {
+                  const hrs = hoursUntilExam(exam.exam_date);
+                  const withinWindow = hrs !== null && hrs <= 24 && hrs > -6;
+                  if (!withinWindow) return null;
+                  const sending = sosSendingId === exam.id;
+                  return (
+                    <TouchableOpacity
+                      onPress={() => handleSosBroadcast(exam)}
+                      disabled={sending}
+                      style={{ width: '100%', backgroundColor: '#fef2f2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    >
+                      {sending ? (
+                        <ActivityIndicator size="small" color="#dc2626" />
+                      ) : (
+                        <>
+                          <Feather name="alert-triangle" size={12} color="#dc2626" />
+                          <Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 12 }}>Emergency SOS — Scribe Cancelled?</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             </View>
           ))

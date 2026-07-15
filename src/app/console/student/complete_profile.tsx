@@ -448,7 +448,7 @@ export default function StudentCompleteProfileForm() {
                 marginTop: 10
               }}>
                 <Feather name="info" size={14} color="#64748b" style={{ marginRight: 8, marginTop: 1 }} />
-                <Text style={{ fontSize: 10.5, color: '#475569', flex: 1, leadingHeight: 15, fontWeight: '600' }}>
+                <Text style={{ fontSize: 10.5, color: '#475569', flex: 1, lineHeight: 15, fontWeight: '600' }}>
                   This document is required to match you with the most suitable scribe based on your specific requirements and government norms.
                 </Text>
               </View>

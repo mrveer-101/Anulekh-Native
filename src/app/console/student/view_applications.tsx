@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
 
 interface Application {
@@ -13,6 +13,7 @@ interface Application {
   scribe_name: string;
   status: string;
   created_at: string;
+  rating?: number;
   profile?: {
     full_name: string;
     phone: string;
@@ -79,7 +80,7 @@ export default function ViewApplicationsPage() {
             let finalRating = 0;
             if (reviews && reviews.length > 0) {
               let sumExamAverages = 0;
-              reviews.forEach(r => {
+              reviews.forEach((r: any) => {
                 const punct = r.rating_punctuality || 0;
                 const comm = r.rating_communication || 0;
                 const speed = r.rating_speed || 0;
@@ -294,7 +295,7 @@ export default function ViewApplicationsPage() {
                   
                   {/* Scribe Rating Badge */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef9c3', borderWidth: 1, borderColor: '#fef08a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 }}>
-                    <Feather name="star" size={11} color="#ca8a04" style={{ fill: '#ca8a04' }} />
+                    <Ionicons name="star" size={12} color="#ca8a04" />
                     <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#854d0e' }}>
                       {app.rating && app.rating > 0 ? app.rating.toFixed(1) : 'New'}
                     </Text>

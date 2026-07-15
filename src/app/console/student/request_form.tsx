@@ -60,6 +60,15 @@ export default function ScribeRequestForm() {
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [examVenue, setExamVenue] = useState('');
 
+  // Bulk Exam Creation: additional subjects sharing the same profile/type/language.
+  // Each entry becomes its own exam_requests row on submit so scribes can apply per-exam.
+  const [extraSubjects, setExtraSubjects] = useState<{ subject: string; examDate: string; examVenue: string }[]>([]);
+  // Tracks which extra-subject row the Date/Map pickers are editing (-1 = the primary subject above)
+  const [activeExtraIndex, setActiveExtraIndex] = useState(-1);
+
+  // Pre-Booking: reserve a scribe before the official hall ticket is published.
+  const [isPreBooking, setIsPreBooking] = useState(false);
+
   // Fetch student profile + existing request if editing
   useEffect(() => {
     const fetchData = async () => {
@@ -92,7 +101,8 @@ export default function ScribeRequestForm() {
             setExamDate(examData.exam_date || '');
             setExamVenue(examData.exam_venue || '');
             setAdmitCardImage(examData.admit_card_proof || null);
-            
+            setIsPreBooking(examData.is_prebooking === 'yes');
+
             // Parse Exam Type and Subtopic
             const fullType = examData.exam_type || 'College';
             const match = fullType.match(/^([^(]+)(?:\(([^)]+)\))?/);
@@ -134,8 +144,26 @@ export default function ScribeRequestForm() {
     const formattedMonth = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
     const dateStr = `${formattedDay}/${formattedMonth}/${calendarYear}`;
     const timeStr = `${selectedHour}:${selectedMinute} ${selectedAmPm}`;
-    setExamDate(`${dateStr} | ${timeStr}`);
+    const value = `${dateStr} | ${timeStr}`;
+    if (activeExtraIndex === -1) {
+      setExamDate(value);
+    } else {
+      updateExtraSubject(activeExtraIndex, 'examDate', value);
+    }
     setShowDatePicker(false);
+  };
+
+  // Bulk Exam helpers
+  const addExtraSubject = () => {
+    setExtraSubjects([...extraSubjects, { subject: '', examDate: '', examVenue: '' }]);
+  };
+
+  const updateExtraSubject = (index: number, field: 'subject' | 'examDate' | 'examVenue', value: string) => {
+    setExtraSubjects(prev => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  };
+
+  const removeExtraSubject = (index: number) => {
+    setExtraSubjects(prev => prev.filter((_, i) => i !== index));
   };
 
   const changeMonth = (direction: 'next' | 'prev') => {
@@ -204,21 +232,41 @@ export default function ScribeRequestForm() {
 
     const finalSubTopic = subTopic || searchQuery;
 
-    if (!subject.trim() || !educationGrade.trim() || !examDate.trim() || !examVenue.trim() || !finalSubTopic.trim() || !admitCardImage || examLanguages.length === 0) {
-      Alert.alert('Missing Fields', 'Please fill in all fields (including the Admit Card) and select at least one language.');
+    // Admit card is not required for pre-bookings (they happen before hall tickets are published).
+    const admitCardMissing = !admitCardImage && !isPreBooking;
+
+    if (!subject.trim() || !educationGrade.trim() || !examDate.trim() || !examVenue.trim() || !finalSubTopic.trim() || admitCardMissing || examLanguages.length === 0) {
+      Alert.alert(
+        'Missing Fields',
+        isPreBooking
+          ? 'Please fill in all exam fields and select at least one language.'
+          : 'Please fill in all fields (including the Admit Card) and select at least one language.'
+      );
       return;
+    }
+
+    // Validate any additional subjects (Bulk Exam Creation). Only in create mode.
+    if (!isEditing && extraSubjects.length > 0) {
+      const incomplete = extraSubjects.some(
+        row => !row.subject.trim() || !row.examDate.trim() || !row.examVenue.trim()
+      );
+      if (incomplete) {
+        Alert.alert('Missing Fields', 'Please complete the subject, date, and venue for every additional exam you added.');
+        return;
+      }
     }
 
     setLoading(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+
       if (!session) {
         throw new Error("You must be logged in to create a request.");
       }
 
-      const requestPayload = {
+      // Fields shared by every exam in this submission.
+      const sharedPayload = {
         student_id: session.user.id,
         student_name: profile.official_name || profile.full_name,
         dob: profile.dob,
@@ -228,11 +276,16 @@ export default function ScribeRequestForm() {
         exam_type: `${examType} (${finalSubTopic})`,
         exam_language: examLanguages.join(', '),
         id_proof: profile.aadhar_number || 'Aadhar Verified',
+        admit_card_proof: admitCardImage,
+        is_prebooking: isPreBooking ? 'yes' : 'no',
+        status: 'pending'
+      };
+
+      const requestPayload = {
+        ...sharedPayload,
         subject: subject.trim(),
         exam_date: examDate.trim(),
         exam_venue: examVenue.trim(),
-        admit_card_proof: admitCardImage,
-        status: 'pending'
       };
 
       if (isEditing) {
@@ -244,12 +297,28 @@ export default function ScribeRequestForm() {
         if (error) throw error;
         Alert.alert('Success', 'Your scribe request has been updated successfully!');
       } else {
-        const { error } = await supabase
-          .from('exam_requests')
-          .insert(requestPayload);
+        // Split the primary subject plus every additional subject into individual requests.
+        const allRows = [
+          requestPayload,
+          ...extraSubjects.map(row => ({
+            ...sharedPayload,
+            subject: row.subject.trim(),
+            exam_date: row.examDate.trim(),
+            exam_venue: row.examVenue.trim(),
+          })),
+        ];
 
-        if (error) throw error;
-        Alert.alert('Success', 'Your scribe request has been posted successfully!');
+        for (const row of allRows) {
+          const { error } = await supabase.from('exam_requests').insert(row);
+          if (error) throw error;
+        }
+
+        Alert.alert(
+          'Success',
+          allRows.length > 1
+            ? `${allRows.length} scribe requests have been posted successfully!`
+            : 'Your scribe request has been posted successfully!'
+        );
       }
 
       router.back();
@@ -283,7 +352,29 @@ export default function ScribeRequestForm() {
           {/* Section: Academic & Exam Details */}
           <View>
             <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Details</Text>
-            
+
+            {/* Pre-Booking toggle (create mode only) */}
+            {!isEditing && (
+              <TouchableOpacity
+                onPress={() => setIsPreBooking(!isPreBooking)}
+                activeOpacity={0.8}
+                className={`flex-row items-center justify-between px-3 py-2.5 mb-3 rounded-xl border ${
+                  isPreBooking ? 'bg-blue-50 border-blue-500' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <View className="flex-row items-center flex-1 pr-3">
+                  <Feather name="clock" size={16} color={isPreBooking ? '#2563eb' : '#94a3b8'} />
+                  <View className="ml-2.5 flex-1">
+                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>Pre-Book a Scribe</Text>
+                    <Text className="text-[9px] text-slate-400 mt-0.5">Reserve early, before your hall ticket is published. Admit card optional.</Text>
+                  </View>
+                </View>
+                <View className={`w-9 h-5 rounded-full justify-center px-0.5 ${isPreBooking ? 'bg-blue-500 items-end' : 'bg-slate-300 items-start'}`}>
+                  <View className="w-4 h-4 rounded-full bg-white" />
+                </View>
+              </TouchableOpacity>
+            )}
+
             <View className="space-y-3">
               <View>
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Subject / Paper Name *</Text>
@@ -308,8 +399,8 @@ export default function ScribeRequestForm() {
               {/* Date & Time Picker Trigger */}
               <View>
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Date & Time *</Text>
-                <TouchableOpacity 
-                  onPress={() => setShowDatePicker(true)}
+                <TouchableOpacity
+                  onPress={() => { setActiveExtraIndex(-1); setShowDatePicker(true); }}
                   activeOpacity={0.8}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
                 >
@@ -332,8 +423,8 @@ export default function ScribeRequestForm() {
                     numberOfLines={2}
                     className="flex-1 text-sm text-slate-800 mr-2 py-1"
                   />
-                  <TouchableOpacity 
-                    onPress={() => setShowMapPicker(true)}
+                  <TouchableOpacity
+                    onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
                     className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
                   >
                     <Feather name="map" size={16} color="#2563eb" />
@@ -343,7 +434,9 @@ export default function ScribeRequestForm() {
 
               {/* Admit Card Image Upload */}
               <View className="pt-1">
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Admit Card / Hall Ticket *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
+                  Upload Admit Card / Hall Ticket {isPreBooking ? '(Optional for pre-booking)' : '*'}
+                </Text>
                 <TouchableOpacity 
                   onPress={handleSimulateAdmitCardUpload}
                   className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
@@ -502,8 +595,84 @@ export default function ScribeRequestForm() {
             </View>
           </View>
 
+          {/* Section: Additional Subjects (Bulk Exam Creation) — create mode only */}
+          {!isEditing && (
+            <>
+              <View className="h-px bg-slate-100 w-full my-1" />
+              <View>
+                <View className="flex-row items-center justify-between mb-1">
+                  <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Additional Exams</Text>
+                  {extraSubjects.length > 0 && (
+                    <View className="bg-blue-50 px-2 py-0.5 rounded-full">
+                      <Text className="text-[9px] font-bold text-blue-600">{extraSubjects.length + 1} total</Text>
+                    </View>
+                  )}
+                </View>
+                <Text className="text-[10px] text-slate-400 mb-2.5 ml-0.5">
+                  Sitting multiple papers? Add them here — each becomes a separate request scribes can apply to.
+                </Text>
+
+                {extraSubjects.map((row, index) => (
+                  <View key={index} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2.5">
+                    <View className="flex-row items-center justify-between mb-2">
+                      <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Exam #{index + 2}</Text>
+                      <TouchableOpacity onPress={() => removeExtraSubject(index)} className="p-1">
+                        <Feather name="trash-2" size={14} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+
+                    <View className="space-y-2">
+                      <TextInput
+                        value={row.subject}
+                        onChangeText={(text) => updateExtraSubject(index, 'subject', text)}
+                        placeholder="Subject / Paper Name"
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800"
+                      />
+
+                      <TouchableOpacity
+                        onPress={() => { setActiveExtraIndex(index); setShowDatePicker(true); }}
+                        activeOpacity={0.8}
+                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between"
+                      >
+                        <Text className={`text-sm ${row.examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                          {row.examDate || 'Select Date & Time'}
+                        </Text>
+                        <Feather name="calendar" size={16} color="#2563eb" />
+                      </TouchableOpacity>
+
+                      <View className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between">
+                        <TextInput
+                          value={row.examVenue}
+                          onChangeText={(text) => updateExtraSubject(index, 'examVenue', text)}
+                          placeholder="Exam venue address"
+                          multiline={true}
+                          numberOfLines={2}
+                          className="flex-1 text-sm text-slate-800 mr-2 py-1"
+                        />
+                        <TouchableOpacity
+                          onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
+                          className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
+                        >
+                          <Feather name="map" size={16} color="#2563eb" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  onPress={addExtraSubject}
+                  className="w-full border-2 border-dashed border-blue-200 bg-blue-50/40 rounded-xl py-2.5 flex-row items-center justify-center active:bg-blue-50"
+                >
+                  <Feather name="plus" size={16} color="#2563eb" />
+                  <Text className="text-blue-600 font-bold text-xs ml-1.5">Add another subject</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
           {/* Submit Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={handleSubmit}
             disabled={loading}
             className="w-full bg-blue-500 active:bg-blue-600 py-3 mt-2 rounded-xl items-center justify-center shadow-md shadow-blue-500/30"
@@ -677,7 +846,12 @@ export default function ScribeRequestForm() {
                   <TouchableOpacity
                     key={loc.id}
                     onPress={() => {
-                      setExamVenue(loc.name + ', ' + loc.address);
+                      const value = loc.name + ', ' + loc.address;
+                      if (activeExtraIndex === -1) {
+                        setExamVenue(value);
+                      } else {
+                        updateExtraSubject(activeExtraIndex, 'examVenue', value);
+                      }
                       setShowMapPicker(false);
                     }}
                     className="flex-row items-start p-2.5 mb-2 bg-white rounded-xl border border-slate-100 active:bg-blue-50/20"

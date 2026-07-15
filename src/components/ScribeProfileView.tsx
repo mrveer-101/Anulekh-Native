@@ -29,7 +29,6 @@ export default function ScribeProfileView() {
 
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -131,58 +130,10 @@ export default function ScribeProfileView() {
     ]);
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      '⚠️ DELETE ACCOUNT PERMANENTLY',
-      'Are you absolutely sure? This will delete your profile, registration details, exam requests, and messages permanently from the backend database. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'DELETE PERMANENTLY',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/delete-account`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_id: user.id }),
-              });
-              
-              if (!res.ok) {
-                const errData = await res.json();
-                throw new Error(errData.message || 'Failed to delete account on backend SQLite db.');
-              }
-
-              const { error: profileDelError } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', user.id);
-              
-              if (profileDelError) throw profileDelError;
-
-              await AsyncStorage.removeItem('welcome_toast_shown');
-              await AsyncStorage.removeItem('scribe_welcome_shown');
-              await supabase.auth.signOut();
-              
-              Alert.alert('Deleted', 'Your account has been deleted successfully.');
-              router.replace('/landing');
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to delete account.');
-            } finally {
-              setDeleting(false);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  if (loading || deleting) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#f0fdf4' }}>
         <ActivityIndicator size="large" color="#16a34a" />
-        {deleting && <Text style={{ marginTop: 12, color: '#64748b', fontWeight: '700' }}>Deleting account...</Text>}
       </View>
     );
   }
@@ -477,19 +428,10 @@ export default function ScribeProfileView() {
       {/* Secondary Action Button (Log Out) */}
       <TouchableOpacity
         onPress={handleSignOut}
-        style={{ width: '100%', backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', paddingVertical: 13, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 12 }}
-      >
-        <Feather name="log-out" size={14} color="#64748b" style={{ marginRight: 6 }} />
-        <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Log Out</Text>
-      </TouchableOpacity>
-
-      {/* Danger Zone Action Button (Delete Account) */}
-      <TouchableOpacity
-        onPress={handleDeleteAccount}
         style={{ width: '100%', backgroundColor: '#fee2e2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 13, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
       >
-        <Feather name="trash-2" size={14} color="#dc2626" style={{ marginRight: 6 }} />
-        <Text style={{ color: '#dc2626', fontWeight: '800', fontSize: 13 }}>Delete Account</Text>
+        <Feather name="log-out" size={14} color="#dc2626" style={{ marginRight: 6 }} />
+        <Text style={{ color: '#dc2626', fontWeight: '800', fontSize: 13 }}>Log Out</Text>
       </TouchableOpacity>
 
     </ScrollView>
