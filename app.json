@@ -35,6 +35,12 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Anulekh needs access to your photos so you can upload your hall ticket / admit card."
+        }
       ]
     ],
     "experiments": {

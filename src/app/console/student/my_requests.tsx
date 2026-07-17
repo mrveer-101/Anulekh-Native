@@ -128,16 +128,28 @@ export default function MyRequests() {
           )}
         </View>
 
-        <TouchableOpacity 
-          onPress={() => router.push(role === 'student' ? '/console/student' : '/console/scribe')}
-          className={`w-10 h-10 rounded-full items-center justify-center border-2 border-white shadow-md ${
-            role === 'student' ? 'bg-blue-400 shadow-blue-500/30' : 'bg-emerald-500 shadow-emerald-500/30'
-          }`}
-        >
-          <Text className="text-white font-black text-base">
-            {fullName ? fullName.charAt(0).toUpperCase() : 'U'}
-          </Text>
-        </TouchableOpacity>
+        <View className="flex-row items-center" style={{ gap: 10 }}>
+          {role === 'student' && (
+            <TouchableOpacity
+              onPress={() => router.push('/console/student/request_form' as any)}
+              className="flex-row items-center bg-blue-500 px-3 py-2 rounded-xl"
+              style={{ gap: 6 }}
+            >
+              <Feather name="plus" size={14} color="#fff" />
+              <Text className="text-white font-bold text-xs">New Request</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            onPress={() => router.push(role === 'student' ? '/console/student' : '/console/scribe')}
+            className={`w-10 h-10 rounded-full items-center justify-center border-2 border-white shadow-md ${
+              role === 'student' ? 'bg-blue-400 shadow-blue-500/30' : 'bg-emerald-500 shadow-emerald-500/30'
+            }`}
+          >
+            <Text className="text-white font-black text-base">
+              {fullName ? fullName.charAt(0).toUpperCase() : 'U'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (

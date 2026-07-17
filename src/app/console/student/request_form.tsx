@@ -1,20 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/app/core/supabase';
 
-const EXAM_TYPES = ['School', 'College', 'Competitive'];
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+const EXAM_TYPES = ['School', 'University', 'Competitive', 'Government'];
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
 // Sub-topics database based on Exam Type
 const SUB_TOPICS: { [key: string]: string[] } = {
   School: ['Class 10 Board Exam', 'Class 12 Board Exam', 'Half Yearly Exam', 'Final Term Exam', 'Unit Test / Monthly Assessment'],
-  College: ['Semester End Exam', 'Mid-Term Assessment', 'Practical Lab Exam', 'Backlog / KT Exam', 'Viva Voce'],
-  Competitive: ['UPSC Civil Services', 'JEE Main & Advanced', 'NEET UG Exam', 'IBPS PO / Clerk', 'SSC CGL', 'CAT Admission Exam']
+  University: ['Semester End Exam', 'Mid-Term Assessment', 'Practical Lab Exam', 'Backlog / KT Exam', 'Viva Voce'],
+  Competitive: ['UPSC Civil Services', 'JEE Main & Advanced', 'NEET UG Exam', 'IBPS PO / Clerk', 'SSC CGL', 'CAT Admission Exam'],
+  Government: ['GPSC (Gujarat Public Service Commission)', 'State PSC', 'Recruitment Board Exam', 'Departmental Exam', 'Other Government Exam'],
 };
+
+// Old requests stored "College" before it was renamed to "University" — treat them as equivalent everywhere.
+const normalizeExamTypeLabel = (type: string) => (type === 'College' ? 'University' : type);
 
 const YEARS = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() + i).toString()); // Next 5 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -32,19 +41,25 @@ const MOCK_LOCATIONS = [
 export default function ScribeRequestForm() {
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
-  
+
+  // Entry choice: ask the student whether to fill manually or auto-fill from an admit card.
+  // Editing an existing request skips straight to the form.
+  const [entryMode, setEntryMode] = useState<'choice' | 'form'>(isEditing ? 'form' : 'choice');
+
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
-  
+
   // Form State
   const [subject, setSubject] = useState('');
   const [educationGrade, setEducationGrade] = useState('');
-  const [examType, setExamType] = useState('College');
+  const [examType, setExamType] = useState('University');
   const [subTopic, setSubTopic] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubTopicOpen, setIsSubTopicOpen] = useState(false);
   const [examLanguages, setExamLanguages] = useState<string[]>(['English']);
   const [admitCardImage, setAdmitCardImage] = useState<string | null>(null);
+  const [admitCardFileName, setAdmitCardFileName] = useState<string | null>(null);
+  const [isParsingHallTicket, setIsParsingHallTicket] = useState(false);
 
   // Date & Time Picker State
   const [examDate, setExamDate] = useState('');
@@ -104,10 +119,10 @@ export default function ScribeRequestForm() {
             setIsPreBooking(examData.is_prebooking === 'yes');
 
             // Parse Exam Type and Subtopic
-            const fullType = examData.exam_type || 'College';
+            const fullType = examData.exam_type || 'University';
             const match = fullType.match(/^([^(]+)(?:\(([^)]+)\))?/);
             if (match) {
-              const type = match[1].trim();
+              const type = normalizeExamTypeLabel(match[1].trim());
               const sub = match[2] ? match[2].trim() : '';
               setExamType(type);
               setSubTopic(sub);
@@ -219,9 +234,121 @@ export default function ScribeRequestForm() {
     return list.filter(item => item.toLowerCase().includes(searchQuery.toLowerCase()));
   };
 
-  const handleSimulateAdmitCardUpload = () => {
-    setAdmitCardImage('hall_ticket_admit_card.jpg');
-    Alert.alert('Upload Simulated', 'Your Admit Card image "hall_ticket_admit_card.jpg" has been prepared for upload.');
+  // Reads a picked file's URI into a base64 string, on both web and native.
+  const readFileAsBase64 = async (uri: string): Promise<string> => {
+    if (Platform.OS === 'web') {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+    return await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+  };
+
+  // Sends the picked hall ticket to the backend, which asks Gemini to extract exam details,
+  // then auto-fills the form fields the student hasn't already typed something into.
+  const analyzeHallTicket = async (uri: string, mimeType: string, fileName: string) => {
+    setIsParsingHallTicket(true);
+    try {
+      const fileBase64 = await readFileAsBase64(uri);
+
+      const res = await fetch(`${API_URL}/api/ai/parse-hall-ticket`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_base64: fileBase64, mime_type: mimeType }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to analyze hall ticket.');
+      }
+
+      setAdmitCardImage(fileName);
+      setAdmitCardFileName(fileName);
+
+      if (result.subject) setSubject(result.subject);
+      if (result.exam_venue) setExamVenue(result.exam_venue);
+      if (result.exam_type && EXAM_TYPES.includes(result.exam_type)) setExamType(result.exam_type);
+      if (result.exam_sub_topic) {
+        setSubTopic(result.exam_sub_topic);
+        setSearchQuery(result.exam_sub_topic);
+      }
+      if (result.exam_date) {
+        const timePart = result.exam_time ? result.exam_time : '10:00 AM';
+        setExamDate(`${result.exam_date} | ${timePart}`);
+      }
+
+      Alert.alert('Hall Ticket Analyzed', 'We\'ve auto-filled what we could read from your hall ticket. Please review and correct any fields before submitting.');
+    } catch (err: any) {
+      setAdmitCardImage(fileName);
+      setAdmitCardFileName(fileName);
+      Alert.alert('Auto-Fill Failed', err.message || 'Could not read details from this file. Your hall ticket was still attached — please fill the fields manually.');
+    } finally {
+      setIsParsingHallTicket(false);
+    }
+  };
+
+  const handlePickAdmitCard = () => {
+    Alert.alert(
+      'Upload Hall Ticket',
+      'Choose how you want to upload your admit card.',
+      [
+        { text: 'Choose Photo', onPress: pickAdmitCardImage },
+        { text: 'Choose PDF', onPress: pickAdmitCardPdf },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickAdmitCardImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission Required', 'Please allow photo library access to upload your hall ticket.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.8,
+      base64: false,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType || 'image/jpeg';
+    const fileName = asset.fileName || `hall_ticket_${Date.now()}.jpg`;
+    await analyzeHallTicket(asset.uri, mimeType, fileName);
+  };
+
+  const pickAdmitCardPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const asset = result.assets[0];
+    const mimeType = asset.mimeType || 'application/pdf';
+    const fileName = asset.name || `hall_ticket_${Date.now()}.pdf`;
+    await analyzeHallTicket(asset.uri, mimeType, fileName);
+  };
+
+  // Entry-choice screen: "Auto-Fill from Admit Card" jumps straight to the picker,
+  // then lands on the (now pre-filled) form once analysis completes.
+  const startAutoFillEntry = () => {
+    setEntryMode('form');
+    handlePickAdmitCard();
   };
 
   const handleSubmit = async () => {
@@ -329,14 +456,71 @@ export default function ScribeRequestForm() {
     }
   };
 
+  // Entry-choice screen: ask whether to fill the request manually or auto-fill from an admit card.
+  if (entryMode === 'choice') {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50">
+        <StatusBar style="dark" />
+
+        {/* Header */}
+        <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
+          >
+            <Feather name="arrow-left" size={24} color="#334155" />
+          </TouchableOpacity>
+          <Text className="text-xl font-black text-slate-800">Request a Scribe</Text>
+        </View>
+
+        <View className="flex-1 px-6 py-8 justify-center">
+          <Text className="text-lg font-black text-slate-800 text-center mb-2">How would you like to create this request?</Text>
+          <Text className="text-sm text-slate-500 text-center mb-8">
+            Upload your admit card and we'll auto-fill the exam details for you — or fill everything in yourself.
+          </Text>
+
+          <TouchableOpacity
+            onPress={startAutoFillEntry}
+            activeOpacity={0.85}
+            className="w-full bg-blue-500 rounded-2xl p-5 flex-row items-center mb-4 shadow-md shadow-blue-500/30"
+          >
+            <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
+              <Feather name="upload-cloud" size={22} color="#fff" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-white font-black text-base">Auto-Fill from Admit Card</Text>
+              <Text className="text-blue-100 text-xs mt-0.5">Upload a photo or PDF — subject, date & venue filled automatically</Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setEntryMode('form')}
+            activeOpacity={0.85}
+            className="w-full bg-white border border-slate-200 rounded-2xl p-5 flex-row items-center shadow-sm"
+          >
+            <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mr-4">
+              <Feather name="edit-3" size={22} color="#334155" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-slate-800 font-black text-base">Fill Manually</Text>
+              <Text className="text-slate-400 text-xs mt-0.5">Enter exam details yourself, step by step</Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#334155" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar style="dark" />
-      
+
       {/* Header */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
-        <TouchableOpacity 
-          onPress={() => router.back()} 
+        <TouchableOpacity
+          onPress={() => { if (!isEditing) { setEntryMode('choice'); } else { router.back(); } }}
           className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
         >
           <Feather name="arrow-left" size={24} color="#334155" />
@@ -349,125 +533,10 @@ export default function ScribeRequestForm() {
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
           
-          {/* Section: Academic & Exam Details */}
-          <View>
-            <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Details</Text>
-
-            {/* Pre-Booking toggle (create mode only) */}
-            {!isEditing && (
-              <TouchableOpacity
-                onPress={() => setIsPreBooking(!isPreBooking)}
-                activeOpacity={0.8}
-                className={`flex-row items-center justify-between px-3 py-2.5 mb-3 rounded-xl border ${
-                  isPreBooking ? 'bg-blue-50 border-blue-500' : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <View className="flex-row items-center flex-1 pr-3">
-                  <Feather name="clock" size={16} color={isPreBooking ? '#2563eb' : '#94a3b8'} />
-                  <View className="ml-2.5 flex-1">
-                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>Pre-Book a Scribe</Text>
-                    <Text className="text-[9px] text-slate-400 mt-0.5">Reserve early, before your hall ticket is published. Admit card optional.</Text>
-                  </View>
-                </View>
-                <View className={`w-9 h-5 rounded-full justify-center px-0.5 ${isPreBooking ? 'bg-blue-500 items-end' : 'bg-slate-300 items-start'}`}>
-                  <View className="w-4 h-4 rounded-full bg-white" />
-                </View>
-              </TouchableOpacity>
-            )}
-
-            <View className="space-y-3">
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Subject / Paper Name *</Text>
-                <TextInput 
-                  value={subject}
-                  onChangeText={setSubject}
-                  placeholder="e.g. Mathematics-II"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </View>
-
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Education Grade/Degree *</Text>
-                <TextInput 
-                  value={educationGrade}
-                  onChangeText={setEducationGrade}
-                  placeholder="e.g. B.A. 2nd Year, Class 12 Board"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </View>
-
-              {/* Date & Time Picker Trigger */}
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Date & Time *</Text>
-                <TouchableOpacity
-                  onPress={() => { setActiveExtraIndex(-1); setShowDatePicker(true); }}
-                  activeOpacity={0.8}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
-                >
-                  <Text className={`text-sm ${examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
-                    {examDate || 'Select Date & Time'}
-                  </Text>
-                  <Feather name="calendar" size={16} color="#2563eb" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Venue & Map Trigger */}
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Venue & Address *</Text>
-                <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between focus-within:border-blue-500 focus-within:bg-white">
-                  <TextInput 
-                    value={examVenue}
-                    onChangeText={setExamVenue}
-                    placeholder="Enter exam venue address"
-                    multiline={true}
-                    numberOfLines={2}
-                    className="flex-1 text-sm text-slate-800 mr-2 py-1"
-                  />
-                  <TouchableOpacity
-                    onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
-                    className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
-                  >
-                    <Feather name="map" size={16} color="#2563eb" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Admit Card Image Upload */}
-              <View className="pt-1">
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
-                  Upload Admit Card / Hall Ticket {isPreBooking ? '(Optional for pre-booking)' : '*'}
-                </Text>
-                <TouchableOpacity 
-                  onPress={handleSimulateAdmitCardUpload}
-                  className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
-                    admitCardImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  {admitCardImage ? (
-                    <View className="items-center">
-                      <Feather name="image" size={24} color="#2563eb" />
-                      <Text className="text-xs font-semibold text-slate-800 mt-1">{admitCardImage}</Text>
-                      <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change image</Text>
-                    </View>
-                  ) : (
-                    <View className="items-center">
-                      <Feather name="upload-cloud" size={24} color="#94a3b8" />
-                      <Text className="text-xs font-semibold text-slate-600 mt-1">Select Admit Card Image</Text>
-                      <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-            </View>
-          </View>
-
-          <View className="h-px bg-slate-100 w-full my-1" />
-
-          {/* Section: Category & Languages */}
+          {/* Section: Exam Classification (top) */}
           <View>
             <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Classification</Text>
-            
+
             <View className="space-y-3">
               {/* 1. Exam Type Segments */}
               <View>
@@ -501,7 +570,7 @@ export default function ScribeRequestForm() {
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Sub-topic / Board / Course *</Text>
                 <View className="w-full relative">
                   <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 flex-row items-center justify-between">
-                    <TextInput 
+                    <TextInput
                       value={searchQuery}
                       onChangeText={(text) => {
                         setSearchQuery(text);
@@ -521,7 +590,7 @@ export default function ScribeRequestForm() {
                   {isSubTopicOpen && (
                     <View className="mt-1.5 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                       {getFilteredSubTopics().length === 0 ? (
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           onPress={() => {
                             if (searchQuery.trim()) {
                               setSubTopic(searchQuery);
@@ -568,7 +637,7 @@ export default function ScribeRequestForm() {
                   {EXAM_LANGUAGES.map((lang) => {
                     const isSelected = examLanguages.includes(lang);
                     return (
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         key={lang}
                         onPress={() => {
                           if (isSelected) {
@@ -578,8 +647,8 @@ export default function ScribeRequestForm() {
                           }
                         }}
                         className={`px-3.5 py-1.5 rounded-full border flex-row items-center ${
-                          isSelected 
-                            ? 'bg-blue-500 border-blue-500 shadow-sm shadow-blue-500/30' 
+                          isSelected
+                            ? 'bg-blue-500 border-blue-500 shadow-sm shadow-blue-500/30'
                             : 'bg-slate-50 border-slate-200'
                         }`}
                       >
@@ -592,6 +661,122 @@ export default function ScribeRequestForm() {
                   })}
                 </View>
               </View>
+            </View>
+          </View>
+
+          <View className="h-px bg-slate-100 w-full my-1" />
+
+          {/* Section: Exam Details (middle) — includes Admit Card Upload */}
+          <View>
+            <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Details</Text>
+
+            {/* Pre-Booking toggle (create mode only) */}
+            {!isEditing && (
+              <TouchableOpacity
+                onPress={() => setIsPreBooking(!isPreBooking)}
+                activeOpacity={0.8}
+                className={`flex-row items-center justify-between px-3 py-2.5 mb-3 rounded-xl border ${
+                  isPreBooking ? 'bg-blue-50 border-blue-500' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <View className="flex-row items-center flex-1 pr-3">
+                  <Feather name="clock" size={16} color={isPreBooking ? '#2563eb' : '#94a3b8'} />
+                  <View className="ml-2.5 flex-1">
+                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>Pre-Book a Scribe</Text>
+                    <Text className="text-[9px] text-slate-400 mt-0.5">Reserve early, before your hall ticket is published. Admit card optional.</Text>
+                  </View>
+                </View>
+                <View className={`w-9 h-5 rounded-full justify-center px-0.5 ${isPreBooking ? 'bg-blue-500 items-end' : 'bg-slate-300 items-start'}`}>
+                  <View className="w-4 h-4 rounded-full bg-white" />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            <View className="space-y-3">
+              <View>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Subject / Paper Name *</Text>
+                <TextInput
+                  value={subject}
+                  onChangeText={setSubject}
+                  placeholder="e.g. Mathematics-II"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
+                />
+              </View>
+
+              <View>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Education Grade/Degree *</Text>
+                <TextInput
+                  value={educationGrade}
+                  onChangeText={setEducationGrade}
+                  placeholder="e.g. B.A. 2nd Year, Class 12 Board"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
+                />
+              </View>
+
+              {/* Date & Time Picker Trigger */}
+              <View>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Date & Time *</Text>
+                <TouchableOpacity
+                  onPress={() => { setActiveExtraIndex(-1); setShowDatePicker(true); }}
+                  activeOpacity={0.8}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
+                >
+                  <Text className={`text-sm ${examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                    {examDate || 'Select Date & Time'}
+                  </Text>
+                  <Feather name="calendar" size={16} color="#2563eb" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Venue & Map Trigger */}
+              <View>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Venue & Address *</Text>
+                <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between focus-within:border-blue-500 focus-within:bg-white">
+                  <TextInput
+                    value={examVenue}
+                    onChangeText={setExamVenue}
+                    placeholder="Enter exam venue address"
+                    multiline={true}
+                    numberOfLines={2}
+                    className="flex-1 text-sm text-slate-800 mr-2 py-1"
+                  />
+                  <TouchableOpacity
+                    onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
+                    className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
+                  >
+                    <Feather name="map" size={16} color="#2563eb" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Admit Card Upload + AI Auto-Fill */}
+              <View className="pt-1">
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
+                  Upload Admit Card / Hall Ticket {isPreBooking ? '(Optional for pre-booking)' : '*'}
+                </Text>
+                <TouchableOpacity
+                  onPress={handlePickAdmitCard}
+                  disabled={isParsingHallTicket}
+                  className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
+                    admitCardImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  {admitCardImage ? (
+                    <View className="items-center">
+                      <Feather name={admitCardFileName?.toLowerCase().endsWith('.pdf') ? 'file-text' : 'image'} size={24} color="#2563eb" />
+                      <Text className="text-xs font-semibold text-slate-800 mt-1">{admitCardImage}</Text>
+                      <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change file</Text>
+                    </View>
+                  ) : (
+                    <View className="items-center">
+                      <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                      <Text className="text-xs font-semibold text-slate-600 mt-1">Upload Hall Ticket (Photo or PDF)</Text>
+                      <Text className="text-[10px] text-slate-400 mt-0.5">We'll auto-fill subject, date & venue for you</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
+
             </View>
           </View>
 
@@ -870,6 +1055,72 @@ export default function ScribeRequestForm() {
         </View>
       </Modal>
 
+      {/* 3. FULL-SCREEN OVERLAY: Hall Ticket Analysis in progress */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isParsingHallTicket}
+        onRequestClose={() => {}}
+      >
+        <View className="flex-1 bg-slate-950/80 items-center justify-center px-10">
+          <HallTicketScanningAnimation />
+          <Text className="text-white font-black text-lg mt-6 text-center">Reading your hall ticket…</Text>
+          <Text className="text-slate-300 text-xs mt-2 text-center leading-5">
+            We're extracting the subject, date, venue and classification automatically. This usually takes a few seconds.
+          </Text>
+        </View>
+      </Modal>
+
     </SafeAreaView>
+  );
+}
+
+// Full-screen scanning animation shown while the hall ticket is being analyzed:
+// a pulsing document icon with an animated scan-line sweep.
+function HallTicketScanningAnimation() {
+  const pulseAnim = React.useRef(new Animated.Value(0.85)).current;
+  const scanAnim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.85, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    const scanLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scanAnim, { toValue: 1, duration: 1400, useNativeDriver: true }),
+        Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    );
+    pulseLoop.start();
+    scanLoop.start();
+    return () => {
+      pulseLoop.stop();
+      scanLoop.stop();
+    };
+  }, []);
+
+  const scanTranslateY = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [-46, 46] });
+
+  return (
+    <Animated.View
+      style={{
+        width: 100, height: 100, borderRadius: 28,
+        backgroundColor: 'rgba(37,99,235,0.15)', borderWidth: 1.5, borderColor: 'rgba(59,130,246,0.4)',
+        alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        transform: [{ scale: pulseAnim }],
+      }}
+    >
+      <Feather name="file-text" size={44} color="#60a5fa" />
+      <Animated.View
+        style={{
+          position: 'absolute', left: 0, right: 0, height: 2,
+          backgroundColor: '#93c5fd', shadowColor: '#60a5fa', shadowOpacity: 0.8, shadowRadius: 6,
+          transform: [{ translateY: scanTranslateY }],
+        }}
+      />
+    </Animated.View>
   );
 }

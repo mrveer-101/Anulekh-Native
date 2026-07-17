@@ -218,11 +218,25 @@ export default function StudentRequestsView() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      {/* Header row: request count + always-visible New Request action */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
+        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#64748b' }}>
+          {requests.length} {requests.length === 1 ? 'Request' : 'Requests'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.push('/console/student/request_form' as any)}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }}
+        >
+          <Feather name="plus" size={14} color="#fff" />
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#fff' }}>New Request</Text>
+        </TouchableOpacity>
+      </View>
+
       <FlatList
         style={{ flex: 1 }}
         data={requests}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: 24, paddingTop: 8, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
         }
@@ -233,6 +247,12 @@ export default function StudentRequestsView() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center' }}>
               {t('no_requests_desc')}
             </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/console/student/request_form' as any)}
+              style={{ marginTop: 16, backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12 }}
+            >
+              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>Create Request</Text>
+            </TouchableOpacity>
           </View>
         }
         renderItem={({ item }) => {

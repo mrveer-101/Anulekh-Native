@@ -104,7 +104,7 @@ export default function ScribeExploreView() {
   };
 
   const LANGUAGE_OPTIONS = ['All', 'English', 'Hindi', 'Gujarati'];
-  const TYPE_OPTIONS = ['All', 'School', 'College', 'Competitive'];
+  const TYPE_OPTIONS = ['All', 'School', 'University', 'Competitive', 'Government'];
   const SLOT_OPTIONS = ['All', 'Morning', 'Afternoon', 'Evening'];
   const DAY_OPTIONS = ['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -129,9 +129,12 @@ export default function ScribeExploreView() {
     const matchesLanguage = selectedLanguage === 'All' ||
       (exam.exam_language || '').toLowerCase().includes(selectedLanguage.toLowerCase());
 
-    // exam_type is stored like "College (Semester End Exam)" — match by prefix.
+    // exam_type is stored like "University (Semester End Exam)" — match by prefix.
+    // Older requests were saved under the previous label "College" — treat that as "University" too.
+    const examTypePrefix = (exam.exam_type || '').trim().toLowerCase();
     const matchesType = selectedType === 'All' ||
-      (exam.exam_type || '').trim().toLowerCase().startsWith(selectedType.toLowerCase());
+      examTypePrefix.startsWith(selectedType.toLowerCase()) ||
+      (selectedType === 'University' && examTypePrefix.startsWith('college'));
 
     // Time slot / day are derived from the free-text date; if unparseable, don't exclude.
     const slot = getExamSlot(exam.exam_date);

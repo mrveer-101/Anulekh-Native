@@ -408,6 +408,23 @@ export default function StudentHomeView() {
             </View>
           ))
         )}
+
+        {/* Persistent "New Request" action once at least one request already exists */}
+        {confirmedPlans.length > 0 && (
+          <TouchableOpacity
+            onPress={() => {
+              if (isVerified) {
+                router.push('/console/student/request_form' as any);
+              } else {
+                Alert.alert(t('error'), t('verify_first_error'));
+              }
+            }}
+            style={{ width: '100%', borderWidth: 1.5, borderColor: BLUE, borderStyle: 'dashed', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, marginTop: 4 }}
+          >
+            <Feather name="plus" size={14} color={BLUE} />
+            <Text style={{ fontFamily: 'Roboto', color: BLUE, fontWeight: '800', fontSize: 12 }}>{t('request_scribe')}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* 4. Need Help? Contact Support Card */}
