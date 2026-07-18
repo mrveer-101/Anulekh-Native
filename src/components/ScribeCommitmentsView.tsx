@@ -274,7 +274,7 @@ export default function ScribeCommitmentsView() {
     const isExpanded = expandedIds.includes(app.id);
 
     return (
-      <View key={app.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderLeftWidth: 6, borderLeftColor: badgeText, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 16, elevation: 3, marginBottom: 14 }}>
+      <View key={app.id} style={{ backgroundColor: '#f8fafc', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', borderLeftWidth: 6, borderLeftColor: badgeText, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}>
         {/* Header row (tappable to expand/collapse) */}
         <TouchableOpacity
           activeOpacity={0.7}
@@ -483,7 +483,7 @@ export default function ScribeCommitmentsView() {
         }
       >
         {visibleApps.length === 0 ? (
-          <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+          <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
             <Feather name="inbox" size={28} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>
               {selectedFilter === 'All' ? 'No applications yet' : `No ${selectedFilter.toLowerCase()} applications`}
@@ -507,7 +507,7 @@ export default function ScribeCommitmentsView() {
         onRequestClose={() => setIsDeclarationOpen(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+          <View style={{ backgroundColor: '#f8fafc', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#64748b', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0' }}>
             {/* Modal Header */}
             <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{t('scribe_declaration')}</Text>
@@ -768,7 +768,7 @@ export default function ScribeCommitmentsView() {
         onRequestClose={() => setRatingModalVisible(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 340, borderRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+          <View style={{ backgroundColor: '#f8fafc', width: '100%', maxWidth: 340, borderRadius: 28, padding: 24, shadowColor: '#64748b', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0' }}>
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                 <Feather name="star" size={24} color="#2563eb" />

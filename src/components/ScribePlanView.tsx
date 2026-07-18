@@ -102,7 +102,7 @@ export default function ScribePlanView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('exam_schedule')}</Text>
 
         {plans.length === 0 ? (
-          <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+          <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
             <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)' }}>
               <Feather name="calendar" size={26} color="#059669" />
             </View>
@@ -113,7 +113,7 @@ export default function ScribePlanView() {
           </View>
         ) : (
           plans.map((exam) => (
-            <View key={exam.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}>
+            <View key={exam.id} style={{ backgroundColor: '#f8fafc', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
@@ -198,7 +198,7 @@ export default function ScribePlanView() {
         onRequestClose={() => setIsDeclarationOpen(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+          <View style={{ backgroundColor: '#f8fafc', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#64748b', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0' }}>
             {/* Modal Header */}
             <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{t('scribe_declaration')}</Text>

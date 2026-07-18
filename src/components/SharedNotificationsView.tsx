@@ -145,7 +145,7 @@ export default function SharedNotificationsView() {
       </View>
 
       {notifications.length === 0 ? (
-        <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+        <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
           <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' }}>
             <Feather name="bell-off" size={24} color="#94a3b8" />
           </View>
@@ -164,7 +164,7 @@ export default function SharedNotificationsView() {
                 if (isUnread) handleMarkSingleAsRead(item.id);
               }}
               activeOpacity={isUnread ? 0.8 : 1}
-              style={{ padding: 16, borderRadius: 24, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 5, elevation: 1, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start', backgroundColor: isUnread ? '#fff' : '#f8fafc', borderColor: isUnread ? themeBgLight : '#e2e8f0' }}
+              style={{ padding: 16, borderRadius: 24, borderWidth: 1, shadowColor: '#64748b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14, flexDirection: 'row', alignItems: 'flex-start', backgroundColor: isUnread ? '#fff' : '#f8fafc', borderColor: isUnread ? themeBgLight : '#e2e8f0' }}
             >
               {/* Status Indicator Icon */}
               <View style={{ width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginRight: 12, backgroundColor: isUnread ? themeBgLight : '#f1f5f9' }}>

@@ -417,16 +417,16 @@ export default function ScribeExploreView() {
         }}
         activeOpacity={0.9}
         style={{ 
-          backgroundColor: '#fff', 
+          backgroundColor: '#f8fafc', 
           padding: 18, 
           borderRadius: 24, 
           borderWidth: 1, 
-          borderColor: 'rgba(0,0,0,0.06)', 
-          shadowColor: '#000', 
+          borderColor: '#e2e8f0', 
+          shadowColor: '#64748b', 
           shadowOffset: { width: 0, height: 4 }, 
-          shadowOpacity: 0.03, 
-          shadowRadius: 10, 
-          elevation: 2, 
+          shadowOpacity: 0.08, 
+          shadowRadius: 12, 
+          elevation: 3, 
           marginBottom: 12 
         }}
       >
@@ -503,14 +503,14 @@ export default function ScribeExploreView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
         <ActivityIndicator size="large" color="#16a34a" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
+    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
       
       {/* Search Header Bar */}
       <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 10, gap: 10 }}>
@@ -612,7 +612,7 @@ export default function ScribeExploreView() {
         
         {/* Scribe's Preferred Availability Windows */}
         {scribeProfile?.availability_slots ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
             <Feather name="clock" size={13} color="#16a34a" style={{ marginRight: 2 }} />
             <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
               Your Slots:
@@ -645,7 +645,7 @@ export default function ScribeExploreView() {
           </Text>
           
           {filteredExams.length === 0 ? (
-            <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
               <Feather name="search" size={26} color="#94a3b8" />
               <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching exams</Text>
               <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>

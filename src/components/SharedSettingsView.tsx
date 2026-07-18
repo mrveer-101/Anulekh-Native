@@ -153,7 +153,7 @@ export default function SharedSettingsView() {
     <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
       {/* Profile Header Card */}
-      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.04, shadowRadius: 16, marginTop: 12, marginBottom: 16 }}>
+      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginTop: 12, marginBottom: 16 }}>
         <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 2, borderColor: 'rgba(37,99,235,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
           <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563eb' }}>
             {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
@@ -168,7 +168,7 @@ export default function SharedSettingsView() {
       </View>
 
       {/* Editable Account Information Card */}
-      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, marginBottom: 16 }}>
+      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 16 }}>
         
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Basic Information</Text>
@@ -453,7 +453,7 @@ export default function SharedSettingsView() {
       </View>
 
       {/* App Settings Card (Language Toggle Display) */}
-      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 12, marginBottom: 20 }}>
+      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 20 }}>
         <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>{t('language_display')}</Text>
         <Text style={{ fontSize: 10, color: '#64748b', marginBottom: 12 }}>{t('select_language_desc')}</Text>
         
