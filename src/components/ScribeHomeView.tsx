@@ -451,7 +451,7 @@ export default function ScribeHomeView() {
                       <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>🚨 EMERGENCY SOS</Text>
                     </View>
                   )}
-                  {exam.private_scribe_id && (
+                  {!!exam.private_scribe_id && (
                     <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
                       <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>💌 PRIVATE INVITE</Text>
                     </View>

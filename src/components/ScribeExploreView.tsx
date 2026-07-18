@@ -441,7 +441,7 @@ export default function ScribeExploreView() {
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '900', color: '#b91c1c' }}>🚨 EMERGENCY SOS</Text>
               </View>
             )}
-            {exam.private_scribe_id && (
+            {!!exam.private_scribe_id && (
               <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>💌 PRIVATE INVITE</Text>
               </View>
@@ -626,7 +626,7 @@ export default function ScribeExploreView() {
         ) : null}
 
         {/* Nearby Opportunities Segment */}
-        {scribeLocation && nearbyExams.length > 0 && (
+        {!!scribeLocation && nearbyExams.length > 0 && (
           <View style={{ marginBottom: 18 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
               <Ionicons name="location" size={15} color="#16a34a" />
