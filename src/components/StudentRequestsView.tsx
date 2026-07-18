@@ -37,6 +37,22 @@ export default function StudentRequestsView() {
   const [refreshing, setRefreshing] = useState(false);
   const [studentProfile, setStudentProfile] = useState<any>(null);
 
+  // Tab view control
+  const [activeTab, setActiveTab] = useState<'requests' | 'past_scribes'>('requests');
+
+  // Past scribes and private invites states
+  const [pastScribes, setPastScribes] = useState<any[]>([]);
+  const [scribeSearchQuery, setScribeSearchQuery] = useState('');
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
+  const [inviteTargetScribe, setInviteTargetScribe] = useState<any>(null);
+  const [submittingInvite, setSubmittingInvite] = useState(false);
+
+  // Scribe detailed profile modal states
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [viewingScribe, setViewingScribe] = useState<any>(null);
+  const [viewingReviews, setViewingReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
   const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
@@ -81,6 +97,26 @@ export default function StudentRequestsView() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch unique past scribes
+      const { data: pastExams } = await supabase
+        .from('exam_requests')
+        .select('scribe_id')
+        .eq('student_id', session.user.id)
+        .not('scribe_id', 'is', null);
+
+      const uniqueScribeIds = Array.from(new Set((pastExams || []).map((e: any) => e.scribe_id)));
+      const scribesList = await Promise.all(
+        uniqueScribeIds.map(async (sid) => {
+          const { data: scribeProf } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', sid)
+            .single();
+          return scribeProf;
+        })
+      );
+      setPastScribes(scribesList.filter(Boolean));
 
       // Enrich requests with applications counts and scribe profiles
       const enriched = await Promise.all(
@@ -224,6 +260,54 @@ export default function StudentRequestsView() {
 
   const closeCallSheet = () => setIsCallOpen(false);
 
+  const handleOpenScribeProfile = async (scribe: any) => {
+    setViewingScribe({ scribe_name: scribe.full_name || scribe.official_name, profile: scribe });
+    setProfileModalVisible(true);
+    setLoadingReviews(true);
+    try {
+      const { data, error } = await supabase
+        .from('scribe_reviews')
+        .select('*')
+        .eq('scribe_id', scribe.id);
+      if (!error && data) {
+        setViewingReviews(data);
+      } else {
+        setViewingReviews([]);
+      }
+    } catch (e) {
+      console.error(e);
+      setViewingReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const openInviteModal = (scribe: any) => {
+    setInviteTargetScribe(scribe);
+    setInviteModalVisible(true);
+  };
+
+  const sendPrivateInvitation = async (examId: number) => {
+    if (!inviteTargetScribe || submittingInvite) return;
+    setSubmittingInvite(true);
+    try {
+      const { error } = await supabase
+        .from('exam_requests')
+        .update({ private_scribe_id: inviteTargetScribe.id })
+        .eq('id', examId);
+      
+      if (error) throw error;
+      
+      Alert.alert("Success", `Invitation sent privately to ${inviteTargetScribe.full_name || inviteTargetScribe.official_name}!`);
+      setInviteModalVisible(false);
+      fetchRequests();
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to send invitation.");
+    } finally {
+      setSubmittingInvite(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
@@ -237,7 +321,10 @@ export default function StudentRequestsView() {
       {/* Header row: request count + always-visible New Request action */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#64748b' }}>
-          {requests.length} {requests.length === 1 ? 'Request' : 'Requests'}
+          {activeTab === 'requests' 
+            ? `${requests.length} ${requests.length === 1 ? 'Request' : 'Requests'}`
+            : `${pastScribes.length} Past Scribes`
+          }
         </Text>
         <TouchableOpacity
           onPress={() => router.push('/console/student/request_form' as any)}
@@ -248,6 +335,31 @@ export default function StudentRequestsView() {
         </TouchableOpacity>
       </View>
 
+      {/* Tab Switcher */}
+      <View style={{ flexDirection: 'row', paddingHorizontal: 24, marginBottom: 12, gap: 10 }}>
+        <TouchableOpacity
+          onPress={() => setActiveTab('requests')}
+          style={{
+            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: activeTab === 'requests' ? '#2563eb' : '#fff',
+            borderWidth: 1, borderColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.05)'
+          }}
+        >
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>My Requests</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('past_scribes')}
+          style={{
+            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: activeTab === 'past_scribes' ? '#2563eb' : '#fff',
+            borderWidth: 1, borderColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.05)'
+          }}
+        >
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'requests' ? (
       <FlatList
         style={{ flex: 1 }}
         data={requests}
@@ -295,6 +407,51 @@ export default function StudentRequestsView() {
               default: return { text: '#2563eb', border: '#bfdbfe', bg: '#eff6ff' };
             }
           })();
+
+          const isToday = item.exam_date && item.exam_date.split('|')[0].trim() === new Date().toISOString().split('T')[0];
+          
+          const handleSOS = async () => {
+            if (item.is_emergency === 'yes') {
+              Alert.alert("SOS Already Sent", "You have already notified emergency scribes for this request.");
+              return;
+            }
+            
+            Alert.alert(
+              'Trigger Emergency SOS',
+              'This will notify all available emergency scribes immediately. Are you sure?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Confirm SOS', style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      // Update request
+                      await supabase.from('exam_requests').update({ is_emergency: 'yes' }).eq('id', item.id);
+                      
+                      // Get emergency scribes
+                      const { data: scribes } = await supabase.from('profiles').select('id').eq('role', 'scribe').eq('urgent_calls', 'yes');
+                      
+                      if (scribes && scribes.length > 0) {
+                        const notifications = scribes.map(s => ({
+                          user_id: s.id,
+                          title: '🚨 Emergency Scribe Needed!',
+                          message: `[Emergency Request] A student needs an emergency scribe for "${item.subject}" TODAY at ${item.exam_venue}! Open the app to accept immediately.`,
+                          is_read: 0,
+                          created_at: new Date().toISOString()
+                        }));
+                        await supabase.from('notifications').insert(notifications);
+                      }
+                      
+                      Alert.alert("SOS Alert Sent!", "All registered emergency scribes have been notified.");
+                      fetchRequests();
+                    } catch (e: any) {
+                      Alert.alert("Error", e.message || "Failed to trigger SOS");
+                    }
+                  }
+                }
+              ]
+            );
+          };
 
           const handleDelete = () => {
             Alert.alert(
@@ -447,22 +604,42 @@ export default function StudentRequestsView() {
 
                 {/* View Scribes — only when pending */}
                 {item.status === 'pending' && (
-                  <TouchableOpacity
-                    onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
-                    style={{
-                      backgroundColor: '#2563eb',
-                      borderRadius: 14, paddingVertical: 14,
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-                      shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Feather name="users" size={18} color="#fff" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.2 }}>
-                      View Scribes ({item.applicationCount ?? 0})
-                    </Text>
-                  </TouchableOpacity>
+                  <>
+                    {isToday && (
+                      <TouchableOpacity
+                        onPress={handleSOS}
+                        style={{
+                          backgroundColor: item.is_emergency === 'yes' ? '#fca5a5' : '#ef4444',
+                          borderRadius: 14, paddingVertical: 14,
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                          shadowColor: '#ef4444', shadowOffset: { width: 0, height: 6 },
+                          shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Feather name="alert-triangle" size={18} color="#fff" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.2 }}>
+                          {item.is_emergency === 'yes' ? 'SOS Triggered' : '🚨 Call SOS Emergency Scribe'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
+                      style={{
+                        backgroundColor: '#2563eb',
+                        borderRadius: 14, paddingVertical: 14,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="users" size={18} color="#fff" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.2 }}>
+                        View Scribes ({item.applicationCount ?? 0})
+                      </Text>
+                    </TouchableOpacity>
+                  </>
                 )}
 
                 {/* Matched actions: Call + Chat */}
@@ -572,6 +749,87 @@ export default function StudentRequestsView() {
           );
         }}
       />
+      ) : (
+        <View style={{ flex: 1 }}>
+          {/* Scribe Name Search Bar */}
+          <View style={{ backgroundColor: '#fff', marginHorizontal: 24, marginBottom: 14, borderRadius: 16, borderWidth: 1.5, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 }}>
+            <Feather name="search" size={16} color="#64748b" style={{ marginRight: 8 }} />
+            <TextInput
+              value={scribeSearchQuery}
+              onChangeText={setScribeSearchQuery}
+              placeholder="Search past scribes by name..."
+              placeholderTextColor="#94a3b8"
+              style={{ flex: 1, fontFamily: 'Roboto', fontSize: 13, color: '#0f172a', paddingVertical: 10, fontWeight: '600' }}
+            />
+            {scribeSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setScribeSearchQuery('')}>
+                <Feather name="x" size={14} color="#64748b" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Past Scribes List */}
+          <FlatList
+            style={{ flex: 1 }}
+            data={pastScribes.filter(s => (s.full_name || s.official_name || '').toLowerCase().includes(scribeSearchQuery.toLowerCase()))}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+            ListEmptyComponent={
+              <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+                <Feather name="users" size={48} color="#94a3b8" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 12 }}>No Past Scribes Found</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center' }}>
+                  {scribeSearchQuery.length > 0
+                    ? "Try searching with a different name."
+                    : "Scribes you have worked with in completed exams will show up here."
+                  }
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 1.5, marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#2563eb' }}>
+                      {(item.full_name || item.official_name || 'S').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{item.full_name || item.official_name}</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 1 }}>{item.occupation || 'Volunteer Scribe'}</Text>
+                  </View>
+                </View>
+
+                <View style={{ gap: 6, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Feather name="book-open" size={12} color="#64748b" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>Education: {item.education_level}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Feather name="map-pin" size={12} color="#64748b" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>Location: {item.location}</Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => handleOpenScribeProfile(item)}
+                    style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569' }}>View Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => openInviteModal(item)}
+                    style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#fff' }}>Invite Privately</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          />
+        </View>
+      )}
 
       {/* FORMAL SCRIBE DECLARATION MODAL */}
       <Modal
@@ -967,6 +1225,193 @@ export default function StudentRequestsView() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* PRIVATE INVITATION MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={inviteModalVisible}
+        onRequestClose={() => setInviteModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 350, borderRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+            
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Feather name="mail" size={22} color="#2563eb" />
+              </View>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a', textAlign: 'center' }}>Invite Privately</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
+                Select an exam request to invite <Text style={{ fontWeight: '700', color: '#0f172a' }}>{inviteTargetScribe?.full_name || inviteTargetScribe?.official_name}</Text> privately:
+              </Text>
+            </View>
+
+            <ScrollView style={{ maxHeight: 200 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+              {requests.filter(r => r.status === 'pending' && !r.private_scribe_id).length === 0 ? (
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', paddingVertical: 12 }}>
+                  No pending/prebooked requests available for invitation.
+                </Text>
+              ) : (
+                requests
+                  .filter(r => r.status === 'pending' && !r.private_scribe_id)
+                  .map((r) => (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => sendPrivateInvitation(r.id)}
+                      style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' }}
+                    >
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#334155' }}>{r.subject}</Text>
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 2 }}>{r.exam_date} · {r.exam_type}</Text>
+                    </TouchableOpacity>
+                  ))
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              onPress={() => setInviteModalVisible(false)}
+              style={{ marginTop: 16, width: '100%', backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>Cancel</Text>
+            </TouchableOpacity>
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* SCRIBE ACCOUNT PROFILE MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={profileModalVisible}
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+            
+            {/* Modal Header */}
+            <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>Scribe Account Profile</Text>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Content */}
+            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 20, gap: 14 }} showsVerticalScrollIndicator={false}>
+              {/* Profile Header Card */}
+              <View style={{ alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#2563eb' }}>
+                    {viewingScribe?.scribe_name?.charAt(0).toUpperCase() || 'S'}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 18, color: '#0f172a' }}>{viewingScribe?.scribe_name}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>{viewingScribe?.profile?.occupation || 'Volunteer Scribe'}</Text>
+              </View>
+
+              {/* Scribe Stats / Details */}
+              <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="book-open" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Education: </Text>
+                    {viewingScribe?.profile?.education_level || 'N/A'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="globe" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Languages: </Text>
+                    {(() => {
+                      const langs = viewingScribe?.profile?.languages;
+                      if (!langs) return 'N/A';
+                      if (Array.isArray(langs)) return langs.join(', ');
+                      if (typeof langs === 'string') {
+                        try {
+                          const parsed = JSON.parse(langs);
+                          if (Array.isArray(parsed)) return parsed.join(', ');
+                        } catch (_) {}
+                        return langs;
+                      }
+                      return 'N/A';
+                    })()}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="map-pin" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Location: </Text>
+                    {viewingScribe?.profile?.location || 'N/A'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="award" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>First Time Scribe? </Text>
+                    {viewingScribe?.profile?.first_time === 'yes' ? 'Yes' : 'No'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="shield" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>ID Verification: </Text>
+                    {viewingScribe?.profile?.verification_status === 'approved' ? 'Aadhar Verified ✅' : 'Pending Verification'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Scribe Reviews / Student Feedback Section */}
+              <View>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Reviews</Text>
+                
+                {loadingReviews ? (
+                  <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 10 }} />
+                ) : viewingReviews.length === 0 ? (
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', paddingVertical: 10 }}>No feedback reviews submitted yet.</Text>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {viewingReviews.map((r, idx) => (
+                      <View key={r.id || idx} style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', gap: 2 }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Ionicons
+                                key={star}
+                                name={star <= (r.rating_overall || 5) ? 'star' : 'star-outline'}
+                                size={11}
+                                color={star <= (r.rating_overall || 5) ? '#eab308' : '#cbd5e1'}
+                              />
+                            ))}
+                          </View>
+                          <Text style={{ fontSize: 9, color: '#94a3b8' }}>
+                            {r.created_at ? r.created_at.split('T')[0] : ''}
+                          </Text>
+                        </View>
+                        {r.remark ? (
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', marginTop: 2 }}>
+                            "{r.remark}"
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer / Close */}
+            <View style={{ padding: 18, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              <TouchableOpacity 
+                onPress={() => setProfileModalVisible(false)}
+                style={{ width: '100%', backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 13 }}>Close Account Profile</Text>
+              </TouchableOpacity>
+            </View>
+
           </View>
         </View>
       </Modal>

@@ -44,6 +44,9 @@ export default function ViewApplicationsPage() {
   const [viewingReviews, setViewingReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
 
+  // Scribe name search query state
+  const [searchQuery, setSearchQuery] = useState('');
+
   const handleOpenScribeProfile = async (app: Application) => {
     setViewingScribe(app);
     setProfileModalVisible(true);
@@ -215,6 +218,25 @@ export default function ViewApplicationsPage() {
               created_at: new Date().toISOString()
             });
         }
+        // 7. If it was an emergency request, notify all emergency scribes that it has been filled
+        if (exam.is_emergency === 'yes') {
+          const { data: emergencyScribes } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'scribe')
+            .eq('urgent_calls', 'yes');
+            
+          if (emergencyScribes && emergencyScribes.length > 0) {
+            const emergencyNotifs = emergencyScribes.map(s => ({
+              user_id: s.id,
+              title: '✅ SOS Request Filled',
+              message: `The emergency request for "${exam.subject}" today has been matched successfully. No need for anyone now, thank you!`,
+              is_read: 0,
+              created_at: new Date().toISOString()
+            }));
+            await supabase.from('notifications').insert(emergencyNotifs);
+          }
+        }
 
         // Show Success Overlay and route back
         setShowSuccessOverlay(true);
@@ -290,36 +312,63 @@ export default function ViewApplicationsPage() {
         </View>
       </View>
 
+      {/* Search Scribe Bar */}
+      {applications.length > 0 && (
+        <View className="bg-white px-6 py-2.5 border-b border-slate-100">
+          <View className="bg-slate-50 border border-slate-200 rounded-2xl flex-row items-center px-4 py-1">
+            <Feather name="search" size={16} color="#64748b" style={{ marginRight: 8 }} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search scribes by name..."
+              placeholderTextColor="#94a3b8"
+              className="flex-1 text-slate-800 text-xs py-2 font-semibold"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Feather name="x" size={14} color="#64748b" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
-        {applications.length === 0 ? (
+        {applications.filter(app => app.scribe_name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
           <View className="bg-white p-8 rounded-3xl border border-slate-100 items-center justify-center mt-10">
             <Feather name="users" size={48} color="#94a3b8" />
-            <Text className="text-slate-800 text-base font-bold mt-4">No Applicants Yet</Text>
+            <Text className="text-slate-800 text-base font-bold mt-4">
+              {searchQuery.length > 0 ? 'No Matching Scribes' : 'No Applicants Yet'}
+            </Text>
             <Text className="text-slate-400 text-xs mt-1 text-center">
-              Scribes will appear here once they apply to assist you with this exam.
+              {searchQuery.length > 0
+                ? 'Try searching with another name or clear the query.'
+                : 'Scribes will appear here once they apply to assist you.'}
             </Text>
           </View>
         ) : (
-          applications.map((app) => {
-            const isWorking = actioning === app.id;
-            return (
-              <View key={app.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-4">
-                
-                {/* Scribe Header */}
-                <View className="flex-row items-center justify-between border-b border-slate-50 pb-3 mb-3">
-                  <View className="flex-row items-center">
-                    <View className="w-9 h-9 rounded-full bg-blue-100 items-center justify-center mr-3">
-                      <Text className="text-blue-600 font-bold text-sm">
-                        {app.scribe_name.charAt(0).toUpperCase()}
-                      </Text>
+          applications
+            .filter(app => app.scribe_name.toLowerCase().includes(searchQuery.toLowerCase()))
+            .map((app) => {
+              const isWorking = actioning === app.id;
+              return (
+                <View key={app.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-4">
+                  
+                  {/* Scribe Header */}
+                  <View className="flex-row items-center justify-between border-b border-slate-50 pb-3 mb-3">
+                    <View className="flex-row items-center">
+                      <View className="w-9 h-9 rounded-full bg-blue-100 items-center justify-center mr-3">
+                        <Text className="text-blue-600 font-bold text-sm">
+                          {app.scribe_name.charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text className="text-sm font-bold text-slate-800">{app.scribe_name}</Text>
+                        <Text className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                          {app.profile?.occupation || 'Volunteer Scribe'}
+                        </Text>
+                      </View>
                     </View>
-                    <View>
-                      <Text className="text-sm font-bold text-slate-800">{app.scribe_name}</Text>
-                      <Text className="text-[10px] font-semibold text-slate-400 mt-0.5">
-                        {app.profile?.occupation || 'Volunteer Scribe'}
-                      </Text>
-                    </View>
-                  </View>
                   
                   {/* Scribe Rating Badge */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef9c3', borderWidth: 1, borderColor: '#fef08a', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 }}>

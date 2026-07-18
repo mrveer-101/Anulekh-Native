@@ -181,7 +181,15 @@ export default function ScribeExploreView() {
         return stats.sum / stats.count;
       };
 
-      // 4. Exclude exams this scribe was already rejected from
+      // 4. Fetch past matches to boost previously worked student requests
+      const { data: pastMatches } = await supabase
+        .from('exam_requests')
+        .select('student_id')
+        .eq('scribe_id', session.user.id);
+
+      const pastStudentsSet = new Set((pastMatches || []).map((pm: any) => pm.student_id));
+
+      // 5. Exclude exams this scribe was already rejected from
       const { data: rejectedApps } = await supabase
         .from('scribe_applications')
         .select('request_id')
@@ -190,11 +198,33 @@ export default function ScribeExploreView() {
 
       const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
       const visibleExams = (data || [])
-        .filter((exam: any) => !rejectedRequestIds.has(exam.id))
+        .filter((exam: any) => {
+          // Exclude rejected opportunities
+          if (rejectedRequestIds.has(exam.id)) return false;
+          // Exclude private invitations meant for other scribes
+          if (exam.private_scribe_id && exam.private_scribe_id !== session.user.id) return false;
+          return true;
+        })
         .sort((a: any, b: any) => {
+          // 0. Emergency SOS check (highest priority booster)
+          const aEmergency = a.is_emergency === 'yes' ? 1 : 0;
+          const bEmergency = b.is_emergency === 'yes' ? 1 : 0;
+          if (aEmergency !== bEmergency) return bEmergency - aEmergency;
+
+          // 1. Private invite check (booster)
+          const aPrivate = a.private_scribe_id === session.user.id ? 1 : 0;
+          const bPrivate = b.private_scribe_id === session.user.id ? 1 : 0;
+          if (aPrivate !== bPrivate) return bPrivate - aPrivate;
+
+          // 2. Past student check (booster)
+          const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
+          const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
+          if (aPast !== bPast) return bPast - aPast;
+
+          // 3. Fallback to student average rating
           const ratingA = getStudentAvgRating(a.student_id);
           const ratingB = getStudentAvgRating(b.student_id);
-          return ratingB - ratingA; // higher rating first
+          return ratingB - ratingA;
         });
 
       setAvailableExams(visibleExams);
@@ -405,7 +435,31 @@ export default function ScribeExploreView() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
           </View>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {exam.is_emergency === 'yes' && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '900', color: '#b91c1c' }}>🚨 EMERGENCY SOS</Text>
+              </View>
+            )}
+            {exam.private_scribe_id && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>💌 PRIVATE INVITE</Text>
+              </View>
+            )}
+            {(() => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              const tomorrowStr = tomorrow.toISOString().split('T')[0];
+              const examDateOnly = exam.exam_date ? exam.exam_date.split('|')[0].trim() : '';
+              if (examDateOnly === tomorrowStr) {
+                return (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#ef4444' }}>⚠️ URGENT</Text>
+                  </View>
+                );
+              }
+              return null;
+            })()}
             {exam.is_prebooking === 'yes' && (
               <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#2563eb' }}>PRE-BOOK</Text>
