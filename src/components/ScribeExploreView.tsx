@@ -503,14 +503,14 @@ export default function ScribeExploreView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0fdf4' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
         <ActivityIndicator size="large" color="#16a34a" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f0fdf4' }}>
+    <View style={{ flex: 1, backgroundColor: '#ffffff' }}>
       
       {/* Search Header Bar */}
       <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 10, gap: 10 }}>

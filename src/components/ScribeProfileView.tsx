@@ -132,7 +132,7 @@ export default function ScribeProfileView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#f0fdf4' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#ffffff' }}>
         <ActivityIndicator size="large" color="#16a34a" />
       </View>
     );

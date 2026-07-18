@@ -37,7 +37,7 @@ const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }
 ];
 
 // ── Design tokens (light theme — green accent for scribe) ──────
-const BG         = '#f0fdf4';   // soft green-tinted white
+const BG         = '#ffffff';   // clean white background
 const SURFACE    = 'rgba(255,255,255,0.82)';
 const BORDER     = 'rgba(0,0,0,0.07)';
 const ACCENT     = '#16a34a';   // green primary
@@ -130,9 +130,7 @@ export default function ScribeDashboard() {
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
 
-      {/* Background orbs — bolder opacity */}
-      <View style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(22,163,74,0.38)' }} />
-      <View style={{ position: 'absolute', bottom: 100, left: -50, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(37,99,235,0.33)' }} />
+      {/* Background orbs removed for clean white style */}
 
       {/* ── HEADER ── */}
       <SafeAreaView edges={['top']} style={{
