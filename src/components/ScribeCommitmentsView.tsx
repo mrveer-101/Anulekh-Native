@@ -274,7 +274,7 @@ export default function ScribeCommitmentsView() {
     const isExpanded = expandedIds.includes(app.id);
 
     return (
-      <View key={app.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}>
+      <View key={app.id} style={{ backgroundColor: '#fff', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderLeftWidth: 6, borderLeftColor: badgeText, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.03, shadowRadius: 16, elevation: 3, marginBottom: 14 }}>
         {/* Header row (tappable to expand/collapse) */}
         <TouchableOpacity
           activeOpacity={0.7}
@@ -311,7 +311,7 @@ export default function ScribeCommitmentsView() {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
             <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
+              {t('candidate_student')}: <Text style={{ fontFamily: 'Roboto', fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -341,7 +341,7 @@ export default function ScribeCommitmentsView() {
               {/* Call */}
               <TouchableOpacity 
                 onPress={() => openCallSheet(exam)}
-                style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
               >
                 <Feather name="phone" size={12} color="#334155" />
                 <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
@@ -350,7 +350,7 @@ export default function ScribeCommitmentsView() {
               {/* Chat */}
               <TouchableOpacity 
                 onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
               >
                 <Feather name="message-square" size={12} color="#334155" />
                 <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
@@ -363,7 +363,7 @@ export default function ScribeCommitmentsView() {
                 setSelectedExam(exam);
                 setIsDeclarationOpen(true);
               }}
-              style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 }}
+              style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
             >
               <Feather name="file-text" size={12} color="white" />
               <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
@@ -430,7 +430,7 @@ export default function ScribeCommitmentsView() {
                 return (
                   <TouchableOpacity
                     onPress={() => openRatingModal(app)}
-                    style={{ width: '100%', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    style={{ width: '100%', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                   >
                     <Feather name="edit-3" size={12} color="#2563eb" style={{ marginRight: 4 }} />
                     <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>Rate Student</Text>
