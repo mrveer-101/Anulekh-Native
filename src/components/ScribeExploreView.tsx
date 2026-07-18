@@ -159,8 +159,29 @@ export default function ScribeExploreView() {
 
       if (error) throw error;
 
-      // 3. Exclude exams this scribe was already rejected from — the request stays
-      // public for every other scribe, it's just hidden from this scribe's own feed.
+      // 3. Fetch all student reviews to calculate average ratings
+      const { data: studentReviews } = await supabase
+        .from('student_reviews')
+        .select('student_id, rating_overall');
+
+      // Map student_id -> { sum: number, count: number }
+      const studentRatingsMap: { [studentId: string]: { sum: number; count: number } } = {};
+      (studentReviews || []).forEach((r: any) => {
+        if (!studentRatingsMap[r.student_id]) {
+          studentRatingsMap[r.student_id] = { sum: 0, count: 0 };
+        }
+        studentRatingsMap[r.student_id].sum += r.rating_overall || 0;
+        studentRatingsMap[r.student_id].count += 1;
+      });
+
+      // Map student_id -> avg_rating (default 5.0 for students with no reviews so they start with high priority)
+      const getStudentAvgRating = (studentId: string): number => {
+        const stats = studentRatingsMap[studentId];
+        if (!stats || stats.count === 0) return 5.0; // New student / no rating gets maximum priority
+        return stats.sum / stats.count;
+      };
+
+      // 4. Exclude exams this scribe was already rejected from
       const { data: rejectedApps } = await supabase
         .from('scribe_applications')
         .select('request_id')
@@ -168,7 +189,13 @@ export default function ScribeExploreView() {
         .eq('status', 'rejected');
 
       const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
-      const visibleExams = (data || []).filter((exam: any) => !rejectedRequestIds.has(exam.id));
+      const visibleExams = (data || [])
+        .filter((exam: any) => !rejectedRequestIds.has(exam.id))
+        .sort((a: any, b: any) => {
+          const ratingA = getStudentAvgRating(a.student_id);
+          const ratingB = getStudentAvgRating(b.student_id);
+          return ratingB - ratingA; // higher rating first
+        });
 
       setAvailableExams(visibleExams);
     } catch (error: any) {

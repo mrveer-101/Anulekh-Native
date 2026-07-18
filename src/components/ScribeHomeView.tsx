@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
@@ -23,6 +23,33 @@ export default function ScribeHomeView() {
   const [completedExamsCount, setCompletedExamsCount] = useState(0);
   const [reviews, setReviews] = useState<any[]>([]);
   const [showRatingDetails, setShowRatingDetails] = useState(false);
+
+  // Calling States
+  const [callExam, setCallExam] = useState<any>(null);
+  const [isCallOpen, setIsCallOpen] = useState(false);
+  const [showMaskedNumber, setShowMaskedNumber] = useState(false);
+
+  const openCallSheet = (exam: any) => {
+    if (!exam || !exam.exam_date) {
+      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
+      return;
+    }
+    
+    // Check if the exam date is today
+    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    if (dateStr !== todayStr) {
+      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
+      return;
+    }
+
+    setCallExam(exam);
+    setShowMaskedNumber(false);
+    setIsCallOpen(true);
+  };
+
+  const closeCallSheet = () => setIsCallOpen(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,6 +80,28 @@ export default function ScribeHomeView() {
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
+      // Fetch all student reviews to calculate average ratings
+      const { data: studentReviews } = await supabase
+        .from('student_reviews')
+        .select('student_id, rating_overall');
+
+      // Map student_id -> { sum: number, count: number }
+      const studentRatingsMap: { [studentId: string]: { sum: number; count: number } } = {};
+      (studentReviews || []).forEach((r: any) => {
+        if (!studentRatingsMap[r.student_id]) {
+          studentRatingsMap[r.student_id] = { sum: 0, count: 0 };
+        }
+        studentRatingsMap[r.student_id].sum += r.rating_overall || 0;
+        studentRatingsMap[r.student_id].count += 1;
+      });
+
+      // Map student_id -> avg_rating (default 5.0 for students with no reviews so they start with high priority)
+      const getStudentAvgRating = (studentId: string): number => {
+        const stats = studentRatingsMap[studentId];
+        if (!stats || stats.count === 0) return 5.0; // New student / no rating gets maximum priority
+        return stats.sum / stats.count;
+      };
+
       const { data: rejectedApps } = await supabase
         .from('scribe_applications')
         .select('request_id')
@@ -60,7 +109,15 @@ export default function ScribeHomeView() {
         .eq('status', 'rejected');
 
       const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
-      setAvailableExams((available || []).filter((exam: any) => !rejectedRequestIds.has(exam.id)));
+      const sortedAvailable = (available || [])
+        .filter((exam: any) => !rejectedRequestIds.has(exam.id))
+        .sort((a: any, b: any) => {
+          const ratingA = getStudentAvgRating(a.student_id);
+          const ratingB = getStudentAvgRating(b.student_id);
+          return ratingB - ratingA; // higher rating first
+        });
+
+      setAvailableExams(sortedAvailable);
 
       // 3. Fetch Scribe's Confirmed Commitments
       const { data: committed } = await supabase
@@ -259,138 +316,76 @@ export default function ScribeHomeView() {
         </View>
       </View>
 
-      {/* Your Rating Summary Card */}
-      <View style={{ marginBottom: 24 }}>
-        <TouchableOpacity 
-          onPress={() => setShowRatingDetails(!showRatingDetails)}
-          activeOpacity={0.9}
-          style={{ 
-            backgroundColor: '#fff', 
-            borderWidth: 1, 
-            borderColor: 'rgba(0,0,0,0.05)', 
-            borderRadius: 24, 
-            padding: 18, 
-            shadowColor: '#000', 
-            shadowOffset: { width: 0, height: 4 }, 
-            shadowOpacity: 0.04, 
-            shadowRadius: 10, 
-            elevation: 2,
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(234,179,8,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-              <Ionicons name="star" size={20} color="#eab308" />
-            </View>
-            <View style={{ flexShrink: 1 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>Your Rating ⭐️</Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                {reviews.length === 0 ? 'No reviews yet' : `Average from ${reviews.length} exam${reviews.length > 1 ? 's' : ''}`}
-              </Text>
-            </View>
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a' }}>
-              {finalRating > 0 ? finalRating.toFixed(1) : '—'}
-            </Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', marginTop: 2 }}>
-              {showRatingDetails ? 'TAP TO COLLAPSE ▲' : 'TAP TO EXPAND ▼'}
-            </Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* Expandable Rating Details */}
-        {showRatingDetails && (
-          <View style={{ 
-            backgroundColor: '#fff', 
-            borderWidth: 1, 
-            borderColor: 'rgba(0,0,0,0.05)', 
-            borderTopWidth: 0,
-            borderBottomLeftRadius: 24, 
-            borderBottomRightRadius: 24, 
-            marginTop: -12,
-            paddingTop: 24,
-            paddingHorizontal: 20, 
-            paddingBottom: 20,
-            gap: 10,
-            shadowColor: '#000', 
-            shadowOffset: { width: 0, height: 4 }, 
-            shadowOpacity: 0.04, 
-            shadowRadius: 10, 
-            elevation: 2 
-          }}>
-            {reviews.length === 0 ? (
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#94a3b8', textAlign: 'center', paddingVertical: 10 }}>
-                Complete exams and receive reviews from students to view your rating breakdowns.
-              </Text>
-            ) : (
-              <View style={{ gap: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Punctuality:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgPunctuality.toFixed(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons key={star} name={star <= Math.round(avgPunctuality) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgPunctuality) ? '#eab308' : '#cbd5e1'} />
-                      ))}
-                    </View>
-                  </View>
+      {/* Upcoming Confirmed Exams (Upcoming Matches) */}
+      {scribeCommitments.length > 0 && (
+        <View style={{ marginBottom: 24 }}>
+          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>Upcoming Matches</Text>
+          {scribeCommitments.map((exam) => (
+            <View 
+              key={exam.id} 
+              style={{ backgroundColor: '#fff', padding: 16, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(22,163,74,0.15)', shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'Exam'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
                 </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Communication:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgCommunication.toFixed(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons key={star} name={star <= Math.round(avgCommunication) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgCommunication) ? '#eab308' : '#cbd5e1'} />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Writing Speed:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgSpeed.toFixed(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons key={star} name={star <= Math.round(avgSpeed) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgSpeed) ? '#eab308' : '#cbd5e1'} />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Behavior & Politeness:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgBehavior.toFixed(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons key={star} name={star <= Math.round(avgBehavior) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgBehavior) ? '#eab308' : '#cbd5e1'} />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569', fontWeight: '600' }}>Overall Rating:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#0f172a' }}>{avgOverall.toFixed(1)}</Text>
-                    <View style={{ flexDirection: 'row', gap: 1 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Ionicons key={star} name={star <= Math.round(avgOverall) ? "star" : "star-outline"} size={11} color={star <= Math.round(avgOverall) ? '#eab308' : '#cbd5e1'} />
-                      ))}
-                    </View>
-                  </View>
+                <View style={{ backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)', paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>Confirmed Match</Text>
                 </View>
               </View>
-            )}
-          </View>
-        )}
-      </View>
+
+              <View style={{ borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 10, marginBottom: 12, gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                    {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="calendar" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                    {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="map-pin" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
+                    {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                    {t('exam_language')}: {exam.exam_language}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Chat & Call Action buttons */}
+              <View style={{ flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10 }}>
+                {/* Call */}
+                <TouchableOpacity 
+                  onPress={() => openCallSheet(exam)}
+                  style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                >
+                  <Feather name="phone" size={12} color="#334155" />
+                  <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                </TouchableOpacity>
+
+                {/* Chat */}
+                <TouchableOpacity 
+                  onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
+                  style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                >
+                  <Feather name="message-square" size={12} color="#334155" />
+                  <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Available Opportunities List */}
       <View>
@@ -501,6 +496,91 @@ export default function ScribeHomeView() {
         </View>
         <Feather name="chevron-right" size={18} color="#64748b" />
       </TouchableOpacity>
+
+      {/* Call Modal Sheet */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isCallOpen}
+        onRequestClose={closeCallSheet}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 15 }}>
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Feather name="phone-call" size={20} color="#059669" />
+              </View>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{t('call_detail')}</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>પ્રાઈવસી પ્રોટેક્શન સક્રિય કરેલ છે.</Text>
+            </View>
+
+            <View style={{ gap: 14, marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#059669' }}>
+                    {callExam?.student_name?.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a' }}>{callExam?.student_name}</Text>
+                  <View style={{ marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)' }}>
+                    <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
+                  </View>
+                </View>
+              </View>
+
+              {showMaskedNumber ? (
+                <View style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)' }}>
+                  <Feather name="phone" size={18} color="#059669" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: 1.5 }}>
+                    {callExam?.phone || '9876543210'}
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setShowMaskedNumber(true)}
+                  style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)', borderStyle: 'dashed' }}
+                >
+                  <Feather name="eye" size={16} color="#059669" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: '#059669' }}>{t('view_number')}</Text>
+                </TouchableOpacity>
+              )}
+
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
+                વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના વિદ્યાર્થી
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={async () => {
+                const url = `tel:${callExam?.phone || '9876543210'}`;
+                try {
+                  const supported = await Linking.canOpenURL(url);
+                  if (supported) {
+                    await Linking.openURL(url);
+                  } else {
+                    Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+                  }
+                } catch (_) {
+                  Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+                }
+              }}
+              style={{ backgroundColor: '#059669', borderRadius: 18, paddingVertical: 16, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#059669', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}
+              activeOpacity={0.85}
+            >
+              <Feather name="phone-call" size={20} color="#fff" />
+              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 16, fontWeight: '900' }}>{t('dial_now')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={closeCallSheet}
+              style={{ paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
+            >
+              <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </ScrollView>
   );

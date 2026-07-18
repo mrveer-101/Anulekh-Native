@@ -203,6 +203,20 @@ export default function StudentRequestsView() {
   };
 
   const openCallSheet = (exam: any) => {
+    if (!exam || !exam.exam_date) {
+      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
+      return;
+    }
+    
+    // Check if the exam date is today
+    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    if (dateStr !== todayStr) {
+      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
+      return;
+    }
+
     setCallExam(exam);
     setShowMaskedNumber(false);
     setIsCallOpen(true);

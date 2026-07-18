@@ -36,6 +36,14 @@ export default function ScribeCommitmentsView() {
   const [scribeProfile, setScribeProfile] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
 
+  // Student reviews states
+  const [studentReviews, setStudentReviews] = useState<any[]>([]);
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [ratingTarget, setRatingTarget] = useState<any>(null);
+  const [selectedRating, setSelectedRating] = useState(5);
+  const [remark, setRemark] = useState('');
+  const [submittingRating, setSubmittingRating] = useState(false);
+
   // Status filter for the flat applications list
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Pending' | 'Completed' | 'Rejected'>('All');
 
@@ -90,6 +98,13 @@ export default function ScribeCommitmentsView() {
         .eq('scribe_id', session.user.id);
       setReviews(reviewsData || []);
 
+      // Fetch reviews of students left by this scribe
+      const { data: studentReviewsData } = await supabase
+        .from('student_reviews')
+        .select('*')
+        .eq('scribe_id', session.user.id);
+      setStudentReviews(studentReviewsData || []);
+
       // Enrich with Exam Details
       const enriched = await Promise.all(
         (data || []).map(async (app: any) => {
@@ -120,7 +135,59 @@ export default function ScribeCommitmentsView() {
     fetchApplications();
   };
 
+  const openRatingModal = (app: EnrichedApplication) => {
+    setRatingTarget(app);
+    setSelectedRating(5);
+    setRemark('');
+    setRatingModalVisible(true);
+  };
+
+  const submitStudentRating = async () => {
+    if (!ratingTarget || submittingRating) return;
+    setSubmittingRating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { error } = await supabase
+        .from('student_reviews')
+        .insert({
+          request_id: ratingTarget.request_id,
+          student_id: ratingTarget.examDetails.student_id,
+          scribe_id: session.user.id,
+          rating_overall: selectedRating,
+          remark: remark.trim(),
+          created_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      Alert.alert("Success", "Student rating submitted successfully!");
+      setRatingModalVisible(false);
+      fetchApplications();
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to submit rating.");
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
+
   const openCallSheet = (exam: any) => {
+    if (!exam || !exam.exam_date) {
+      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
+      return;
+    }
+    
+    // Check if the exam date is today
+    // Date format is "YYYY-MM-DD | 10:00 AM" or "YYYY-MM-DD"
+    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    if (dateStr !== todayStr) {
+      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
+      return;
+    }
+
     setCallExam(exam);
     setShowMaskedNumber(false);
     setIsCallOpen(true);
@@ -334,6 +401,43 @@ export default function ScribeCommitmentsView() {
                   the scribe. Scribes see numerical ratings only; remarks stay in the
                   candidate's dashboard. */}
             </View>
+          </View>
+        )}
+
+        {/* Scribe's Feedback for Student (Rate Student) */}
+        {type === 'completed' && (
+          <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
+            {(() => {
+              const studentReview = studentReviews.find(r => r.request_id === app.request_id);
+              if (studentReview) {
+                return (
+                  <View style={{ gap: 4 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Rating for Student</Text>
+                    <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', fontWeight: '700' }}>Overall Rating:</Text>
+                        <StarDisplay rating={studentReview.rating_overall} />
+                      </View>
+                      {studentReview.remark ? (
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontStyle: 'italic', marginTop: 2 }}>
+                          "{studentReview.remark}"
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              } else {
+                return (
+                  <TouchableOpacity
+                    onPress={() => openRatingModal(app)}
+                    style={{ width: '100%', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                  >
+                    <Feather name="edit-3" size={12} color="#2563eb" style={{ marginRight: 4 }} />
+                    <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>Rate Student</Text>
+                  </TouchableOpacity>
+                );
+              }
+            })()}
           </View>
         )}
         </>
@@ -653,6 +757,81 @@ export default function ScribeCommitmentsView() {
           >
             <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* RATE STUDENT MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={ratingModalVisible}
+        onRequestClose={() => setRatingModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 340, borderRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Feather name="star" size={24} color="#2563eb" />
+              </View>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a', textAlign: 'center' }}>Rate Candidate Student</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
+                Please provide feedback for student {ratingTarget?.examDetails?.student_name}.
+              </Text>
+            </View>
+
+            {/* Stars selection */}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 20 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setSelectedRating(star)}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons
+                    name={star <= selectedRating ? "star" : "star-outline"}
+                    size={32}
+                    color={star <= selectedRating ? "#eab308" : "#cbd5e1"}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Remark input */}
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6, marginLeft: 2 }}>Write a remark (optional)</Text>
+              <TextInput
+                value={remark}
+                onChangeText={setRemark}
+                placeholder="e.g. Cooperative, punctual and shared requirements clearly."
+                placeholderTextColor="#94a3b8"
+                multiline={true}
+                numberOfLines={3}
+                style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', height: 72, textAlignVertical: 'top' }}
+              />
+            </View>
+
+            {/* Actions */}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setRatingModalVisible(false)}
+                style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={submitStudentRating}
+                disabled={submittingRating}
+                style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 13 }}>Submit Rating</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+          </View>
         </View>
       </Modal>
     </View>

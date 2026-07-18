@@ -38,6 +38,34 @@ export default function ViewApplicationsPage() {
   const [actionType, setActionType] = useState<'accept' | 'reject' | null>(null);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
+  // Scribe Profile Modal States
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
+  const [viewingScribe, setViewingScribe] = useState<Application | null>(null);
+  const [viewingReviews, setViewingReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+
+  const handleOpenScribeProfile = async (app: Application) => {
+    setViewingScribe(app);
+    setProfileModalVisible(true);
+    setLoadingReviews(true);
+    try {
+      const { data, error } = await supabase
+        .from('scribe_reviews')
+        .select('*')
+        .eq('scribe_id', app.scribe_id);
+      if (!error && data) {
+        setViewingReviews(data);
+      } else {
+        setViewingReviews([]);
+      }
+    } catch (e) {
+      console.error(e);
+      setViewingReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
   useEffect(() => {
     fetchApplications();
   }, [params.id]);
@@ -341,6 +369,14 @@ export default function ViewApplicationsPage() {
                   </View>
                 </View>
 
+                {/* View Scribe Profile Button */}
+                <TouchableOpacity
+                  onPress={() => handleOpenScribeProfile(app)}
+                  style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}
+                >
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569' }}>View Scribe Account</Text>
+                </TouchableOpacity>
+
                 {/* Action Buttons */}
                 <View className="flex-row space-x-3 pt-3 border-t border-slate-50">
                   <TouchableOpacity
@@ -442,6 +478,141 @@ export default function ViewApplicationsPage() {
           </View>
         </View>
       )}
+
+      {/* 3. SCRIBE ACCOUNT PROFILE MODAL */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={profileModalVisible}
+        onRequestClose={() => setProfileModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
+          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
+            
+            {/* Modal Header */}
+            <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>Scribe Account Profile</Text>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={18} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Profile Content */}
+            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 20, gap: 14 }} showsVerticalScrollIndicator={false}>
+              {/* Profile Header Card */}
+              <View style={{ alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ width: 56, height: 56, borderRadius: 20, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#2563eb' }}>
+                    {viewingScribe?.scribe_name?.charAt(0).toUpperCase() || 'S'}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 18, color: '#0f172a' }}>{viewingScribe?.scribe_name}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>{viewingScribe?.profile?.occupation || 'Volunteer Scribe'}</Text>
+              </View>
+
+              {/* Scribe Stats / Details */}
+              <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="book-open" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Education: </Text>
+                    {viewingScribe?.profile?.education_level || 'N/A'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="globe" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Languages: </Text>
+                    {(() => {
+                      const langs = viewingScribe?.profile?.languages;
+                      if (!langs) return 'N/A';
+                      if (Array.isArray(langs)) return langs.join(', ');
+                      if (typeof langs === 'string') {
+                        try {
+                          const parsed = JSON.parse(langs);
+                          if (Array.isArray(parsed)) return parsed.join(', ');
+                        } catch (_) {}
+                        return langs;
+                      }
+                      return 'N/A';
+                    })()}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="map-pin" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>Location: </Text>
+                    {viewingScribe?.profile?.location || 'N/A'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="award" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>First Time Scribe? </Text>
+                    {viewingScribe?.profile?.first_time === 'yes' ? 'Yes' : 'No'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Feather name="shield" size={13} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    <Text style={{ fontWeight: '800', color: '#334155' }}>ID Verification: </Text>
+                    {viewingScribe?.profile?.verification_status === 'approved' ? 'Aadhar Verified ✅' : 'Pending Verification'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Scribe Reviews / Student Feedback Section */}
+              <View>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Reviews</Text>
+                
+                {loadingReviews ? (
+                  <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 10 }} />
+                ) : viewingReviews.length === 0 ? (
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#94a3b8', fontStyle: 'italic', textAlign: 'center', paddingVertical: 10 }}>No feedback reviews submitted yet.</Text>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {viewingReviews.map((r, idx) => (
+                      <View key={r.id || idx} style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flexDirection: 'row', gap: 2 }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Ionicons
+                                key={star}
+                                name={star <= (r.rating_overall || 5) ? 'star' : 'star-outline'}
+                                size={11}
+                                color={star <= (r.rating_overall || 5) ? '#eab308' : '#cbd5e1'}
+                              />
+                            ))}
+                          </View>
+                          <Text style={{ fontSize: 9, color: '#94a3b8' }}>
+                            {r.created_at ? r.created_at.split('T')[0] : ''}
+                          </Text>
+                        </View>
+                        {r.remark ? (
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', marginTop: 2 }}>
+                            "{r.remark}"
+                          </Text>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer / Close */}
+            <View style={{ padding: 18, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              <TouchableOpacity 
+                onPress={() => setProfileModalVisible(false)}
+                style={{ width: '100%', backgroundColor: '#2563eb', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 13 }}>Close Account Profile</Text>
+              </TouchableOpacity>
+            </View>
+
+          </View>
+        </View>
+      </Modal>
 
     </SafeAreaView>
   );

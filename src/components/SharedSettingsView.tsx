@@ -24,6 +24,12 @@ export default function SharedSettingsView() {
   const [certificationProof, setCertificationProof] = useState('');
   const [aadharImageProof, setAadharImageProof] = useState('');
 
+  // Scribe Specific Settings states
+  const [role, setRole] = useState<'student' | 'scribe' | ''>('');
+  const [firstTime, setFirstTime] = useState(false);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [availabilitySlots, setAvailabilitySlots] = useState('');
+
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
@@ -52,6 +58,7 @@ export default function SharedSettingsView() {
       if (profile) {
         setFullName(profile.full_name || '');
         setPhone(profile.phone || '');
+        setRole(profile.role || '');
         
         // Populate extra details
         setDob(profile.dob || '2005-02-03');
@@ -61,6 +68,16 @@ export default function SharedSettingsView() {
         setAadharNumber(profile.aadhar_number || '8102917340');
         setCertificationProof(profile.certification_proof || 'educational_certificate.pdf');
         setAadharImageProof(profile.aadhar_image_proof || 'government_id_proof.jpg');
+
+        // Scribe specific fields
+        setFirstTime(profile.first_time === 'yes');
+        try {
+          const parsedLangs = typeof profile.languages === 'string' ? JSON.parse(profile.languages) : (profile.languages || []);
+          setSelectedLanguages(Array.isArray(parsedLangs) ? parsedLangs : []);
+        } catch (_) {
+          setSelectedLanguages(typeof profile.languages === 'string' ? [profile.languages] : []);
+        }
+        setAvailabilitySlots(profile.availability_slots || '');
       }
     } catch (error) {
       console.error('Error fetching user data in Settings:', error);
@@ -77,17 +94,25 @@ export default function SharedSettingsView() {
 
     setUpdating(true);
     try {
+      const updateData: any = {
+        full_name: fullName.trim(),
+        phone: phone.trim(),
+        dob: dob.trim(),
+        location: location.trim(),
+        occupation: occupation.trim(),
+        education_level: educationLevel.trim(),
+        aadhar_number: aadharNumber.trim(),
+      };
+      
+      if (role === 'scribe') {
+        updateData.first_time = firstTime ? 'yes' : 'no';
+        updateData.languages = JSON.stringify(selectedLanguages);
+        updateData.availability_slots = availabilitySlots;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          full_name: fullName.trim(),
-          phone: phone.trim(),
-          dob: dob.trim(),
-          location: location.trim(),
-          occupation: occupation.trim(),
-          education_level: educationLevel.trim(),
-          aadhar_number: aadharNumber.trim(),
-        })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;
@@ -319,6 +344,89 @@ export default function SharedSettingsView() {
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Scribe Specific Profile Details */}
+              {role === 'scribe' && (
+                <View style={{ borderTopWidth: 1.5, borderTopColor: '#f8fafc', paddingTop: 10, gap: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Scribe Configuration</Text>
+                  
+                  {/* First Time Scribe Switcher Option */}
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>First Time Scribe?</Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        <TouchableOpacity
+                          onPress={() => setFirstTime(true)}
+                          style={{
+                            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                            backgroundColor: firstTime ? '#16a34a' : '#fff',
+                            borderWidth: 1, borderColor: firstTime ? '#16a34a' : 'rgba(0,0,0,0.06)'
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: firstTime ? '#fff' : '#64748b' }}>Yes</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => setFirstTime(false)}
+                          style={{
+                            paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                            backgroundColor: !firstTime ? '#16a34a' : '#fff',
+                            borderWidth: 1, borderColor: !firstTime ? '#16a34a' : 'rgba(0,0,0,0.06)'
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: !firstTime ? '#fff' : '#64748b' }}>No</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Languages Selector */}
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Feather name="globe" size={12} color="#2563eb" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Preferred Scribe Languages</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {['English', 'Hindi', 'Gujarati'].map(langOption => {
+                        const isSelected = selectedLanguages.includes(langOption);
+                        return (
+                          <TouchableOpacity
+                            key={langOption}
+                            onPress={() => {
+                              if (isSelected) {
+                                setSelectedLanguages(selectedLanguages.filter(l => l !== langOption));
+                              } else {
+                                setSelectedLanguages([...selectedLanguages, langOption]);
+                              }
+                            }}
+                            style={{
+                              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                              backgroundColor: isSelected ? '#2563eb' : '#f8fafc',
+                              borderWidth: 1, borderColor: isSelected ? '#2563eb' : 'rgba(0,0,0,0.06)'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? '#fff' : '#64748b' }}>{langOption}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Availability Slots */}
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Feather name="clock" size={12} color="#2563eb" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Availability Slots</Text>
+                    </View>
+                    <TextInput
+                      value={availabilitySlots}
+                      onChangeText={setAvailabilitySlots}
+                      placeholder="e.g. Morning, Afternoon, Evening"
+                      placeholderTextColor="#94a3b8"
+                      style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
+                    />
+                  </View>
+                </View>
+              )}
 
             </View>
           )}
