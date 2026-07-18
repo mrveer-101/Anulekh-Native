@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
+import { parseExamDate } from '../app/core/examDate';
 
 interface ExamRequest {
   id: number;
@@ -15,6 +16,100 @@ interface ExamRequest {
   student_name: string;
   education_grade: string;
   is_prebooking?: string;
+}
+
+// Helper to parse search queries for date matching
+function parseSearchQueryForDates(query: string): { start: Date | null; end: Date | null; cleanQuery: string } {
+  const lowerQuery = query.toLowerCase().trim();
+  if (!lowerQuery) {
+    return { start: null, end: null, cleanQuery: "" };
+  }
+
+  // Months mapping for text parsing
+  const months: { [key: string]: number } = {
+    jan: 0, january: 0,
+    feb: 1, february: 1,
+    mar: 2, march: 2,
+    apr: 3, april: 3,
+    may: 4,
+    jun: 5, june: 5,
+    jul: 6, july: 6,
+    aug: 7, august: 7,
+    sep: 8, september: 8,
+    oct: 9, october: 9,
+    nov: 10, november: 10,
+    dec: 11, december: 11
+  };
+
+  // Helper to parse a single date string from natural text
+  const parseNaturalDate = (str: string): Date | null => {
+    str = str.trim();
+    if (!str) return null;
+    
+    // Match DD/MM/YYYY
+    const dmy = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (dmy) {
+      return new Date(parseInt(dmy[3], 10), parseInt(dmy[2], 10) - 1, parseInt(dmy[1], 10));
+    }
+    
+    // Match YYYY-MM-DD
+    const ymd = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (ymd) {
+      return new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10));
+    }
+    
+    // Match patterns like "17 july", "17 july 2026", "july 17", "july 17 2026"
+    const words = str.split(/\s+/);
+    let day: number | null = null;
+    let month: number | null = null;
+    let year: number = new Date().getFullYear(); // default to current year
+    
+    for (const w of words) {
+      const cleanW = w.replace(/,$/, '').trim();
+      if (/^\d{4}$/.test(cleanW)) {
+        year = parseInt(cleanW, 10);
+      } else if (/^\d{1,2}(st|nd|rd|th)?$/.test(cleanW)) {
+        day = parseInt(cleanW, 10);
+      } else if (months[cleanW] !== undefined) {
+        month = months[cleanW];
+      }
+    }
+    
+    if (day !== null && month !== null) {
+      return new Date(year, month, day);
+    }
+    return null;
+  };
+
+  // Check for "from <date> to <date>" or "<date> to <date>" or "<date> - <date>"
+  const rangePattern = /(?:from\s+)?(.+?)\s+(?:to|-)\s+(.+)/i;
+  const matchRange = lowerQuery.match(rangePattern);
+  if (matchRange) {
+    const start = parseNaturalDate(matchRange[1]);
+    const end = parseNaturalDate(matchRange[2]);
+    if (start || end) {
+      const cleanQuery = query.replace(new RegExp(matchRange[0], 'i'), '').trim();
+      return { start, end, cleanQuery };
+    }
+  }
+
+  // Check if there is an "on <date>", "for <date>", "at <date>"
+  const onMatch = lowerQuery.match(/(.+?)\s+(?:on|for|at)\s+(.+)/i);
+  if (onMatch) {
+    const possibleDate = parseNaturalDate(onMatch[2]);
+    if (possibleDate) {
+      const cleanQuery = query.replace(new RegExp(onMatch[0].substring(onMatch[1].length), 'i'), '').trim();
+      return { start: possibleDate, end: possibleDate, cleanQuery };
+    }
+  }
+
+  // Check if the entire query is a single date
+  const singleDate = parseNaturalDate(lowerQuery);
+  if (singleDate) {
+    return { start: singleDate, end: singleDate, cleanQuery: "" };
+  }
+
+  return { start: null, end: null, cleanQuery: query };
 }
 
 export default function ScribeExploreView() {
@@ -32,9 +127,15 @@ export default function ScribeExploreView() {
   const [selectedDay, setSelectedDay] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
 
-  useEffect(() => {
-    fetchSession();
-  }, []);
+  // Date-range filter (DD/MM/YYYY text inputs, inclusive on both ends)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchSession();
+    }, [])
+  );
 
   const fetchSession = async () => {
     try {
@@ -57,7 +158,19 @@ export default function ScribeExploreView() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setAvailableExams(data || []);
+
+      // 3. Exclude exams this scribe was already rejected from — the request stays
+      // public for every other scribe, it's just hidden from this scribe's own feed.
+      const { data: rejectedApps } = await supabase
+        .from('scribe_applications')
+        .select('request_id')
+        .eq('scribe_id', session.user.id)
+        .eq('status', 'rejected');
+
+      const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
+      const visibleExams = (data || []).filter((exam: any) => !rejectedRequestIds.has(exam.id));
+
+      setAvailableExams(visibleExams);
     } catch (error: any) {
       console.error('Error fetching scribe explore data:', error.message);
     } finally {
@@ -108,22 +221,46 @@ export default function ScribeExploreView() {
   const SLOT_OPTIONS = ['All', 'Morning', 'Afternoon', 'Evening'];
   const DAY_OPTIONS = ['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+  // Parses a DD/MM/YYYY filter input into a Date at local midnight, or null when incomplete/invalid.
+  const parseFilterDate = (value: string): Date | null => {
+    const m = value.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    const year = parseInt(m[3], 10);
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? null : d;
+  };
+
   // Count of non-default (active) filters, shown on the collapsed filter bar.
   const activeFilterCount = [selectedLanguage, selectedType, selectedSlot, selectedDay]
-    .filter(v => v !== 'All').length;
+    .filter(v => v !== 'All').length + (dateFrom.trim() ? 1 : 0) + (dateTo.trim() ? 1 : 0);
 
   const clearFilters = () => {
     setSelectedLanguage('All');
     setSelectedType('All');
     setSelectedSlot('All');
     setSelectedDay('All');
+    setDateFrom('');
+    setDateTo('');
   };
 
   // Apply search query and filters
   const filteredExams = availableExams.filter(exam => {
+    // 1. Parse search query for potential date range/matching
+    const dateParsed = parseSearchQueryForDates(searchQuery);
+    
+    // If we have parsed dates from search query, use them as extra date range constraints.
+    // Otherwise fallback to filterDate controls.
+    const fromDate = dateParsed.start || parseFilterDate(dateFrom);
+    const toDate = dateParsed.end || parseFilterDate(dateTo);
+    const actualSearchQuery = dateParsed.cleanQuery;
+
     const matchesSearch =
-      (exam.subject || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (exam.exam_venue || '').toLowerCase().includes(searchQuery.toLowerCase());
+      !actualSearchQuery.trim() ||
+      (exam.subject || '').toLowerCase().includes(actualSearchQuery.toLowerCase()) ||
+      (exam.exam_venue || '').toLowerCase().includes(actualSearchQuery.toLowerCase()) ||
+      (exam.exam_date || '').toLowerCase().includes(actualSearchQuery.toLowerCase());
 
     // exam_language may be a comma list (e.g. "English, Hindi") — match by substring.
     const matchesLanguage = selectedLanguage === 'All' ||
@@ -143,7 +280,19 @@ export default function ScribeExploreView() {
     const day = getExamDay(exam.exam_date);
     const matchesDay = selectedDay === 'All' || day === null || day === selectedDay;
 
-    return matchesSearch && matchesLanguage && matchesType && matchesSlot && matchesDay;
+    // Date range (From/To, inclusive). If the exam date can't be parsed, don't exclude it.
+    const examDay = parseExamDate(exam.exam_date);
+    const matchesDateRange = (() => {
+      if (!examDay) return true;
+      if (fromDate && examDay < fromDate) return false;
+      if (toDate) {
+        const toEndOfDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59);
+        if (examDay > toEndOfDay) return false;
+      }
+      return true;
+    })();
+
+    return matchesSearch && matchesLanguage && matchesType && matchesSlot && matchesDay && matchesDateRange;
   });
 
   // Segment by location (Nearby vs All Other)
@@ -336,6 +485,36 @@ export default function ScribeExploreView() {
               {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
               {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
               {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
+
+              {/* Exam Date Range */}
+              <View>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
+                  Exam Date Range
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
+                    <TextInput
+                      value={dateFrom}
+                      onChangeText={setDateFrom}
+                      placeholder="From DD/MM/YYYY"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numbers-and-punctuation"
+                      style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
+                    />
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
+                    <TextInput
+                      value={dateTo}
+                      onChangeText={setDateTo}
+                      placeholder="To DD/MM/YYYY"
+                      placeholderTextColor="#94a3b8"
+                      keyboardType="numbers-and-punctuation"
+                      style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
+                    />
+                  </View>
+                </View>
+              </View>
             </View>
           )}
         </View>

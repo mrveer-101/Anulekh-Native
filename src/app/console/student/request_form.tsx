@@ -51,7 +51,6 @@ export default function ScribeRequestForm() {
 
   // Form State
   const [subject, setSubject] = useState('');
-  const [educationGrade, setEducationGrade] = useState('');
   const [examType, setExamType] = useState('University');
   const [subTopic, setSubTopic] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -112,7 +111,6 @@ export default function ScribeRequestForm() {
 
           if (examData) {
             setSubject(examData.subject || '');
-            setEducationGrade(examData.education_grade || '');
             setExamDate(examData.exam_date || '');
             setExamVenue(examData.exam_venue || '');
             setAdmitCardImage(examData.admit_card_proof || null);
@@ -255,7 +253,7 @@ export default function ScribeRequestForm() {
   };
 
   // Sends the picked hall ticket to the backend, which asks Gemini to extract exam details,
-  // then auto-fills the form fields the student hasn't already typed something into.
+  // fills the form, then submits the request immediately — no manual review step.
   const analyzeHallTicket = async (uri: string, mimeType: string, fileName: string) => {
     setIsParsingHallTicket(true);
     try {
@@ -275,19 +273,38 @@ export default function ScribeRequestForm() {
       setAdmitCardImage(fileName);
       setAdmitCardFileName(fileName);
 
-      if (result.subject) setSubject(result.subject);
-      if (result.exam_venue) setExamVenue(result.exam_venue);
-      if (result.exam_type && EXAM_TYPES.includes(result.exam_type)) setExamType(result.exam_type);
-      if (result.exam_sub_topic) {
-        setSubTopic(result.exam_sub_topic);
-        setSearchQuery(result.exam_sub_topic);
+      const filledSubject = result.subject || '';
+      const filledVenue = result.exam_venue || '';
+      const filledType = (result.exam_type && EXAM_TYPES.includes(result.exam_type)) ? result.exam_type : examType;
+      const filledSubTopic = result.exam_sub_topic || '';
+      const filledDate = result.exam_date
+        ? `${result.exam_date} | ${result.exam_time ? result.exam_time : '10:00 AM'}`
+        : '';
+
+      if (filledSubject) setSubject(filledSubject);
+      if (filledVenue) setExamVenue(filledVenue);
+      setExamType(filledType);
+      if (filledSubTopic) {
+        setSubTopic(filledSubTopic);
+        setSearchQuery(filledSubTopic);
       }
-      if (result.exam_date) {
-        const timePart = result.exam_time ? result.exam_time : '10:00 AM';
-        setExamDate(`${result.exam_date} | ${timePart}`);
+      if (filledDate) setExamDate(filledDate);
+
+      // Not everything could be read confidently — fall back to manual review instead of
+      // submitting an incomplete request.
+      if (!filledSubject || !filledVenue || !filledSubTopic || !filledDate) {
+        Alert.alert('Hall Ticket Partially Read', 'We couldn\'t confidently read every field. Please review and complete the form before submitting.');
+        return;
       }
 
-      Alert.alert('Hall Ticket Analyzed', 'We\'ve auto-filled what we could read from your hall ticket. Please review and correct any fields before submitting.');
+      await handleSubmit({
+        subject: filledSubject,
+        examVenue: filledVenue,
+        examType: filledType,
+        subTopic: filledSubTopic,
+        examDate: filledDate,
+        admitCardImage: fileName,
+      });
     } catch (err: any) {
       setAdmitCardImage(fileName);
       setAdmitCardFileName(fileName);
@@ -351,18 +368,32 @@ export default function ScribeRequestForm() {
     handlePickAdmitCard();
   };
 
-  const handleSubmit = async () => {
+  // Accepts optional overrides so a caller (e.g. the AI auto-fill flow) can submit immediately
+  // with freshly-parsed values instead of waiting a render cycle for state to catch up.
+  const handleSubmit = async (overrides?: {
+    subject: string;
+    examVenue: string;
+    examType: string;
+    subTopic: string;
+    examDate: string;
+    admitCardImage: string;
+  }) => {
     if (!profile) {
       Alert.alert('Error', 'Your profile details could not be loaded. Please try again.');
       return;
     }
 
-    const finalSubTopic = subTopic || searchQuery;
+    const finalSubject = overrides?.subject ?? subject;
+    const finalVenue = overrides?.examVenue ?? examVenue;
+    const finalExamType = overrides?.examType ?? examType;
+    const finalSubTopic = overrides?.subTopic ?? (subTopic || searchQuery);
+    const finalExamDate = overrides?.examDate ?? examDate;
+    const finalAdmitCard = overrides?.admitCardImage ?? admitCardImage;
 
     // Admit card is not required for pre-bookings (they happen before hall tickets are published).
-    const admitCardMissing = !admitCardImage && !isPreBooking;
+    const admitCardMissing = !finalAdmitCard && !isPreBooking;
 
-    if (!subject.trim() || !educationGrade.trim() || !examDate.trim() || !examVenue.trim() || !finalSubTopic.trim() || admitCardMissing || examLanguages.length === 0) {
+    if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || admitCardMissing || examLanguages.length === 0) {
       Alert.alert(
         'Missing Fields',
         isPreBooking
@@ -397,22 +428,21 @@ export default function ScribeRequestForm() {
         student_id: session.user.id,
         student_name: profile.official_name || profile.full_name,
         dob: profile.dob,
-        education_grade: educationGrade.trim(),
         phone: profile.phone,
         emergency_phone: profile.emergency_phone,
-        exam_type: `${examType} (${finalSubTopic})`,
+        exam_type: `${finalExamType} (${finalSubTopic})`,
         exam_language: examLanguages.join(', '),
         id_proof: profile.aadhar_number || 'Aadhar Verified',
-        admit_card_proof: admitCardImage,
+        admit_card_proof: finalAdmitCard,
         is_prebooking: isPreBooking ? 'yes' : 'no',
         status: 'pending'
       };
 
       const requestPayload = {
         ...sharedPayload,
-        subject: subject.trim(),
-        exam_date: examDate.trim(),
-        exam_venue: examVenue.trim(),
+        subject: finalSubject.trim(),
+        exam_date: finalExamDate.trim(),
+        exam_venue: finalVenue.trim(),
       };
 
       if (isEditing) {
@@ -448,7 +478,10 @@ export default function ScribeRequestForm() {
         );
       }
 
-      router.back();
+      // Land on the student's Requests tab so the new/updated request is immediately visible.
+      // router.back() can throw GO_BACK errors when this screen was reached without history
+      // (e.g. straight from the auto-fill flow), so always replace instead.
+      router.replace({ pathname: '/console/student' as any, params: { tab: 'requests' } });
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to save request.');
     } finally {
@@ -465,7 +498,10 @@ export default function ScribeRequestForm() {
         {/* Header */}
         <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/console/student' as any);
+            }}
             className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
           >
             <Feather name="arrow-left" size={24} color="#334155" />
@@ -520,7 +556,11 @@ export default function ScribeRequestForm() {
       {/* Header */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
         <TouchableOpacity
-          onPress={() => { if (!isEditing) { setEntryMode('choice'); } else { router.back(); } }}
+          onPress={() => {
+            if (!isEditing) { setEntryMode('choice'); return; }
+            if (router.canGoBack()) router.back();
+            else router.replace('/console/student' as any);
+          }}
           className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
         >
           <Feather name="arrow-left" size={24} color="#334155" />
@@ -703,15 +743,6 @@ export default function ScribeRequestForm() {
                 />
               </View>
 
-              <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Education Grade/Degree *</Text>
-                <TextInput
-                  value={educationGrade}
-                  onChangeText={setEducationGrade}
-                  placeholder="e.g. B.A. 2nd Year, Class 12 Board"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                />
-              </View>
 
               {/* Date & Time Picker Trigger */}
               <View>
@@ -858,7 +889,7 @@ export default function ScribeRequestForm() {
 
           {/* Submit Button */}
           <TouchableOpacity
-            onPress={handleSubmit}
+            onPress={() => handleSubmit()}
             disabled={loading}
             className="w-full bg-blue-500 active:bg-blue-600 py-3 mt-2 rounded-xl items-center justify-center shadow-md shadow-blue-500/30"
           >

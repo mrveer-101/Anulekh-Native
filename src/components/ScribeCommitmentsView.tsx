@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 
@@ -55,9 +55,11 @@ export default function ScribeCommitmentsView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
-  useEffect(() => {
-    fetchApplications();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchApplications();
+    }, [])
+  );
 
   const fetchApplications = async () => {
     try {
@@ -198,7 +200,7 @@ export default function ScribeCommitmentsView() {
       badgeBg = 'rgba(220,38,38,0.08)';
       badgeBorder = 'rgba(220,38,38,0.2)';
       badgeText = '#dc2626';
-      statusLabel = t('status_cancelled');
+      statusLabel = t('status_rejected') || 'Rejected';
     }
 
     const review = reviews.find(r => r.request_id === app.request_id);

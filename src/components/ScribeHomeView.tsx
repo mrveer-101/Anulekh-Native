@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 
@@ -24,9 +24,11 @@ export default function ScribeHomeView() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [showRatingDetails, setShowRatingDetails] = useState(false);
 
-  useEffect(() => {
-    fetchSession();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchSession();
+    }, [])
+  );
 
   const fetchSession = async () => {
     try {
@@ -43,14 +45,22 @@ export default function ScribeHomeView() {
 
       setProfile(profileData);
 
-      // 2. Fetch Available Exams (where status is pending)
+      // 2. Fetch Available Exams (where status is pending), excluding exams this
+      // scribe was already rejected from — stays public for every other scribe.
       const { data: available } = await supabase
         .from('exam_requests')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      setAvailableExams(available || []);
+      const { data: rejectedApps } = await supabase
+        .from('scribe_applications')
+        .select('request_id')
+        .eq('scribe_id', session.user.id)
+        .eq('status', 'rejected');
+
+      const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
+      setAvailableExams((available || []).filter((exam: any) => !rejectedRequestIds.has(exam.id)));
 
       // 3. Fetch Scribe's Confirmed Commitments
       const { data: committed } = await supabase

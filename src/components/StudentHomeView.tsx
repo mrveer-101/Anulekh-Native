@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 import { hoursUntilExam } from '../app/core/examDate';
@@ -30,9 +30,11 @@ export default function StudentHomeView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
-  useEffect(() => {
-    fetchSession();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchSession();
+    }, [])
+  );
 
   const fetchSession = async () => {
     try {

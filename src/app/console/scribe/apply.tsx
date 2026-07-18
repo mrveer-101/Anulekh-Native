@@ -46,17 +46,17 @@ export default function ScribeApplyDetailsPage() {
       
       setExam(examData);
 
-      // 3. Check if Scribe has already applied
+      // 3. Check if Scribe has an active (non-rejected) application on this exam.
+      // A prior rejection should not block re-applying.
       if (examData) {
         const { data: existingApps } = await supabase
           .from('scribe_applications')
           .select('*')
           .eq('request_id', examData.id)
           .eq('scribe_id', session.user.id);
-        
-        if (existingApps && existingApps.length > 0) {
-          setHasApplied(true);
-        }
+
+        const hasActiveApp = (existingApps || []).some((app: any) => app.status !== 'rejected');
+        setHasApplied(hasActiveApp);
       }
     } catch (err) {
       console.error('Error fetching exam details:', err);
