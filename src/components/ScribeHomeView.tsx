@@ -353,7 +353,19 @@ export default function ScribeHomeView() {
           {scribeCommitments.map((exam) => (
             <View 
               key={exam.id} 
-              style={{ backgroundColor: '#fff', padding: 16, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(22,163,74,0.15)', shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}
+              style={{ 
+                backgroundColor: 'rgba(255, 255, 255, 0.75)', 
+                padding: 18, 
+                borderRadius: 28, 
+                borderWidth: 1.5, 
+                borderColor: 'rgba(255, 255, 255, 0.8)', 
+                shadowColor: '#16a34a', 
+                shadowOffset: { width: 0, height: 8 }, 
+                shadowOpacity: 0.05, 
+                shadowRadius: 16, 
+                elevation: 3, 
+                marginBottom: 14 
+              }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
@@ -365,11 +377,11 @@ export default function ScribeHomeView() {
                 </View>
               </View>
 
-              <View style={{ borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 10, marginBottom: 12, gap: 6 }}>
+              <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.4)', paddingTop: 10, marginBottom: 12, gap: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
+                    {t('candidate_student')}: <Text style={{ fontFamily: 'Roboto', fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -393,11 +405,11 @@ export default function ScribeHomeView() {
               </View>
 
               {/* Chat & Call Action buttons */}
-              <View style={{ flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.4)', paddingTop: 10 }}>
                 {/* Call */}
                 <TouchableOpacity 
                   onPress={() => openCallSheet(exam)}
-                  style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                  style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                 >
                   <Feather name="phone" size={12} color="#334155" />
                   <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
@@ -406,7 +418,7 @@ export default function ScribeHomeView() {
                 {/* Chat */}
                 <TouchableOpacity 
                   onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                  style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                  style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.65)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.8)', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                 >
                   <Feather name="message-square" size={12} color="#334155" />
                   <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
