@@ -297,7 +297,7 @@ export default function ScribeHomeView() {
       )}
 
       {/* Scribe Stats Summary */}
-      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+      <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
         <View style={{ alignItems: 'center', flex: 1 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>{scribeCommitments.length}</Text>
           <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('commitments')}</Text>
@@ -319,7 +319,7 @@ export default function ScribeHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Contributions 🤝</Text>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Card 1: Hours Contributed */}
-          <View style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderRadius: 24, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 }}>
+          <View style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Feather name="clock" size={16} color="#059669" />
               <View style={{ backgroundColor: 'rgba(5,150,105,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -332,7 +332,7 @@ export default function ScribeHomeView() {
           </View>
 
           {/* Card 2: Requests Completed */}
-          <View style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', borderRadius: 24, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 }}>
+          <View style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Feather name="award" size={16} color="#d97706" />
               <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -354,17 +354,17 @@ export default function ScribeHomeView() {
             <View 
               key={exam.id} 
               style={{ 
-                backgroundColor: '#ffffff', 
+                backgroundColor: '#f8fafc', 
                 padding: 18, 
                 borderRadius: 24, 
                 borderWidth: 1, 
-                borderColor: 'rgba(0,0,0,0.05)', 
+                borderColor: '#e2e8f0', 
                 borderLeftWidth: 6, 
-                borderLeftColor: '#059669', // Confirmed Match accent green
-                shadowColor: '#0f172a', 
-                shadowOffset: { width: 0, height: 6 }, 
-                shadowOpacity: 0.03, 
-                shadowRadius: 16, 
+                borderLeftColor: '#059669',
+                shadowColor: '#64748b', 
+                shadowOffset: { width: 0, height: 4 }, 
+                shadowOpacity: 0.08, 
+                shadowRadius: 12, 
                 elevation: 3, 
                 marginBottom: 14 
               }}
@@ -436,7 +436,7 @@ export default function ScribeHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('available_opportunities')}</Text>
 
         {availableExams.length === 0 ? (
-          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: '#f8fafc', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="inbox" size={28} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_opportunities_found')}</Text>
           </View>
