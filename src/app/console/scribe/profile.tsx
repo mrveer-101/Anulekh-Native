@@ -14,6 +14,10 @@ export default function VolunteerProfile() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [occupation, setOccupation] = useState('');
+  const [location, setLocation] = useState('');
+  const [firstTime, setFirstTime] = useState(false);
+  const [urgentCalls, setUrgentCalls] = useState(false);
   
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -44,6 +48,10 @@ export default function VolunteerProfile() {
         setFullName(profile.full_name || '');
         setPhone(profile.phone || '');
         setSelectedLanguages(profile.languages || []);
+        setOccupation(profile.occupation || '');
+        setLocation(profile.location || '');
+        setFirstTime(profile.first_time === 'yes');
+        setUrgentCalls(profile.urgent_calls === 'yes');
       }
     } catch (err: any) {
       console.error('Error fetching profile:', err.message);
@@ -78,7 +86,11 @@ export default function VolunteerProfile() {
         .update({
           full_name: fullName.trim(),
           phone: phone.trim(),
-          languages: selectedLanguages
+          languages: selectedLanguages,
+          occupation: occupation.trim(),
+          location: location.trim(),
+          first_time: firstTime ? 'yes' : 'no',
+          urgent_calls: urgentCalls ? 'yes' : 'no'
         })
         .eq('id', user.id);
 
@@ -172,6 +184,57 @@ export default function VolunteerProfile() {
                 editable={false}
                 className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-400"
               />
+            </View>
+
+            <View>
+              <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Occupation</Text>
+              <TextInput 
+                value={occupation}
+                onChangeText={setOccupation}
+                placeholder="e.g. Student, Teacher, etc."
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+              />
+            </View>
+
+            <View>
+              <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Location</Text>
+              <TextInput 
+                value={location}
+                onChangeText={setLocation}
+                placeholder="e.g. Navrangpura, Ahmedabad"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+              />
+            </View>
+
+            {/* Scribe Preferences Section */}
+            <View className="pt-2 border-t border-slate-100 mt-2">
+              <Text className="text-[10px] font-semibold text-slate-500 mb-3 ml-1">Scribe Preferences</Text>
+              
+              <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
+                <View>
+                  <Text className="text-sm font-bold text-slate-700">First Time Scribe</Text>
+                  <Text className="text-[10px] text-slate-500 mt-0.5">Is this your first time scribing?</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setFirstTime(!firstTime)}
+                  className={`w-12 h-6 rounded-full p-0.5 flex-row ${firstTime ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}
+                >
+                  <View className="w-5 h-5 rounded-full bg-white shadow-sm" />
+                </TouchableOpacity>
+              </View>
+
+              <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+                <View className="flex-1 pr-4">
+                  <Text className="text-sm font-bold text-slate-700">Emergency SOS Scribe</Text>
+                  <Text className="text-[10px] text-slate-500 mt-0.5">Notify me for urgent day-of-exam requests.</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setUrgentCalls(!urgentCalls)}
+                  className={`w-12 h-6 rounded-full p-0.5 flex-row ${urgentCalls ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}
+                >
+                  <View className="w-5 h-5 rounded-full bg-white shadow-sm" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Languages Scribe Section */}
