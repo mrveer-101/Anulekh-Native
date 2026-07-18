@@ -103,7 +103,7 @@ export default function StudentRequestsView() {
         .from('exam_requests')
         .select('scribe_id')
         .eq('student_id', session.user.id)
-        .not('scribe_id', 'is', null);
+        .neq('scribe_id', null);
 
       const uniqueScribeIds = Array.from(new Set((pastExams || []).map((e: any) => e.scribe_id)));
       const scribesList = await Promise.all(
@@ -369,7 +369,7 @@ export default function StudentRequestsView() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
         }
         ListEmptyComponent={
-          <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+          <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
             <Feather name="inbox" size={48} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 12 }}>{t('no_requests_found')}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center' }}>
@@ -775,7 +775,7 @@ export default function StudentRequestsView() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
             ListEmptyComponent={
-              <View style={{ backgroundColor: '#fff', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+              <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
                 <Feather name="users" size={48} color="#94a3b8" />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 12 }}>No Past Scribes Found</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center' }}>
@@ -787,7 +787,7 @@ export default function StudentRequestsView() {
               </View>
             }
             renderItem={({ item }) => (
-              <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 1.5, marginBottom: 14 }}>
+              <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3.5, marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                   <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center' }}>
                     <Text style={{ fontSize: 18, fontWeight: '900', color: '#2563eb' }}>

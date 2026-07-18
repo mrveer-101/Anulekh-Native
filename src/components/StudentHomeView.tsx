@@ -274,7 +274,7 @@ export default function StudentHomeView() {
       )}
 
       {/* Student Stats Summary */}
-      <View style={{ backgroundColor: '#fff', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+      <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
         <View style={{ alignItems: 'center', flex: 1 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{confirmedPlans.length}</Text>
           <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('commitments')}</Text>
@@ -291,7 +291,7 @@ export default function StudentHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('upcoming_exams')}</Text>
 
         {confirmedPlans.length === 0 ? (
-          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ backgroundColor: '#f8fafc', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="calendar" size={28} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_upcoming_exams')}</Text>
             <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, marginTop: 6, textAlign: 'center', paddingHorizontal: 16 }}>
@@ -314,7 +314,7 @@ export default function StudentHomeView() {
           confirmedPlans.map((exam) => (
             <View 
               key={exam.id}
-              style={{ backgroundColor: '#fff', padding: 16, borderRadius: 28, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 14 }}
+              style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 28, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <View style={{ flex: 1, paddingRight: 8 }}>

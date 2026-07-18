@@ -36,7 +36,7 @@ const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
-const BG         = '#f0f4ff';   // page background
+const BG         = '#ffffff';   // clean white background
 const SURFACE    = 'rgba(255,255,255,0.82)'; // glass surface
 const BORDER     = 'rgba(0,0,0,0.07)';
 const ACCENT     = '#2563eb';   // blue primary
@@ -131,9 +131,7 @@ export default function StudentDashboard() {
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
 
-      {/* Background orbs — bolder opacity */}
-      <View style={{ position: 'absolute', top: -60, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(37,99,235,0.38)' }} />
-      <View style={{ position: 'absolute', bottom: 120, left: -60, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(234,88,12,0.33)' }} />
+      {/* Background orbs removed for clean white style */}
 
       {/* ── HEADER (glass surface) ── */}
       <SafeAreaView edges={['top']} style={{
