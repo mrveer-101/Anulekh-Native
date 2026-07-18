@@ -28,7 +28,7 @@ export default function SharedSettingsView() {
   const [role, setRole] = useState<'student' | 'scribe' | ''>('');
   const [firstTime, setFirstTime] = useState(false);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
-  const [availabilitySlots, setAvailabilitySlots] = useState('');
+  const [availabilitySlots, setAvailabilitySlots] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -77,7 +77,8 @@ export default function SharedSettingsView() {
         } catch (_) {
           setSelectedLanguages(typeof profile.languages === 'string' ? [profile.languages] : []);
         }
-        setAvailabilitySlots(profile.availability_slots || '');
+        const slotsStr = profile.availability_slots || '';
+        setAvailabilitySlots(slotsStr.split(',').map((s: string) => s.trim()).filter(Boolean));
       }
     } catch (error) {
       console.error('Error fetching user data in Settings:', error);
@@ -107,7 +108,7 @@ export default function SharedSettingsView() {
       if (role === 'scribe') {
         updateData.first_time = firstTime ? 'yes' : 'no';
         updateData.languages = JSON.stringify(selectedLanguages);
-        updateData.availability_slots = availabilitySlots;
+        updateData.availability_slots = availabilitySlots.join(', ');
       }
 
       const { error } = await supabase
@@ -412,18 +413,35 @@ export default function SharedSettingsView() {
                   </View>
 
                   {/* Availability Slots */}
-                  <View>
+                  <View style={{ marginTop: 6 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                       <Feather name="clock" size={12} color="#2563eb" style={{ marginRight: 6 }} />
                       <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Availability Slots</Text>
                     </View>
-                    <TextInput
-                      value={availabilitySlots}
-                      onChangeText={setAvailabilitySlots}
-                      placeholder="e.g. Morning, Afternoon, Evening"
-                      placeholderTextColor="#94a3b8"
-                      style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
-                    />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {['Morning', 'Afternoon', 'Evening'].map(slotOption => {
+                        const isSelected = availabilitySlots.includes(slotOption);
+                        return (
+                          <TouchableOpacity
+                            key={slotOption}
+                            onPress={() => {
+                              if (isSelected) {
+                                setAvailabilitySlots(availabilitySlots.filter(s => s !== slotOption));
+                              } else {
+                                setAvailabilitySlots([...availabilitySlots, slotOption]);
+                              }
+                            }}
+                            style={{
+                              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+                              backgroundColor: isSelected ? '#2563eb' : '#f8fafc',
+                              borderWidth: 1, borderColor: isSelected ? '#2563eb' : 'rgba(0,0,0,0.06)'
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isSelected ? '#fff' : '#64748b' }}>{slotOption}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                   </View>
                 </View>
               )}
