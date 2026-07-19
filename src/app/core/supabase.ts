@@ -95,6 +95,7 @@ async function initLocalDB() {
     await AsyncStorage.setItem('db_scribe_applications', JSON.stringify([]));
     await AsyncStorage.setItem('db_notifications', JSON.stringify([]));
     await AsyncStorage.setItem('db_chat_messages', JSON.stringify([]));
+    await AsyncStorage.setItem('db_assignment_requests', JSON.stringify([]));
     await AsyncStorage.setItem('local_db_initialized', 'true');
     console.log('Client-side mock database initialized with seed data.');
   }

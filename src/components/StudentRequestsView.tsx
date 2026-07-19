@@ -33,12 +33,13 @@ interface ExamRequest {
 export default function StudentRequestsView() {
   const { t } = useLanguage();
   const [requests, setRequests] = useState<ExamRequest[]>([]);
+  const [assignmentRequests, setAssignmentRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [studentProfile, setStudentProfile] = useState<any>(null);
 
   // Tab view control
-  const [activeTab, setActiveTab] = useState<'requests' | 'past_scribes'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'assignments' | 'past_scribes'>('requests');
 
   // Past scribes and private invites states
   const [pastScribes, setPastScribes] = useState<any[]>([]);
@@ -97,6 +98,35 @@ export default function StudentRequestsView() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch all assignment requests
+      const { data: assignmentData, error: assignmentError } = await supabase
+        .from('assignment_requests')
+        .select('*')
+        .eq('student_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      if (assignmentError) throw assignmentError;
+
+      // Enrich assignment requests with scribe profiles
+      const enrichedAssignments = await Promise.all(
+        (assignmentData || []).map(async (assign: any) => {
+          let scribeProfile = null;
+          if (assign.status === 'matched' && assign.scribe_id) {
+            const { data: scribe } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', assign.scribe_id)
+              .single();
+            scribeProfile = scribe;
+          }
+          return {
+            ...assign,
+            scribeProfile: scribeProfile || undefined
+          };
+        })
+      );
+      setAssignmentRequests(enrichedAssignments);
 
       // Fetch unique past scribes
       const { data: pastExams } = await supabase
@@ -308,6 +338,243 @@ export default function StudentRequestsView() {
     }
   };
 
+  const renderAssignmentCard = (item: any) => {
+    const isMatched = item.status === 'matched';
+
+    const statusLabel = (() => {
+      switch (item.status.toLowerCase()) {
+        case 'pending': return 'NOT ASSIGNED';
+        case 'matched': return 'ASSIGNED';
+        case 'completed': return 'COMPLETED';
+        case 'cancelled': return 'CANCELLED';
+        default: return item.status.toUpperCase();
+      }
+    })();
+
+    const statusColor = (() => {
+      switch (item.status.toLowerCase()) {
+        case 'pending': return { text: '#475569', border: '#cbd5e1', bg: '#fff' };
+        case 'matched': return { text: '#059669', border: '#6ee7b7', bg: '#f0fdf4' };
+        case 'completed': return { text: '#10b981', border: '#a7f3d0', bg: '#ecfdf5' };
+        case 'cancelled': return { text: '#ef4444', border: '#fca5a5', bg: '#fff7f7' };
+        default: return { text: '#2563eb', border: '#bfdbfe', bg: '#eff6ff' };
+      }
+    })();
+
+    const handleDelete = () => {
+      Alert.alert(
+        'Delete Assignment Request',
+        'Are you sure you want to delete this assignment request? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete', style: 'destructive',
+            onPress: async () => {
+              await supabase.from('assignment_requests').delete().eq('id', item.id);
+              fetchRequests();
+            }
+          }
+        ]
+      );
+    };
+
+    const handleMarkCompleted = async () => {
+      Alert.alert(
+        'Mark as Completed',
+        'Are you sure you want to mark this assignment as completed?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              try {
+                await supabase
+                  .from('assignment_requests')
+                  .update({ status: 'completed' })
+                  .eq('id', item.id);
+                fetchRequests();
+              } catch (e: any) {
+                Alert.alert('Error', e.message || 'Failed to update request');
+              }
+            }
+          }
+        ]
+      );
+    };
+
+    return (
+      <View style={{
+        backgroundColor: '#f8fafc',
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+        marginBottom: 16,
+        overflow: 'hidden',
+      }}>
+        {/* Top Section */}
+        <View style={{ padding: 18, paddingBottom: 14 }}>
+          {/* Status Badge */}
+          <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+            <View style={{
+              paddingVertical: 5, paddingHorizontal: 12,
+              borderRadius: 20,
+              borderWidth: 1.5,
+              borderColor: statusColor.border,
+              backgroundColor: statusColor.bg,
+            }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: statusColor.text, letterSpacing: 0.5 }}>
+                {statusLabel}
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>
+              {item.subject}
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#3b82f6', marginTop: 2 }}>
+              {item.assignment_title}
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>
+              Level: {item.academic_level}
+            </Text>
+          </View>
+
+          <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 12, gap: 6 }}>
+            {item.description ? (
+              <View style={{ marginBottom: 4 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: 2 }}>Instructions</Text>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, lineHeight: 17 }}>
+                  {item.description}
+                </Text>
+              </View>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+              <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
+              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                Deadline: <Text style={{ fontWeight: '700' }}>{item.deadline}</Text>
+              </Text>
+            </View>
+
+            {isMatched && item.scribeProfile ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                <Feather name="user" size={12} color="#2563eb" style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                  Writer: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile.full_name}</Text>
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Action Row */}
+          {isMatched && (
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={handleMarkCompleted}
+                style={{
+                  flex: 1, backgroundColor: '#10b981',
+                  borderRadius: 14, paddingVertical: 12,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2, shadowRadius: 8, elevation: 3,
+                }}
+                activeOpacity={0.85}
+              >
+                <Feather name="check-circle" size={16} color="#fff" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                  Mark Completed
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  if (item.scribeProfile?.phone) {
+                    Linking.openURL(`tel:${item.scribeProfile.phone}`);
+                  } else {
+                    Alert.alert('Unavailable', 'Phone number not available');
+                  }
+                }}
+                style={{
+                  flex: 1, backgroundColor: '#2563eb',
+                  borderRadius: 14, paddingVertical: 12,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.2, shadowRadius: 8, elevation: 3,
+                }}
+                activeOpacity={0.85}
+              >
+                <Feather name="phone-call" size={16} color="#fff" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                  Call Writer
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => {
+                router.push(`/console/student/assignment_form?id=${item.id}` as any);
+              }}
+              style={{
+                flex: 1, paddingVertical: 12,
+                borderRadius: 14, borderWidth: 1.5,
+                borderColor: '#2563eb',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                Edit Details
+              </Text>
+            </TouchableOpacity>
+
+            {item.status !== 'matched' && (
+              <TouchableOpacity
+                onPress={handleDelete}
+                style={{
+                  flex: 1, paddingVertical: 12,
+                  borderRadius: 14, borderWidth: 1.5,
+                  borderColor: '#fca5a5',
+                  backgroundColor: '#fff7f7',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {isMatched && (
+              <TouchableOpacity
+                onPress={() => router.push(`/console/common/chat?requestId=${item.id}&type=assignment` as any)}
+                style={{
+                  flex: 1, paddingVertical: 12,
+                  borderRadius: 14, borderWidth: 1.5,
+                  borderColor: '#bfdbfe',
+                  backgroundColor: '#eff6ff',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
@@ -322,12 +589,24 @@ export default function StudentRequestsView() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#64748b' }}>
           {activeTab === 'requests' 
-            ? `${requests.length} ${requests.length === 1 ? 'Request' : 'Requests'}`
+            ? `${requests.length} ${requests.length === 1 ? 'Exam' : 'Exams'}`
+            : activeTab === 'assignments'
+            ? `${assignmentRequests.length} ${assignmentRequests.length === 1 ? 'Assignment' : 'Assignments'}`
             : `${pastScribes.length} Past Scribes`
           }
         </Text>
         <TouchableOpacity
-          onPress={() => router.push('/console/student/request_form' as any)}
+          onPress={() => {
+            Alert.alert(
+              'Select Request Type',
+              'What type of request would you like to create?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
+                { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
+              ]
+            );
+          }}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }}
         >
           <Feather name="plus" size={14} color="#fff" />
@@ -345,7 +624,17 @@ export default function StudentRequestsView() {
             borderWidth: 1, borderColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.05)'
           }}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>My Requests</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>Exams</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('assignments')}
+          style={{
+            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
+            backgroundColor: activeTab === 'assignments' ? '#2563eb' : '#fff',
+            borderWidth: 1, borderColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.05)'
+          }}
+        >
+          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'assignments' ? '#fff' : '#64748b' }}>Assignments</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveTab('past_scribes')}
@@ -355,14 +644,14 @@ export default function StudentRequestsView() {
             borderWidth: 1, borderColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.05)'
           }}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'requests' ? (
+      {activeTab === 'requests' || activeTab === 'assignments' ? (
       <FlatList
         style={{ flex: 1 }}
-        data={requests}
+        data={activeTab === 'requests' ? requests : assignmentRequests}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={{ padding: 24, paddingTop: 8, paddingBottom: 40 }}
         refreshControl={
@@ -371,19 +660,32 @@ export default function StudentRequestsView() {
         ListEmptyComponent={
           <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
             <Feather name="inbox" size={48} color="#94a3b8" />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 12 }}>{t('no_requests_found')}</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', marginTop: 12 }}>
+              {activeTab === 'requests' ? t('no_requests_found') : 'No assignments found'}
+            </Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 4, textAlign: 'center' }}>
-              {t('no_requests_desc')}
+              {activeTab === 'requests' ? t('no_requests_desc') : 'Request a helper to write or complete assignments for you.'}
             </Text>
             <TouchableOpacity
-              onPress={() => router.push('/console/student/request_form' as any)}
+              onPress={() => {
+                if (activeTab === 'requests') {
+                  router.push('/console/student/request_form' as any);
+                } else {
+                  router.push('/console/student/assignment_form' as any);
+                }
+              }}
               style={{ marginTop: 16, backgroundColor: '#2563eb', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12 }}
             >
-              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>Create Request</Text>
+              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>
+                {activeTab === 'requests' ? 'Create Request' : 'Create Assignment'}
+              </Text>
             </TouchableOpacity>
           </View>
         }
         renderItem={({ item }) => {
+          if (activeTab === 'assignments') {
+            return renderAssignmentCard(item);
+          }
           const statusStyle = getStatusStyle(item.status);
           const hasApps = item.status === 'pending' && (item.applicationCount || 0) > 0;
           const isMatched = item.status === 'matched';

@@ -20,6 +20,8 @@ export default function StudentHomeView() {
   const [loading, setLoading] = useState(true);
   const [confirmedPlans, setConfirmedPlans] = useState<any[]>([]);
   const [examRequestsCount, setExamRequestsCount] = useState(0);
+  const [assignmentRequestsCount, setAssignmentRequestsCount] = useState(0);
+  const [confirmedAssignmentsCount, setConfirmedAssignmentsCount] = useState(0);
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -87,6 +89,18 @@ export default function StudentHomeView() {
         .eq('student_id', session.user.id);
       
       setExamRequestsCount(reqs ? reqs.length : 0);
+
+      // 4. Fetch Student's Total Assignment Requests Count
+      const { data: assignments } = await supabase
+        .from('assignment_requests')
+        .select('id, status')
+        .eq('student_id', session.user.id);
+
+      setAssignmentRequestsCount(assignments ? assignments.length : 0);
+
+      // 5. Fetch Confirmed Assignments Count
+      const matchedAssignments = (assignments || []).filter((a: any) => a.status === 'matched');
+      setConfirmedAssignmentsCount(matchedAssignments.length);
 
     } catch (err: any) {
       console.log('Error fetching student session:', err.message);
@@ -276,13 +290,18 @@ export default function StudentHomeView() {
       {/* Student Stats Summary */}
       <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
         <View style={{ alignItems: 'center', flex: 1 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{confirmedPlans.length}</Text>
-          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('commitments')}</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{examRequestsCount}</Text>
+          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Exam Requests</Text>
         </View>
         <View style={{ width: 1, height: 32, backgroundColor: '#f1f5f9' }} />
         <View style={{ alignItems: 'center', flex: 1 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{examRequestsCount}</Text>
-          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('applications')}</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{assignmentRequestsCount}</Text>
+          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Assignments</Text>
+        </View>
+        <View style={{ width: 1, height: 32, backgroundColor: '#f1f5f9' }} />
+        <View style={{ alignItems: 'center', flex: 1 }}>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{confirmedPlans.length + confirmedAssignmentsCount}</Text>
+          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Matched Scribes</Text>
         </View>
       </View>
 
