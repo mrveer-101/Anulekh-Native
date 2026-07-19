@@ -20,19 +20,16 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 const { height } = Dimensions.get('window');
 
 export default function LoginScreen() {
-  const params = useLocalSearchParams<{ role?: string }>();
-  const [role, setRole]               = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]         = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  const isStudent    = role === 'student';
-  const accentColor  = isStudent ? '#2563eb' : '#16a34a';
-  const accentBg     = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
-  const accentBorder = isStudent ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
-  const accentShadow = isStudent ? 'rgba(37,99,235,0.25)' : 'rgba(22,163,74,0.25)';
+  const accentColor  = '#2563eb';
+  const accentBg     = 'rgba(37,99,235,0.08)';
+  const accentBorder = 'rgba(37,99,235,0.22)';
+  const accentShadow = 'rgba(37,99,235,0.25)';
 
   const handleLogin = async () => {
     if (!emailOrPhone.trim() || !password.trim()) {
@@ -65,7 +62,7 @@ export default function LoginScreen() {
       <StatusBar style="dark" />
 
       {/* Soft background orbs */}
-      <View style={{ position: 'absolute', top: -80, right: -70, width: 260, height: 260, borderRadius: 130, backgroundColor: isStudent ? 'rgba(37,99,235,0.20)' : 'rgba(22,163,74,0.20)' }} />
+      <View style={{ position: 'absolute', top: -80, right: -70, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(37,99,235,0.20)' }} />
       <View style={{ position: 'absolute', bottom: 80, left: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(234,88,12,0.16)' }} />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -117,40 +114,7 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* Role toggle — glass pill */}
-            <View style={{
-              backgroundColor: 'rgba(255,255,255,0.7)',
-              borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
-              borderRadius: 18, padding: 4,
-              flexDirection: 'row', marginBottom: 28,
-              shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
-            }}>
-              {(['student', 'scribe'] as const).map((r) => {
-                const active   = role === r;
-                const color    = r === 'student' ? '#2563eb' : '#16a34a';
-                const bg       = r === 'student' ? 'rgba(37,99,235,0.1)' : 'rgba(22,163,74,0.1)';
-                const border   = r === 'student' ? 'rgba(37,99,235,0.25)' : 'rgba(22,163,74,0.25)';
-                return (
-                  <TouchableOpacity
-                    key={r}
-                    onPress={() => setRole(r)}
-                    disabled={loading}
-                    style={{
-                      flex: 1, paddingVertical: 14, borderRadius: 14,
-                      alignItems: 'center',
-                      backgroundColor: active ? bg : 'transparent',
-                      borderWidth: active ? 1 : 0,
-                      borderColor: active ? border : 'transparent',
-                    }}
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: active ? color : '#94a3b8' }}>
-                      {r === 'student' ? '🎓 Student' : '🤝 Scribe'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+
 
             {/* Form — glass card */}
             <View style={{
@@ -242,7 +206,7 @@ export default function LoginScreen() {
               ) : (
                 <>
                   <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>
-                    Sign In as {isStudent ? 'Student' : 'Scribe'}
+                    Sign In
                   </Text>
                   <Feather name="arrow-right" size={18} color="#fff" />
                 </>
@@ -250,7 +214,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push(`/auth/register?role=${role}`)}
+              onPress={() => router.push('/auth/register')}
               disabled={loading}
               style={{ paddingVertical: 14, alignItems: 'center' }}
             >
