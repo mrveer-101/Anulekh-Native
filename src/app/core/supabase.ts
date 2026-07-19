@@ -194,7 +194,13 @@ class MockQueryBuilder {
           })
         });
         
-        const result = await res.json();
+        const resText = await res.text();
+        let result: any = {};
+        try {
+          result = JSON.parse(resText);
+        } catch (e) {
+          result = { error: resText };
+        }
         if (!res.ok) {
           throw new Error(result.error || 'Query failed');
         }
@@ -348,8 +354,14 @@ const mockAuth = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Signup failed');
+        const resText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(resText);
+        } catch (e) {
+          data = { error: resText };
+        }
+        if (!res.ok) throw new Error(data.error || data.message || 'Signup failed');
         
         const session = { user: data.user };
         await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
@@ -391,8 +403,14 @@ const mockAuth = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, phone, password })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Signin failed');
+        const resText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(resText);
+        } catch (e) {
+          data = { error: resText };
+        }
+        if (!res.ok) throw new Error(data.error || data.message || 'Signin failed');
 
         const session = { user: data.user };
         await AsyncStorage.setItem('local_db_session', JSON.stringify(session));

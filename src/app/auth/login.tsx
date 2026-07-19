@@ -11,6 +11,7 @@ import {
   Alert,
   Dimensions,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -54,7 +55,15 @@ export default function LoginScreen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
-      const data = await res.json();
+      
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        data = { error: resText };
+      }
+
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to send verification OTP.');
       
       setForgotStep(2);
@@ -92,7 +101,15 @@ export default function LoginScreen() {
           new_password: forgotNewPass,
         }),
       });
-      const data = await res.json();
+      
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        data = { error: resText };
+      }
+
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to reset password.');
 
       Alert.alert('Success', 'Your password has been reset successfully! Please log in.');
@@ -361,41 +378,36 @@ export default function LoginScreen() {
 
             {/* Social */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
-              {[
-                { label: 'G', provider: 'Google' },
-                { label: '', provider: 'Apple', isIcon: true },
-              ].map((s) => (
-                <TouchableOpacity
-                  key={s.provider}
-                  style={{
-                    width: 58, height: 58,
-                    backgroundColor: 'rgba(255,255,255,0.85)',
-                    borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
-                    borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-                  }}
-                >
-                  {s.isIcon
-                    ? <Ionicons name="logo-apple" size={24} color="#0f172a" />
-                    : (
-                      // Real 4-colour Google "G" logo using Text with gradient-like segments
-                      <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ fontSize: 20, fontWeight: '800' }}>
-                          <Text style={{ color: '#4285F4' }}>G</Text>
-                        </Text>
-                        {/* Colour underline bar replicating Google's 4-colour scheme */}
-                        <View style={{ flexDirection: 'row', height: 3, width: 20, borderRadius: 2, overflow: 'hidden', marginTop: 1 }}>
-                          <View style={{ flex: 1, backgroundColor: '#4285F4' }} />
-                          <View style={{ flex: 1, backgroundColor: '#EA4335' }} />
-                          <View style={{ flex: 1, backgroundColor: '#FBBC05' }} />
-                          <View style={{ flex: 1, backgroundColor: '#34A853' }} />
-                        </View>
-                      </View>
-                    )
-                  }
-                </TouchableOpacity>
-              ))}
+              {/* Google */}
+              <TouchableOpacity
+                style={{
+                  width: 58, height: 58,
+                  backgroundColor: 'rgba(255,255,255,0.85)',
+                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+                }}
+              >
+                <Image 
+                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png' }} 
+                  style={{ width: 24, height: 24, resizeMode: 'contain' }}
+                />
+              </TouchableOpacity>
+
+              {/* Apple */}
+              <TouchableOpacity
+                style={{
+                  width: 58, height: 58,
+                  backgroundColor: 'rgba(255,255,255,0.85)',
+                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 18, alignItems: 'center', justifyContent: 'center',
+                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
+                }}
+              >
+                <Ionicons name="logo-apple" size={24} color="#000000" />
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
