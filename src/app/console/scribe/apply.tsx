@@ -7,7 +7,8 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
 
 export default function ScribeApplyDetailsPage() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; type?: string }>();
+  const type = params.type || 'exam';
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -18,7 +19,7 @@ export default function ScribeApplyDetailsPage() {
 
   useEffect(() => {
     fetchExamAndProfile();
-  }, [params.id]);
+  }, [params.id, params.type]);
 
   const fetchExamAndProfile = async () => {
     try {
@@ -37,29 +38,40 @@ export default function ScribeApplyDetailsPage() {
       
       setProfile(profileData);
 
-      // 2. Fetch Exam Details
-      const { data: examData } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('id', params.id)
-        .single();
+      // 2. Fetch Details based on type
+      let examData = null;
+      if (type === 'assignment') {
+        const { data } = await supabase
+          .from('assignment_requests')
+          .select('*')
+          .eq('id', params.id)
+          .single();
+        examData = data;
+      } else {
+        const { data } = await supabase
+          .from('exam_requests')
+          .select('*')
+          .eq('id', params.id)
+          .single();
+        examData = data;
+      }
       
       setExam(examData);
 
-      // 3. Check if Scribe has an active (non-rejected) application on this exam.
-      // A prior rejection should not block re-applying.
+      // 3. Check if Scribe has an active application on this request.
       if (examData) {
         const { data: existingApps } = await supabase
           .from('scribe_applications')
           .select('*')
           .eq('request_id', examData.id)
-          .eq('scribe_id', session.user.id);
+          .eq('scribe_id', session.user.id)
+          .eq('type', type);
 
         const hasActiveApp = (existingApps || []).some((app: any) => app.status !== 'rejected');
         setHasApplied(hasActiveApp);
       }
     } catch (err) {
-      console.error('Error fetching exam details:', err);
+      console.error('Error fetching details:', err);
     } finally {
       setLoading(false);
     }
@@ -71,7 +83,7 @@ export default function ScribeApplyDetailsPage() {
     if (profile.verification_status !== 'approved') {
       Alert.alert(
         'Verification Required',
-        'Your profile must be approved by an administrator before you can apply as a scribe. Please complete your profile and wait for admin approval.'
+        'Your profile must be approved by an administrator before you can apply. Please complete your profile and wait for admin approval.'
       );
       return;
     }
@@ -85,7 +97,8 @@ export default function ScribeApplyDetailsPage() {
           request_id: exam.id,
           scribe_id: profile.id,
           scribe_name: profile.official_name || profile.full_name,
-          status: 'pending'
+          status: 'pending',
+          type: type
         });
 
       if (error) throw error;
@@ -95,8 +108,10 @@ export default function ScribeApplyDetailsPage() {
         .from('notifications')
         .insert({
           user_id: exam.student_id,
-          title: 'New Scribe Application',
-          message: `${profile.official_name || profile.full_name} has applied to be a scribe for your "${exam.subject || 'Exam'}" exam.`,
+          title: type === 'exam' ? 'New Scribe Application' : 'New Writer Application',
+          message: type === 'exam'
+            ? `${profile.official_name || profile.full_name} has applied to be a scribe for your "${exam.subject || 'Exam'}" exam.`
+            : `${profile.official_name || profile.full_name} has applied to write your assignment "${exam.subject || 'Assignment'}".`,
           is_read: 0,
           created_at: new Date().toISOString()
         });
@@ -127,7 +142,9 @@ export default function ScribeApplyDetailsPage() {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 justify-center items-center p-6">
         <Feather name="alert-circle" size={48} color="#ef4444" />
-        <Text className="text-base font-bold text-slate-800 mt-4">Exam Request Not Found</Text>
+        <Text className="text-base font-bold text-slate-800 mt-4">
+          {type === 'exam' ? 'Exam Request Not Found' : 'Assignment Request Not Found'}
+        </Text>
         <TouchableOpacity onPress={() => router.back()} className="mt-4 bg-emerald-500 px-6 py-2.5 rounded-xl shadow-md">
           <Text className="text-white font-bold text-xs">Go Back</Text>
         </TouchableOpacity>
@@ -147,9 +164,11 @@ export default function ScribeApplyDetailsPage() {
         >
           <Feather name="arrow-left" size={24} color="#334155" />
         </TouchableOpacity>
-        <Text className="text-xl font-black text-slate-800">Exam Details</Text>
+        <Text className="text-xl font-black text-slate-800">
+          {type === 'exam' ? 'Exam Details' : 'Assignment Details'}
+        </Text>
       </View>
-
+ 
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Main Details Card */}
         <View className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm space-y-4 mb-4">
@@ -157,51 +176,87 @@ export default function ScribeApplyDetailsPage() {
           {/* Header & Status */}
           <View className="flex-row items-center justify-between border-b border-slate-50 pb-3">
             <View className="flex-1 pr-2">
-              <Text className="text-xl font-black text-slate-850 text-slate-900">{exam.subject || 'Exam'}</Text>
-              <Text className="text-xs font-semibold text-slate-400 mt-0.5">{exam.exam_type}</Text>
+              <Text className="text-xl font-black text-slate-850 text-slate-900">{exam.subject || 'Details'}</Text>
+              <Text className="text-xs font-semibold text-slate-400 mt-0.5">
+                {type === 'exam' ? exam.exam_type : `Level: ${exam.academic_level}`}
+              </Text>
             </View>
             <View className="py-1 px-3 rounded-full border bg-amber-50 border-amber-200">
               <Text className="text-[10px] font-bold uppercase text-amber-700">{exam.status}</Text>
             </View>
           </View>
-
+ 
           {/* Details Grid */}
           <View className="space-y-3.5">
-            <View className="flex-row items-start">
-              <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
-              <View className="flex-1">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</Text>
-                <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_date || 'Date not specified'}</Text>
-              </View>
-            </View>
+            {type === 'exam' ? (
+              <>
+                <View className="flex-row items-start">
+                  <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</Text>
+                    <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_date || 'Date not specified'}</Text>
+                  </View>
+                </View>
+ 
+                <View className="flex-row items-start">
+                  <Feather name="map-pin" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Exam Venue</Text>
+                    <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_venue || 'Venue not specified'}</Text>
+                  </View>
+                </View>
+ 
+                <View className="flex-row items-start">
+                  <Feather name="globe" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Languages Required</Text>
+                    <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_language}</Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                <View className="flex-row items-start">
+                  <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deadline</Text>
+                    <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.deadline}</Text>
+                  </View>
+                </View>
 
-            <View className="flex-row items-start">
-              <Feather name="map-pin" size={16} color="#059669" className="mr-3.5 mt-0.5" />
-              <View className="flex-1">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Exam Venue</Text>
-                <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_venue || 'Venue not specified'}</Text>
-              </View>
-            </View>
+                <View className="flex-row items-start">
+                  <Feather name="file-text" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignment Title</Text>
+                    <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.assignment_title}</Text>
+                  </View>
+                </View>
 
-            <View className="flex-row items-start">
-              <Feather name="globe" size={16} color="#059669" className="mr-3.5 mt-0.5" />
-              <View className="flex-1">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Languages Required</Text>
-                <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_language}</Text>
-              </View>
-            </View>
-
+                {exam.description ? (
+                  <View className="flex-row items-start">
+                    <Feather name="info" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                    <View className="flex-1">
+                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Instructions</Text>
+                      <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.description}</Text>
+                    </View>
+                  </View>
+                ) : null}
+              </>
+            )}
+ 
             <View className="flex-row items-start">
               <Feather name="user" size={16} color="#059669" className="mr-3.5 mt-0.5" />
               <View className="flex-1">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Name & Grade</Text>
-                <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.student_name} ({exam.education_grade})</Text>
+                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Name</Text>
+                <Text className="text-sm font-semibold text-slate-700 mt-0.5">
+                  {exam.student_name} {type === 'exam' ? `(${exam.education_grade})` : ''}
+                </Text>
               </View>
             </View>
           </View>
-
-          {/* Admit Card Section */}
-          {exam.admit_card_proof ? (
+ 
+          {/* Admit Card Section (Only for Exams) */}
+          {type === 'exam' && exam.admit_card_proof ? (
             <View className="pt-3 border-t border-slate-100">
               <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Student's Admit Card / Proof</Text>
               <View className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex-row items-center justify-between">
@@ -220,9 +275,9 @@ export default function ScribeApplyDetailsPage() {
               </View>
             </View>
           ) : null}
-
+ 
         </View>
-
+ 
         {/* Action Button */}
         {hasApplied ? (
           <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
@@ -238,12 +293,14 @@ export default function ScribeApplyDetailsPage() {
             {submitting ? (
               <ActivityIndicator color="white" size="small" />
             ) : (
-              <Text className="text-white font-bold text-sm">Apply as Scribe</Text>
+              <Text className="text-white font-bold text-sm">
+                {type === 'exam' ? 'Apply as Scribe' : 'Apply as Writer'}
+              </Text>
             )}
           </TouchableOpacity>
         )}
       </ScrollView>
-
+ 
       {/* 100% APPLICATION SUCCESS OVERLAY */}
       {showSuccessOverlay && (
         <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
@@ -266,7 +323,7 @@ export default function ScribeApplyDetailsPage() {
           </View>
         </View>
       )}
-
+ 
     </SafeAreaView>
   );
 }

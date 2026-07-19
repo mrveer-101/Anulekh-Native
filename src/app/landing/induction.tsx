@@ -144,8 +144,22 @@ export default function OnboardingCarousel() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
       <StatusBar style="dark" />
+
+      {/* Soft background pastel orbs */}
+      <View style={{
+        position: 'absolute', top: -100, left: -80,
+        width: 320, height: 320, borderRadius: 160,
+        backgroundColor: 'rgba(37,99,235,0.18)',
+      }} />
+      <View style={{
+        position: 'absolute', bottom: -80, right: -60,
+        width: 280, height: 280, borderRadius: 140,
+        backgroundColor: 'rgba(16,185,129,0.12)',
+      }} />
+
+      <SafeAreaView style={{ flex: 1 }}>
       
       {/* 
         TOP HEADER BAR: Progress & Quick Actions
@@ -231,120 +245,31 @@ export default function OnboardingCarousel() {
         
         {/* SLIDE 1: Primary Branding Introduction */}
         {currentStep === 0 && (
-          <View className="items-center">
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderWidth: 1.5, borderColor: '#cbd5e1',
+            borderRadius: 28, padding: 32, alignItems: 'center',
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
+            width: '100%', maxWidth: 340, alignSelf: 'center',
+            minHeight: 400, justifyContent: 'center',
+          }}>
             {/* White rounded corner square container for the logo */}
             <View style={{
-              width: 138,
-              height: 138,
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: '#e2e8f0',
-              borderRadius: 28,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 20,
-              shadowColor: '#64748b',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
-              padding: 8,
-            }}>
-              <RNImage 
-                source={require('../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: 20,
-                }}
-                resizeMode="contain"
-                accessible={true}
-                accessibilityLabel="Anulekh Logo"
-              />
-            </View>
-
-            <Text 
-              className="text-2xl font-black text-slate-900 text-center tracking-tight px-4"
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
-              accessible={true}
-              accessibilityRole="header"
-              accessibilityLabel={t.slides[0].title}
-            >
-              {t.slides[0].title}
-            </Text>
-            
-            <Text className="text-slate-600 text-center mt-4 text-sm leading-relaxed max-w-xs">
-              {t.slides[0].desc}
-            </Text>
-          </View>
-        )}
-
-        {/* SLIDE 2: Student Flow explanation */}
-        {currentStep === 1 && (
-          <View className="items-center">
-            {/* Minimalist Book-open outline icon */}
-            <View className="w-24 h-24 bg-blue-50 border border-blue-100 rounded-full items-center justify-center mb-8 shadow-sm">
-              <Feather name="book-open" size={40} color="#1e293b" />
-            </View>
-
-            <Text 
-              className="text-3xl font-bold text-slate-900 text-center px-4"
-              accessible={true}
-              accessibilityRole="header"
-              accessibilityLabel={t.slides[1].title}
-            >
-              {t.slides[1].title}
-            </Text>
-            
-            <Text className="text-slate-600 text-center mt-6 text-base leading-relaxed max-w-xs">
-              {t.slides[1].desc}
-            </Text>
-          </View>
-        )}
-
-        {/* SLIDE 3: Scribe Flow explanation */}
-        {currentStep === 2 && (
-          <View className="items-center">
-            {/* Minimalist Users outline icon representing community connection */}
-            <View className="w-24 h-24 bg-emerald-50 border border-emerald-100 rounded-full items-center justify-center mb-8 shadow-sm">
-              <Feather name="users" size={40} color="#1e293b" />
-            </View>
-
-            <Text 
-              className="text-3xl font-bold text-slate-900 text-center px-4"
-              accessible={true}
-              accessibilityRole="header"
-              accessibilityLabel={t.slides[2].title}
-            >
-              {t.slides[2].title}
-            </Text>
-            
-            <Text className="text-slate-600 text-center mt-6 text-base leading-relaxed max-w-xs">
-              {t.slides[2].desc}
-            </Text>
-          </View>
-        )}
-
-        {/* SLIDE 4: Call-To-Action & Role Selection Gate */}
-        {currentStep === 3 && (
-          <View className="items-center">
-            {/* White rounded corner square container for the logo */}
-            <View style={{
-              width: 125,
-              height: 125,
+              width: 120,
+              height: 120,
               backgroundColor: '#ffffff',
               borderWidth: 1.5,
               borderColor: '#e2e8f0',
               borderRadius: 26,
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: 16,
-              shadowColor: '#64748b',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08,
-              shadowRadius: 8,
-              elevation: 2,
+              marginBottom: 24,
+              shadowColor: '#2563eb',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.16,
+              shadowRadius: 16,
+              elevation: 4,
               padding: 6,
             }}>
               <RNImage 
@@ -359,11 +284,150 @@ export default function OnboardingCarousel() {
                 accessibilityLabel="Anulekh Logo"
               />
             </View>
+
+            <Text 
+              className="text-2xl font-black text-slate-900 text-center tracking-tight px-2"
+              accessible={true}
+              accessibilityRole="header"
+              accessibilityLabel={t.slides[0].title}
+            >
+              {t.slides[0].title}
+            </Text>
+            
+            <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
+              {t.slides[0].desc}
+            </Text>
+          </View>
+        )}
+
+        {/* SLIDE 2: Student Flow explanation */}
+        {currentStep === 1 && (
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
+            borderRadius: 28, padding: 32, alignItems: 'center',
+            shadowColor: '#2563eb', shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.12, shadowRadius: 24, elevation: 5,
+            width: '100%', maxWidth: 340, alignSelf: 'center',
+            minHeight: 400, justifyContent: 'center',
+          }}>
+            {/* Minimalist Book-open outline icon */}
+            <View 
+              style={{
+                width: 96, height: 96,
+                backgroundColor: 'rgba(37,99,235,0.08)',
+                borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+                borderRadius: 48,
+                alignItems: 'center', justifyContent: 'center',
+                marginBottom: 28,
+                shadowColor: '#2563eb', shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.12, shadowRadius: 16, elevation: 4,
+              }}
+            >
+              <Feather name="book-open" size={42} color="#2563eb" />
+            </View>
+
+            <Text 
+              className="text-2xl font-black text-slate-900 text-center px-2"
+              accessible={true}
+              accessibilityRole="header"
+              accessibilityLabel={t.slides[1].title}
+            >
+              {t.slides[1].title}
+            </Text>
+            
+            <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
+              {t.slides[1].desc}
+            </Text>
+          </View>
+        )}
+
+        {/* SLIDE 3: Scribe Flow explanation */}
+        {currentStep === 2 && (
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.18)',
+            borderRadius: 28, padding: 32, alignItems: 'center',
+            shadowColor: '#10b981', shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.12, shadowRadius: 24, elevation: 5,
+            width: '100%', maxWidth: 340, alignSelf: 'center',
+            minHeight: 400, justifyContent: 'center',
+          }}>
+            {/* Minimalist Users outline icon representing community connection */}
+            <View 
+              style={{
+                width: 96, height: 96,
+                backgroundColor: 'rgba(16,185,129,0.08)',
+                borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.22)',
+                borderRadius: 48,
+                alignItems: 'center', justifyContent: 'center',
+                marginBottom: 28,
+                shadowColor: '#10b981', shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.12, shadowRadius: 16, elevation: 4,
+              }}
+            >
+              <Feather name="users" size={42} color="#10b981" />
+            </View>
+
+            <Text 
+              className="text-2xl font-black text-slate-900 text-center px-2"
+              accessible={true}
+              accessibilityRole="header"
+              accessibilityLabel={t.slides[2].title}
+            >
+              {t.slides[2].title}
+            </Text>
+            
+            <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
+              {t.slides[2].desc}
+            </Text>
+          </View>
+        )}
+
+        {/* SLIDE 4: Call-To-Action & Role Selection Gate */}
+        {currentStep === 3 && (
+          <View style={{
+            backgroundColor: 'rgba(255,255,255,0.85)',
+            borderWidth: 1.5, borderColor: '#cbd5e1',
+            borderRadius: 28, padding: 32, alignItems: 'center',
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
+            width: '100%', maxWidth: 340, alignSelf: 'center',
+            minHeight: 450, justifyContent: 'center',
+          }}>
+            {/* White rounded corner square container for the logo */}
+            <View style={{
+              width: 100,
+              height: 100,
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 22,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 20,
+              shadowColor: '#64748b',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.08,
+              shadowRadius: 12,
+              elevation: 2,
+              padding: 6,
+            }}>
+              <RNImage 
+                source={require('../../../assets/images/custom/Pen_Logo.jpg')} 
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 14,
+                }}
+                resizeMode="contain"
+                accessible={true}
+                accessibilityLabel="Anulekh Logo"
+              />
+            </View>
             
             <Text 
-              className="text-2xl font-black text-slate-900 text-center px-4"
-              numberOfLines={1}
-              adjustsFontSizeToFit={true}
+              className="text-2xl font-black text-slate-900 text-center px-2"
               accessible={true}
               accessibilityRole="header"
               accessibilityLabel={t.step4Title}
@@ -371,11 +435,11 @@ export default function OnboardingCarousel() {
               {t.step4Title}
             </Text>
             
-            <Text className="text-slate-500 text-center mt-3 text-sm max-w-xs mb-8">
+            <Text className="text-slate-500 text-center mt-3 text-sm max-w-xs mb-6">
               {t.step4Sub}
             </Text>
 
-            <View className="space-y-4 w-full max-w-sm">
+            <View className="space-y-4 w-full">
               {/* Student CTA Button (Solid Brand Blue 500 + Shadow Glow) */}
               <TouchableOpacity 
                 onPress={handleNavigateToStudent}
@@ -386,7 +450,7 @@ export default function OnboardingCarousel() {
                 accessibilityHint="Double tap to register or log in as a student in need of a scribe"
                 activeOpacity={0.85}
               >
-                <Text className="text-white text-lg font-bold">
+                <Text className="text-white text-base font-bold">
                   {t.studentBtn}
                 </Text>
               </TouchableOpacity>
@@ -401,7 +465,7 @@ export default function OnboardingCarousel() {
                 accessibilityHint="Double tap to register or log in as a volunteer scribe"
                 activeOpacity={0.85}
               >
-                <Text className="text-white text-lg font-bold">
+                <Text className="text-white text-base font-bold">
                   {t.scribeBtn}
                 </Text>
               </TouchableOpacity>
@@ -509,5 +573,6 @@ export default function OnboardingCarousel() {
       )}
 
     </SafeAreaView>
+    </View>
   );
 }

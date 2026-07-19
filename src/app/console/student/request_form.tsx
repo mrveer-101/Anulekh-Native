@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -73,6 +74,7 @@ export default function ScribeRequestForm() {
   // Map Picker State
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [examVenue, setExamVenue] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
 
   // Bulk Exam Creation: additional subjects sharing the same profile/type/language.
   // Each entry becomes its own exam_requests row on submit so scribes can apply per-exam.
@@ -177,6 +179,53 @@ export default function ScribeRequestForm() {
 
   const removeExtraSubject = (index: number) => {
     setExtraSubjects(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGetCurrentLocation = async (extraIndex: number = -1) => {
+    setIsLocating(true);
+    setActiveExtraIndex(extraIndex);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Permission to access location was denied. Please enter address manually.');
+        return;
+      }
+
+      const locationData = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = locationData.coords;
+      const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+      if (geocode && geocode.length > 0) {
+        const addressObj = geocode[0];
+        // Build a readable address string
+        const parts = [
+          addressObj.name,
+          addressObj.street,
+          addressObj.district,
+          addressObj.city,
+          addressObj.subregion,
+          addressObj.region,
+          addressObj.postalCode
+        ].filter(p => !!p && p !== 'undefined' && p !== 'Unnamed Road');
+
+        const addressString = parts.join(', ');
+        
+        if (extraIndex === -1) {
+          setExamVenue(addressString);
+        } else {
+          updateExtraSubject(extraIndex, 'examVenue', addressString);
+        }
+      } else {
+        Alert.alert('Error', 'Unable to resolve your geocoded address.');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to get your current location.');
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   const changeMonth = (direction: 'next' | 'prev') => {
@@ -492,22 +541,24 @@ export default function ScribeRequestForm() {
   // Entry-choice screen: ask whether to fill the request manually or auto-fill from an admit card.
   if (entryMode === 'choice') {
     return (
-      <SafeAreaView className="flex-1 bg-slate-50">
+      <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
         <StatusBar style="dark" />
-
-        {/* Header */}
-        <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
-          <TouchableOpacity
-            onPress={() => {
-              if (router.canGoBack()) router.back();
-              else router.replace('/console/student' as any);
-            }}
-            className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
-          >
-            <Feather name="arrow-left" size={24} color="#334155" />
-          </TouchableOpacity>
-          <Text className="text-xl font-black text-slate-800">Request a Scribe</Text>
-        </View>
+        
+        {/* Page Header (with back button) */}
+        <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 }}>
+          <View style={{ paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => {
+                if (router.canGoBack()) router.back();
+                else router.replace('/console/student' as any);
+              }}
+              style={{ marginRight: 16, padding: 8, marginLeft: -8, borderRadius: 10 }}
+            >
+              <Feather name="arrow-left" size={24} color="#334155" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: '#1e293b' }}>Request a Scribe</Text>
+          </View>
+        </SafeAreaView>
 
         <View className="flex-1 px-6 py-8 justify-center">
           <Text className="text-lg font-black text-slate-800 text-center mb-2">How would you like to create this request?</Text>
@@ -545,30 +596,89 @@ export default function ScribeRequestForm() {
             <Feather name="chevron-right" size={20} color="#334155" />
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+
+        {/* Replicated Bottom Nav Bar */}
+        <SafeAreaView edges={['bottom']} style={{
+          backgroundColor: 'rgba(255,255,255,0.82)',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
+        }}>
+          <View style={{
+            flexDirection: 'row',
+            paddingVertical: 8,
+            paddingHorizontal: 8,
+            gap: 4,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(0,0,0,0.07)',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+          }}>
+            {[
+              { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
+              { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+              { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
+              { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
+            ].map((tab) => {
+              const active = tab.id === 'requests';
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  onPress={() => {
+                    router.replace(`/console/student?tab=${tab.id}`);
+                  }}
+                  style={{
+                    flex: 1, alignItems: 'center', paddingVertical: 9,
+                    borderRadius: 20,
+                    backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
+                  }}
+                >
+                  <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
+                  <Text style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 11, fontWeight: active ? '800' : '600',
+                    marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
+                  }}>
+                    {tab.label}
+                  </Text>
+                  {active && (
+                    <View style={{
+                      position: 'absolute', bottom: 2,
+                      width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
+                    }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
 
-      {/* Header */}
-      <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
-        <TouchableOpacity
-          onPress={() => {
-            if (!isEditing) { setEntryMode('choice'); return; }
-            if (router.canGoBack()) router.back();
-            else router.replace('/console/student' as any);
-          }}
-          className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
-        >
-          <Feather name="arrow-left" size={24} color="#334155" />
-        </TouchableOpacity>
-        <Text className="text-xl font-black text-slate-800">
-          {isEditing ? 'Edit Scribe Request' : 'Request a Scribe'}
-        </Text>
-      </View>
+      {/* Page Header (with back button) */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 }}>
+        <View style={{ paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (!isEditing) { setEntryMode('choice'); return; }
+              if (router.canGoBack()) router.back();
+              else router.replace('/console/student' as any);
+            }}
+            style={{ marginRight: 16, padding: 8, marginLeft: -8, borderRadius: 10 }}
+          >
+            <Feather name="arrow-left" size={24} color="#334155" />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 20, fontWeight: '900', color: '#1e293b' }}>
+            {isEditing ? 'Edit Scribe Request' : 'Request a Scribe'}
+          </Text>
+        </View>
+      </SafeAreaView>
 
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
@@ -771,12 +881,25 @@ export default function ScribeRequestForm() {
                     numberOfLines={2}
                     className="flex-1 text-sm text-slate-800 mr-2 py-1"
                   />
-                  <TouchableOpacity
-                    onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
-                    className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
-                  >
-                    <Feather name="map" size={16} color="#2563eb" />
-                  </TouchableOpacity>
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity
+                      onPress={() => handleGetCurrentLocation(-1)}
+                      disabled={isLocating}
+                      className="p-2 bg-blue-50 rounded-lg active:bg-blue-100 items-center justify-center"
+                    >
+                      {isLocating && activeExtraIndex === -1 ? (
+                        <ActivityIndicator size="small" color="#2563eb" style={{ width: 16, height: 16 }} />
+                      ) : (
+                        <Feather name="navigation" size={16} color="#2563eb" />
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
+                      className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
+                    >
+                      <Feather name="map" size={16} color="#2563eb" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
 
@@ -865,12 +988,25 @@ export default function ScribeRequestForm() {
                           numberOfLines={2}
                           className="flex-1 text-sm text-slate-800 mr-2 py-1"
                         />
-                        <TouchableOpacity
-                          onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
-                          className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
-                        >
-                          <Feather name="map" size={16} color="#2563eb" />
-                        </TouchableOpacity>
+                        <View className="flex-row gap-2">
+                          <TouchableOpacity
+                            onPress={() => handleGetCurrentLocation(index)}
+                            disabled={isLocating}
+                            className="p-2 bg-blue-50 rounded-lg active:bg-blue-100 items-center justify-center"
+                          >
+                            {isLocating && activeExtraIndex === index ? (
+                              <ActivityIndicator size="small" color="#2563eb" style={{ width: 16, height: 16 }} />
+                            ) : (
+                              <Feather name="navigation" size={16} color="#2563eb" />
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
+                            className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
+                          >
+                            <Feather name="map" size={16} color="#2563eb" />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
@@ -1102,7 +1238,63 @@ export default function ScribeRequestForm() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+      {/* Replicated Bottom Nav Bar */}
+      <SafeAreaView edges={['bottom']} style={{
+        backgroundColor: 'rgba(255,255,255,0.82)',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          paddingVertical: 8,
+          paddingHorizontal: 8,
+          gap: 4,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,0,0,0.07)',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+        }}>
+          {[
+            { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
+            { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+            { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
+            { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
+          ].map((tab) => {
+            const active = tab.id === 'requests';
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                onPress={() => {
+                  router.replace(`/console/student?tab=${tab.id}`);
+                }}
+                style={{
+                  flex: 1, alignItems: 'center', paddingVertical: 9,
+                  borderRadius: 20,
+                  backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
+                }}
+              >
+                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
+                <Text style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 11, fontWeight: active ? '800' : '600',
+                  marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
+                }}>
+                  {tab.label}
+                </Text>
+                {active && (
+                  <View style={{
+                    position: 'absolute', bottom: 2,
+                    width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
+                  }} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 

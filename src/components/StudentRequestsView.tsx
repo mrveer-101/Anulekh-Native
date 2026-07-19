@@ -4,6 +4,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
+import ScribesDirectoryModal from './ScribesDirectoryModal';
 
 interface ExamRequest {
   id: number;
@@ -22,6 +23,8 @@ interface ExamRequest {
   exam_venue?: string;
   applicationCount?: number;
   scribe_id?: string;
+  is_emergency?: string;
+  private_scribe_id?: string;
   scribeProfile?: {
     full_name: string;
     phone: string;
@@ -40,6 +43,8 @@ export default function StudentRequestsView() {
 
   // Tab view control
   const [activeTab, setActiveTab] = useState<'requests' | 'assignments' | 'past_scribes'>('requests');
+  const [showScribeDirectory, setShowScribeDirectory] = useState(false);
+  const [preSelectedScribeReq, setPreSelectedScribeReq] = useState<{ id: number; type: 'exam' | 'assignment'; subject: string } | undefined>(undefined);
 
   // Past scribes and private invites states
   const [pastScribes, setPastScribes] = useState<any[]>([]);
@@ -97,7 +102,7 @@ export default function StudentRequestsView() {
         .eq('student_id', session.user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || error.details || error.hint || 'Failed to load exam requests.');
 
       // Fetch all assignment requests
       const { data: assignmentData, error: assignmentError } = await supabase
@@ -106,7 +111,7 @@ export default function StudentRequestsView() {
         .eq('student_id', session.user.id)
         .order('created_at', { ascending: false });
 
-      if (assignmentError) throw assignmentError;
+      if (assignmentError) throw new Error(assignmentError.message || assignmentError.details || assignmentError.hint || 'Failed to load assignment requests.');
 
       // Enrich assignment requests with scribe profiles
       const enrichedAssignments = await Promise.all(
@@ -154,8 +159,7 @@ export default function StudentRequestsView() {
           const { data: apps } = await supabase
             .from('scribe_applications')
             .select('id')
-            .eq('request_id', exam.id)
-            .eq('status', 'pending');
+            .eq('request_id', exam.id);
           
           let scribeProfile = null;
           if (exam.status === 'matched' && exam.scribe_id) {
@@ -177,7 +181,8 @@ export default function StudentRequestsView() {
 
       setRequests(enriched);
     } catch (error: any) {
-      console.error('Error fetching requests:', error.message);
+      const msg = error?.message ?? error?.details ?? error?.hint ?? (typeof error === 'string' ? error : JSON.stringify(error));
+      console.error('Error fetching requests:', msg, error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -404,90 +409,118 @@ export default function StudentRequestsView() {
 
     return (
       <View style={{
-        backgroundColor: '#f8fafc',
-        borderRadius: 22,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
+        backgroundColor: '#ffffff',
+        borderRadius: 24,
+        borderWidth: 1.5,
+        borderColor: '#f1f5f9',
         shadowColor: '#64748b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
         elevation: 3,
         marginBottom: 16,
-        overflow: 'hidden',
+        padding: 20,
       }}>
-        {/* Top Section */}
-        <View style={{ padding: 18, paddingBottom: 14 }}>
-          {/* Status Badge */}
-          <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+        {/* Top Section: Status Badge & Subject info */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          {/* Icon + details block */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1 }}>
+            {/* Book-Open Icon block */}
             <View style={{
-              paddingVertical: 5, paddingHorizontal: 12,
-              borderRadius: 20,
-              borderWidth: 1.5,
-              borderColor: statusColor.border,
-              backgroundColor: statusColor.bg,
+              width: 46, height: 46, borderRadius: 14,
+              backgroundColor: 'rgba(79,70,229,0.08)',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: 'rgba(79,70,229,0.16)',
             }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: statusColor.text, letterSpacing: 0.5 }}>
-                {statusLabel}
+              <Feather name="book-open" size={20} color="#4f46e5" />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
+                {item.subject}
               </Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#4f46e5', marginTop: 2 }}>
+                {item.assignment_title}
+              </Text>
+              
+              {/* Level Tag badge */}
+              <View style={{ flexDirection: 'row', marginTop: 6 }}>
+                <View style={{ backgroundColor: '#f1f5f9', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '700', color: '#475569' }}>
+                    Level: {item.academic_level}
+                  </Text>
+                </View>
+              </View>
             </View>
           </View>
 
-          <View style={{ marginBottom: 14 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>
-              {item.subject}
+          {/* Status Badge */}
+          <View style={{
+            paddingVertical: 4, paddingHorizontal: 10,
+            borderRadius: 12,
+            borderWidth: 1.2,
+            borderColor: statusColor.border,
+            backgroundColor: statusColor.bg,
+          }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: statusColor.text, letterSpacing: 0.3 }}>
+              {statusLabel}
             </Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#3b82f6', marginTop: 2 }}>
-              {item.assignment_title}
+          </View>
+        </View>
+
+        {/* Instructions bubble section if description exists */}
+        {item.description ? (
+          <View style={{
+            backgroundColor: '#f8fafc',
+            borderWidth: 1,
+            borderColor: '#e2e8f0',
+            borderRadius: 14,
+            padding: 12,
+            marginBottom: 14,
+          }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: 4 }}>Instructions</Text>
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, lineHeight: 17 }}>
+              {item.description}
             </Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>
-              Level: {item.academic_level}
+          </View>
+        ) : null}
+
+        {/* Deadline and Writer Details Row */}
+        <View style={{ gap: 6, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+              Deadline: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.deadline}</Text>
             </Text>
           </View>
 
-          <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 12, gap: 6 }}>
-            {item.description ? (
-              <View style={{ marginBottom: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: 2 }}>Instructions</Text>
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, lineHeight: 17 }}>
-                  {item.description}
-                </Text>
-              </View>
-            ) : null}
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-              <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
+          {isMatched && item.scribeProfile ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Feather name="user" size={12} color="#4f46e5" style={{ marginRight: 8 }} />
               <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                Deadline: <Text style={{ fontWeight: '700' }}>{item.deadline}</Text>
+                Writer: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile.full_name}</Text>
               </Text>
             </View>
+          ) : null}
+        </View>
 
-            {isMatched && item.scribeProfile ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                <Feather name="user" size={12} color="#2563eb" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                  Writer: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile.full_name}</Text>
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Action Row */}
-          {isMatched && (
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+        {/* Action Row */}
+        {isMatched ? (
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
               <TouchableOpacity
                 onPress={handleMarkCompleted}
                 style={{
                   flex: 1, backgroundColor: '#10b981',
-                  borderRadius: 14, paddingVertical: 12,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  borderRadius: 12, paddingVertical: 11,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                   shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.2, shadowRadius: 8, elevation: 3,
+                  shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
                 }}
                 activeOpacity={0.85}
               >
-                <Feather name="check-circle" size={16} color="#fff" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                <Feather name="check-circle" size={14} color="#fff" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
                   Mark Completed
                 </Text>
               </TouchableOpacity>
@@ -502,45 +535,83 @@ export default function StudentRequestsView() {
                 }}
                 style={{
                   flex: 1, backgroundColor: '#2563eb',
-                  borderRadius: 14, paddingVertical: 12,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  borderRadius: 12, paddingVertical: 11,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                   shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.2, shadowRadius: 8, elevation: 3,
+                  shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
                 }}
                 activeOpacity={0.85}
               >
-                <Feather name="phone-call" size={16} color="#fff" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                <Feather name="phone-call" size={14} color="#fff" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
                   Call Writer
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
 
-          <View style={{ flexDirection: 'row', gap: 10 }}>
             <TouchableOpacity
-              onPress={() => {
-                router.push(`/console/student/assignment_form?id=${item.id}` as any);
-              }}
+              onPress={() => router.push(`/console/common/chat?requestId=${item.id}&type=assignment` as any)}
               style={{
-                flex: 1, paddingVertical: 12,
-                borderRadius: 14, borderWidth: 1.5,
-                borderColor: '#2563eb',
+                width: '100%', paddingVertical: 11,
+                borderRadius: 12, borderWidth: 1.5,
+                borderColor: '#bfdbfe',
+                backgroundColor: '#eff6ff',
                 alignItems: 'center', justifyContent: 'center',
               }}
               activeOpacity={0.7}
             >
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                Edit Details
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat with Writer</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={{ gap: 10 }}>
+            {/* Find & Invite Writers button — full width, primary */}
+            <TouchableOpacity
+              onPress={() => {
+                setPreSelectedScribeReq({ id: item.id, type: 'assignment', subject: item.subject });
+                setShowScribeDirectory(true);
+              }}
+              style={{
+                width: '100%', paddingVertical: 11,
+                borderRadius: 12,
+                backgroundColor: '#4f46e5',
+                alignItems: 'center', justifyContent: 'center',
+                flexDirection: 'row', gap: 6,
+                shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+              }}
+              activeOpacity={0.85}
+            >
+              <Feather name="search" size={14} color="#fff" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                Find & Invite Writers
               </Text>
             </TouchableOpacity>
 
-            {item.status !== 'matched' && (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  router.push(`/console/student/assignment_form?id=${item.id}` as any);
+                }}
+                style={{
+                  flex: 1, paddingVertical: 11,
+                  borderRadius: 12, borderWidth: 1.5,
+                  borderColor: '#2563eb',
+                  backgroundColor: '#fff',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                  Edit Details
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={handleDelete}
                 style={{
-                  flex: 1, paddingVertical: 12,
-                  borderRadius: 14, borderWidth: 1.5,
+                  flex: 1, paddingVertical: 11,
+                  borderRadius: 12, borderWidth: 1.5,
                   borderColor: '#fca5a5',
                   backgroundColor: '#fff7f7',
                   alignItems: 'center', justifyContent: 'center',
@@ -551,101 +622,120 @@ export default function StudentRequestsView() {
                   Delete
                 </Text>
               </TouchableOpacity>
-            )}
-
-            {isMatched && (
-              <TouchableOpacity
-                onPress={() => router.push(`/console/common/chat?requestId=${item.id}&type=assignment` as any)}
-                style={{
-                  flex: 1, paddingVertical: 12,
-                  borderRadius: 14, borderWidth: 1.5,
-                  borderColor: '#bfdbfe',
-                  backgroundColor: '#eff6ff',
-                  alignItems: 'center', justifyContent: 'center',
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat</Text>
-              </TouchableOpacity>
-            )}
+            </View>
           </View>
-
-        </View>
+        )}
       </View>
     );
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-      {/* Header row: request count + always-visible New Request action */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 8 }}>
-        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#64748b' }}>
-          {activeTab === 'requests' 
-            ? `${requests.length} ${requests.length === 1 ? 'Exam' : 'Exams'}`
-            : activeTab === 'assignments'
-            ? `${assignmentRequests.length} ${assignmentRequests.length === 1 ? 'Assignment' : 'Assignments'}`
-            : `${pastScribes.length} Past Scribes`
-          }
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            Alert.alert(
-              'Select Request Type',
-              'What type of request would you like to create?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
-                { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
-              ]
-            );
-          }}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 }}
-        >
-          <Feather name="plus" size={14} color="#fff" />
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#fff' }}>New Request</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+      {/* Top Filter & Action Panel */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        marginHorizontal: 24,
+        marginTop: 16,
+        marginBottom: 12,
+        borderRadius: 24,
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+        padding: 16,
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 3,
+      }}>
+        {/* Header row: request count + always-visible New Request action */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#1e293b' }}>
+            {activeTab === 'requests' 
+              ? `${requests.length} ${requests.length === 1 ? 'Exam' : 'Exams'}`
+              : activeTab === 'assignments'
+              ? `${assignmentRequests.length} ${assignmentRequests.length === 1 ? 'Assignment' : 'Assignments'}`
+              : `${pastScribes.length} Past Scribes`
+            }
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setShowScribeDirectory(true)}
+              style={{
+                flexDirection: 'row', alignItems: 'center', gap: 5,
+                borderWidth: 1.5, borderColor: '#2563eb', paddingVertical: 7, paddingHorizontal: 12,
+                borderRadius: 12, backgroundColor: '#fff'
+              }}
+            >
+              <Feather name="search" size={13} color="#2563eb" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#2563eb' }}>Find Scribes</Text>
+            </TouchableOpacity>
 
-      {/* Tab Switcher */}
-      <View style={{ flexDirection: 'row', paddingHorizontal: 24, marginBottom: 12, gap: 10 }}>
-        <TouchableOpacity
-          onPress={() => setActiveTab('requests')}
-          style={{
-            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: activeTab === 'requests' ? '#2563eb' : '#fff',
-            borderWidth: 1, borderColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.05)'
-          }}
-        >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>Exams</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab('assignments')}
-          style={{
-            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: activeTab === 'assignments' ? '#2563eb' : '#fff',
-            borderWidth: 1, borderColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.05)'
-          }}
-        >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'assignments' ? '#fff' : '#64748b' }}>Assignments</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveTab('past_scribes')}
-          style={{
-            flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center',
-            backgroundColor: activeTab === 'past_scribes' ? '#2563eb' : '#fff',
-            borderWidth: 1, borderColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.05)'
-          }}
-        >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert(
+                  'Select Request Type',
+                  'What type of request would you like to create?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
+                    { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
+                  ]
+                );
+              }}
+              style={{ 
+                flexDirection: 'row', alignItems: 'center', gap: 5, 
+                backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 12, 
+                borderRadius: 12, shadowColor: '#2563eb', 
+                shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 2 
+              }}
+            >
+              <Feather name="plus" size={13} color="#fff" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#fff' }}>New Request</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Tab Switcher */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setActiveTab('requests')}
+            style={{
+              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.02)',
+              borderWidth: 1, borderColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.06)'
+            }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>Exams</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('assignments')}
+            style={{
+              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.02)',
+              borderWidth: 1, borderColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.06)'
+            }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'assignments' ? '#fff' : '#64748b' }}>Assignments</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setActiveTab('past_scribes')}
+            style={{
+              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+              backgroundColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.02)',
+              borderWidth: 1, borderColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.06)'
+            }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {activeTab === 'requests' || activeTab === 'assignments' ? (
@@ -692,6 +782,9 @@ export default function StudentRequestsView() {
 
           // Status label
           const statusLabel = (() => {
+            if (item.is_emergency === 'yes') {
+              return '🚨 EMERGENCY SOS';
+            }
             switch (item.status.toLowerCase()) {
               case 'pending': return 'NOT ASSIGNED';
               case 'matched': return 'ASSIGNED';
@@ -701,6 +794,9 @@ export default function StudentRequestsView() {
             }
           })();
           const statusColor = (() => {
+            if (item.is_emergency === 'yes') {
+              return { text: '#dc2626', border: '#fca5a5', bg: '#fef2f2' };
+            }
             switch (item.status.toLowerCase()) {
               case 'pending': return { text: '#475569', border: '#cbd5e1', bg: '#fff' };
               case 'matched': return { text: '#059669', border: '#6ee7b7', bg: '#f0fdf4' };
@@ -734,7 +830,7 @@ export default function StudentRequestsView() {
                       const { data: scribes } = await supabase.from('profiles').select('id').eq('role', 'scribe').eq('urgent_calls', 'yes');
                       
                       if (scribes && scribes.length > 0) {
-                        const notifications = scribes.map(s => ({
+                        const notifications = scribes.map((s: any) => ({
                           user_id: s.id,
                           title: '🚨 Emergency Scribe Needed!',
                           message: `[Emergency Request] A student needs an emergency scribe for "${item.subject}" TODAY at ${item.exam_venue}! Open the app to accept immediately.`,
@@ -777,11 +873,11 @@ export default function StudentRequestsView() {
             <View style={{
               backgroundColor: '#fff',
               borderRadius: 22,
-              borderWidth: 1,
-              borderColor: 'rgba(0,0,0,0.07)',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06,
+              borderWidth: item.is_emergency === 'yes' ? 2 : 1.5,
+              borderColor: item.is_emergency === 'yes' ? '#fca5a5' : '#e2e8f0',
+              shadowColor: item.is_emergency === 'yes' ? '#dc2626' : '#64748b',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: item.is_emergency === 'yes' ? 0.12 : 0.06,
               shadowRadius: 16,
               elevation: 3,
               marginBottom: 16,
@@ -925,127 +1021,164 @@ export default function StudentRequestsView() {
                         </Text>
                       </TouchableOpacity>
                     )}
+                    {/* Find & Invite Scribes directly to this exam */}
                     <TouchableOpacity
-                      onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
+                      onPress={() => {
+                        setPreSelectedScribeReq({ id: item.id, type: 'exam', subject: item.subject });
+                        setShowScribeDirectory(true);
+                      }}
                       style={{
                         backgroundColor: '#2563eb',
-                        borderRadius: 14, paddingVertical: 14,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
+                        borderRadius: 14, paddingVertical: 12,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.18, shadowRadius: 10, elevation: 4,
                       }}
                       activeOpacity={0.85}
                     >
-                      <Feather name="users" size={18} color="#fff" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff', letterSpacing: 0.2 }}>
-                        View Scribes ({item.applicationCount ?? 0})
+                      <Feather name="search" size={16} color="#fff" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>
+                        Find & Invite Scribes
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
+                      style={{
+                        backgroundColor: '#eff6ff',
+                        borderRadius: 14, paddingVertical: 12,
+                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        borderWidth: 1.5, borderColor: '#bfdbfe',
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="users" size={16} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#2563eb', letterSpacing: 0.2 }}>
+                        View Applications ({item.applicationCount ?? 0})
                       </Text>
                     </TouchableOpacity>
                   </>
                 )}
 
-                {/* Matched actions: Call + Chat */}
-                {isMatched && (
-                  <View style={{ gap: 10 }}>
-                    {/* Mark Completed */}
-                    <TouchableOpacity
-                      onPress={() => openRatingModal(item)}
-                      style={{
-                        backgroundColor: '#10b981',
-                        borderRadius: 14, paddingVertical: 14,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-                        shadowColor: '#10b981', shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Feather name="check-circle" size={18} color="#fff" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff' }}>
-                        Mark Completed
-                      </Text>
-                    </TouchableOpacity>
+                {/* Matched actions (2x2 Compact Grid) */}
+                {isMatched ? (
+                  <View style={{ gap: 10, marginTop: 4 }}>
+                    {/* Row 1: Call Scribe + Chat */}
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => openCallSheet(item)}
+                        style={{
+                          flex: 1, backgroundColor: '#2563eb',
+                          borderRadius: 12, paddingVertical: 11,
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Feather name="phone-call" size={15} color="#fff" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                          Call Scribe
+                        </Text>
+                      </TouchableOpacity>
 
-                    {/* Call Scribe */}
-                    <TouchableOpacity
-                      onPress={() => openCallSheet(item)}
-                      style={{
-                        backgroundColor: '#2563eb',
-                        borderRadius: 14, paddingVertical: 14,
-                        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                        shadowOpacity: 0.25, shadowRadius: 12, elevation: 5,
-                      }}
-                      activeOpacity={0.85}
-                    >
-                      <Feather name="phone-call" size={18} color="#fff" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#fff' }}>
-                        Call Scribe
-                      </Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => router.push(`/console/common/chat?requestId=${item.id}` as any)}
+                        style={{
+                          flex: 1, paddingVertical: 11,
+                          borderRadius: 12, borderWidth: 1.5,
+                          borderColor: '#bfdbfe',
+                          backgroundColor: '#eff6ff',
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="message-square" size={15} color="#2563eb" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                          Chat
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Row 2: Mark Completed + View Details */}
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        onPress={() => openRatingModal(item)}
+                        style={{
+                          flex: 1, backgroundColor: '#10b981',
+                          borderRadius: 12, paddingVertical: 11,
+                          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                          shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Feather name="check-circle" size={15} color="#fff" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                          Mark Completed
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedExam(item);
+                          setIsDeclarationOpen(true);
+                        }}
+                        style={{
+                          flex: 1, paddingVertical: 11,
+                          borderRadius: 12, borderWidth: 1.5,
+                          borderColor: '#2563eb',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                          View Details
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  /* Original Unmatched Flow */
+                  <View style={{ gap: 10 }}>
+                    {/* Bottom row: View Details + Delete */}
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      {/* View Details */}
+                      <TouchableOpacity
+                        onPress={() => {
+                          router.push(`/console/student/request_form?id=${item.id}` as any);
+                        }}
+                        style={{
+                          flex: 1, paddingVertical: 13,
+                          borderRadius: 14, borderWidth: 1.5,
+                          borderColor: '#2563eb',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                          View Details
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Delete Exam */}
+                      <TouchableOpacity
+                        onPress={handleDelete}
+                        style={{
+                          flex: 1, paddingVertical: 13,
+                          borderRadius: 14, borderWidth: 1.5,
+                          borderColor: '#fca5a5',
+                          backgroundColor: '#fff7f7',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                          Delete Exam
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
-
-                {/* Bottom row: View Details + Delete */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  {/* View Details */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      if (isMatched) {
-                        setSelectedExam(item);
-                        setIsDeclarationOpen(true);
-                      } else {
-                        router.push(`/console/student/request_form?id=${item.id}` as any);
-                      }
-                    }}
-                    style={{
-                      flex: 1, paddingVertical: 13,
-                      borderRadius: 14, borderWidth: 1.5,
-                      borderColor: '#2563eb',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                      View Details
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Delete Exam */}
-                  {item.status !== 'matched' && (
-                    <TouchableOpacity
-                      onPress={handleDelete}
-                      style={{
-                        flex: 1, paddingVertical: 13,
-                        borderRadius: 14, borderWidth: 1.5,
-                        borderColor: '#fca5a5',
-                        backgroundColor: '#fff7f7',
-                        alignItems: 'center', justifyContent: 'center',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
-                        Delete Exam
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Chat button (matched) */}
-                  {isMatched && (
-                    <TouchableOpacity
-                      onPress={() => router.push(`/console/common/chat?requestId=${item.id}` as any)}
-                      style={{
-                        flex: 1, paddingVertical: 13,
-                        borderRadius: 14, borderWidth: 1.5,
-                        borderColor: '#bfdbfe',
-                        backgroundColor: '#eff6ff',
-                        alignItems: 'center', justifyContent: 'center',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
               </View>
             </View>
           );
@@ -1717,6 +1850,17 @@ export default function StudentRequestsView() {
           </View>
         </View>
       </Modal>
+
+      {/* Scribes Directory Search Modal */}
+      <ScribesDirectoryModal
+        visible={showScribeDirectory}
+        onClose={() => {
+          setShowScribeDirectory(false);
+          setPreSelectedScribeReq(undefined);
+        }}
+        studentId={studentProfile?.id || ''}
+        preSelectedRequest={preSelectedScribeReq}
+      />
 
     </View>
   );

@@ -504,10 +504,25 @@ export default function SharedSettingsView() {
       {/* Secondary Action Button (Log Out) */}
       <TouchableOpacity
         onPress={handleSignOut}
-        style={{ width: '100%', backgroundColor: '#fee2e2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 13, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+        style={{ 
+          width: '100%', 
+          backgroundColor: '#dc2626', 
+          paddingVertical: 15, 
+          borderRadius: 16, 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          flexDirection: 'row',
+          shadowColor: '#dc2626',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.25,
+          shadowRadius: 12,
+          elevation: 4,
+          marginBottom: 10
+        }}
+        activeOpacity={0.85}
       >
-        <Feather name="log-out" size={14} color="#dc2626" style={{ marginRight: 6 }} />
-        <Text style={{ color: '#dc2626', fontWeight: '800', fontSize: 13 }}>{t('sign_out')}</Text>
+        <Feather name="log-out" size={16} color="#ffffff" style={{ marginRight: 8 }} />
+        <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('sign_out')}</Text>
       </TouchableOpacity>
 
     </ScrollView>

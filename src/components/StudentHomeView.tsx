@@ -53,17 +53,20 @@ export default function StudentHomeView() {
 
       setProfile(profileData);
 
-      // 2. Fetch Student's Confirmed Plans (matched status)
+      // 2. Fetch Student's Confirmed Plans (matched status) or active SOS requests
       const { data: committed } = await supabase
         .from('exam_requests')
         .select('*')
-        .eq('status', 'matched')
         .eq('student_id', session.user.id)
         .order('created_at', { ascending: false });
 
-      // Enrich confirmed plans with scribe profile details
+      const activePlans = (committed || []).filter((exam: any) => {
+        return exam.status === 'matched' || (exam.status === 'pending' && exam.is_emergency === 'yes');
+      });
+
+      // Enrich active plans with scribe profile details
       const enrichedPlans = await Promise.all(
-        (committed || []).map(async (exam: any) => {
+        activePlans.map(async (exam: any) => {
           let scribeProfile = null;
           if (exam.scribe_id) {
             const { data: scribe } = await supabase
@@ -150,9 +153,18 @@ export default function StudentHomeView() {
     }
   };
 
-  // SOS Emergency Scribe Broadcast: for last-minute cancellations (within 24h of the exam),
-  // alert all approved scribes and reopen the request so a replacement can pick it up.
+  // SOS Emergency Scribe Broadcast
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
+  // Which exam cards are expanded (collapsed by default)
+  const [expandedExamIds, setExpandedExamIds] = useState<Set<number>>(new Set());
+
+  const toggleExamCard = (id: number) => {
+    setExpandedExamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const handleSosBroadcast = (exam: any) => {
     Alert.alert(
@@ -166,10 +178,10 @@ export default function StudentHomeView() {
           onPress: async () => {
             setSosSendingId(exam.id);
             try {
-              // 1. Reopen the request so a new scribe can apply.
+              // 1. Reopen the request so a new scribe can apply, and flag it as emergency SOS.
               const { error: reqErr } = await supabase
                 .from('exam_requests')
-                .update({ status: 'pending', scribe_id: null })
+                .update({ status: 'pending', scribe_id: null, is_emergency: 'yes' })
                 .eq('id', exam.id);
               if (reqErr) throw reqErr;
 
@@ -244,7 +256,7 @@ export default function StudentHomeView() {
 
       {/* 1. Complete Profile Onboarding Card */}
       {isUnverified && (
-        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#fef3c7', padding: 20, borderRadius: 24, shadowColor: '#d97706', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#fef3c7', padding: 20, borderRadius: 24, shadowColor: '#d97706', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, paddingRight: 16 }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#92400e' }}>{t('complete_profile')}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: MUTED, marginTop: 4, lineHeight: 18 }}>
@@ -262,7 +274,7 @@ export default function StudentHomeView() {
 
       {/* 2. Verification Pending Card with Simulation Tool */}
       {isPending && (
-        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbeafe', padding: 20, borderRadius: 24, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, marginBottom: 20 }}>
+        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbeafe', padding: 20, borderRadius: 24, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
             <Feather name="clock" size={18} color={BLUE} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#1e40af' }}>{t('verification_pending')}</Text>
@@ -281,14 +293,28 @@ export default function StudentHomeView() {
 
       {/* 3. Verified Badge */}
       {isVerified && (
-        <View style={{ backgroundColor: BLUE_BG_LIGHT, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 }}>
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
+          paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16,
+          flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10,
+          shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
+        }}>
           <Feather name="check-circle" size={16} color={BLUE} />
           <Text style={{ fontFamily: 'Roboto', color: BLUE, fontSize: 12, fontWeight: '800' }}>{t('verified_student_profile')}</Text>
         </View>
       )}
 
       {/* Student Stats Summary */}
-      <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+      <View style={{
+        backgroundColor: '#ffffff',
+        padding: 16, borderRadius: 24,
+        borderWidth: 1.5, borderColor: '#e2e8f0',
+        shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1, shadowRadius: 16, elevation: 3,
+        flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20
+      }}>
         <View style={{ alignItems: 'center', flex: 1 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{examRequestsCount}</Text>
           <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Exam Requests</Text>
@@ -310,7 +336,14 @@ export default function StudentHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('upcoming_exams')}</Text>
 
         {confirmedPlans.length === 0 ? (
-          <View style={{ backgroundColor: '#f8fafc', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{
+            backgroundColor: '#ffffff',
+            padding: 24, borderRadius: 24,
+            borderWidth: 1.5, borderColor: '#e2e8f0',
+            alignItems: 'center', justifyContent: 'center',
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.08, shadowRadius: 16, elevation: 2,
+          }}>
             <Feather name="calendar" size={28} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_upcoming_exams')}</Text>
             <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, marginTop: 6, textAlign: 'center', paddingHorizontal: 16 }}>
@@ -324,113 +357,224 @@ export default function StudentHomeView() {
                   Alert.alert(t('error'), t('verify_first_error'));
                 }
               }}
-              style={{ backgroundColor: BLUE, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 12, marginTop: 14 }}
+              style={{ 
+                backgroundColor: BLUE, 
+                paddingVertical: 12, paddingHorizontal: 24, 
+                borderRadius: 12, marginTop: 16,
+                shadowColor: BLUE, shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15, shadowRadius: 8, elevation: 3
+              }}
             >
-              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>{t('request_scribe')}</Text>
+              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.2 }}>{t('request_scribe')}</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          confirmedPlans.map((exam) => (
-            <View 
-              key={exam.id}
-              style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 28, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: TEXT }}>{exam.subject || t('exam_fallback')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
-                </View>
-                <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: BLUE_BG_LIGHT, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
-                  <Text style={{ fontFamily: 'Roboto', color: BLUE, fontSize: 9, fontWeight: '800' }}>{t('status_matched')}</Text>
-                </View>
-              </View>
+          confirmedPlans.map((exam) => {
+            const isEmergency = exam.is_emergency === 'yes';
+            const isExpanded = expandedExamIds.has(exam.id);
 
-              <View style={{ borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 10, marginBottom: 12, gap: 6 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="user" size={12} color={BLUE} style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="calendar" size={12} color={MUTED} style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="map-pin" size={12} color={MUTED} style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                    {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="globe" size={12} color={MUTED} style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_language')}: {exam.exam_language}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ borderTopWidth: 1, borderTopColor: '#f8fafc', paddingTop: 10, gap: 8 }}>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <TouchableOpacity 
-                    onPress={() => openCallSheet(exam)}
-                    style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="phone" size={12} color="#334155" />
-                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                    style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="message-square" size={12} color="#334155" />
-                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                  </TouchableOpacity>
-                </View>
-
+            return (
+              <View
+                key={exam.id}
+                style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 20,
+                  borderWidth: isEmergency ? 2 : 1.5,
+                  borderColor: isEmergency ? '#fca5a5' : '#e2e8f0',
+                  shadowColor: isEmergency ? '#dc2626' : '#64748b',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: isEmergency ? 0.12 : 0.07,
+                  shadowRadius: 16,
+                  elevation: 3,
+                  marginBottom: 10,
+                  overflow: 'hidden',
+                }}
+              >
+                {/* ── Collapsed Header Row (always visible) ── */}
                 <TouchableOpacity
-                  onPress={() => {
-                    setSelectedExam(exam);
-                    setIsDeclarationOpen(true);
+                  onPress={() => toggleExamCard(exam.id)}
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
                   }}
-                  style={{ width: '100%', backgroundColor: BLUE, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 }}
                 >
-                  <Feather name="file-text" size={12} color="white" />
-                  <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                  {/* Subject icon */}
+                  <View style={{
+                    width: 38, height: 38, borderRadius: 11,
+                    backgroundColor: isEmergency ? '#fef2f2' : BLUE_BG_LIGHT,
+                    alignItems: 'center', justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: isEmergency ? '#fecaca' : 'rgba(37,99,235,0.18)',
+                  }}>
+                    <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
+                      color={isEmergency ? '#dc2626' : BLUE} />
+                  </View>
+
+                  {/* Subject + level */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: TEXT }} numberOfLines={1}>
+                      {exam.subject || t('exam_fallback')}
+                    </Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>
+                      {exam.exam_type}{exam.exam_date ? '  ·  ' + exam.exam_date : ''}
+                    </Text>
+                  </View>
+
+                  {/* Status pill */}
+                  <View style={{
+                    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20,
+                    backgroundColor: isEmergency ? '#fef2f2' : 'rgba(5,150,105,0.08)',
+                    borderWidth: 1,
+                    borderColor: isEmergency ? '#fca5a5' : 'rgba(5,150,105,0.22)',
+                    marginRight: 4,
+                  }}>
+                    <Text style={{
+                      fontFamily: 'Roboto', fontSize: 9, fontWeight: '800',
+                      color: isEmergency ? '#dc2626' : GREEN,
+                    }}>
+                      {isEmergency ? '🚨 SOS' : 'Confirmed'}
+                    </Text>
+                  </View>
+
+                  {/* Chevron */}
+                  <Feather
+                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                    size={16} color={MUTED}
+                  />
                 </TouchableOpacity>
 
-                {/* SOS Emergency Broadcast — only within 24h of the exam (last-minute cancellations) */}
-                {(() => {
-                  const hrs = hoursUntilExam(exam.exam_date);
-                  const withinWindow = hrs !== null && hrs <= 24 && hrs > -6;
-                  if (!withinWindow) return null;
-                  const sending = sosSendingId === exam.id;
-                  return (
-                    <TouchableOpacity
-                      onPress={() => handleSosBroadcast(exam)}
-                      disabled={sending}
-                      style={{ width: '100%', backgroundColor: '#fef2f2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                    >
-                      {sending ? (
-                        <ActivityIndicator size="small" color="#dc2626" />
+                {/* ── Expanded Detail Panel ── */}
+                {isExpanded && (
+                  <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
+
+                    {isEmergency && (
+                      <View style={{
+                        backgroundColor: '#fef2f2', padding: 10, borderRadius: 12,
+                        borderWidth: 1, borderColor: '#fca5a5',
+                        flexDirection: 'row', alignItems: 'center', gap: 8,
+                      }}>
+                        <Feather name="alert-triangle" size={13} color="#dc2626" />
+                        <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
+                          Scribe cancelled! Re-broadcasting emergency SOS to all available scribes.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Detail rows */}
+                    <View style={{ gap: 6 }}>
+                      {!isEmergency && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Feather name="user" size={12} color={BLUE} style={{ marginRight: 8, width: 16 }} />
+                          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                            {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="calendar" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
+                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                          {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="map-pin" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
+                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
+                          {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="globe" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
+                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                          {t('exam_language')}: {exam.exam_language}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={{ gap: 8, marginTop: 2 }}>
+                      {isEmergency ? (
+                        <TouchableOpacity
+                          onPress={() => router.push('/console/student/view_applications' as any)}
+                          style={{
+                            width: '100%', backgroundColor: '#dc2626',
+                            paddingVertical: 11, borderRadius: 12,
+                            alignItems: 'center', justifyContent: 'center',
+                            flexDirection: 'row', gap: 6,
+                          }}
+                        >
+                          <ActivityIndicator size="small" color="white" />
+                          <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>🚨 Tracking SOS Applications...</Text>
+                        </TouchableOpacity>
                       ) : (
                         <>
-                          <Feather name="alert-triangle" size={12} color="#dc2626" />
-                          <Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 12 }}>Emergency SOS — Scribe Cancelled?</Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity
+                              onPress={() => openCallSheet(exam)}
+                              style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                            >
+                              <Feather name="phone" size={12} color="#334155" />
+                              <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
+                              style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                            >
+                              <Feather name="message-square" size={12} color="#334155" />
+                              <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          {(() => {
+                            const hrs = hoursUntilExam(exam.exam_date);
+                            const showSos = hrs !== null && hrs <= 24 && hrs > -6;
+                            const sending = sosSendingId === exam.id;
+                            if (showSos) {
+                              return (
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                  <TouchableOpacity
+                                    onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
+                                    style={{ flex: 1, backgroundColor: BLUE, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
+                                  >
+                                    <Feather name="file-text" size={12} color="white" />
+                                    <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => handleSosBroadcast(exam)}
+                                    disabled={sending}
+                                    style={{ flex: 1, backgroundColor: '#fef2f2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                                  >
+                                    {sending
+                                      ? <ActivityIndicator size="small" color="#dc2626" />
+                                      : <><Feather name="alert-triangle" size={12} color="#dc2626" /><Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 11 }}>SOS - Cancelled?</Text></>
+                                    }
+                                  </TouchableOpacity>
+                                </View>
+                              );
+                            }
+                            return (
+                              <TouchableOpacity
+                                onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
+                                style={{ width: '100%', backgroundColor: BLUE, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
+                              >
+                                <Feather name="file-text" size={12} color="white" />
+                                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
                         </>
                       )}
-                    </TouchableOpacity>
-                  );
-                })()}
+                    </View>
+                  </View>
+                )}
               </View>
-            </View>
-          ))
+            );
+          })
         )}
 
+
         {/* Persistent "New Request" action once at least one request already exists */}
+
         {confirmedPlans.length > 0 && (
           <TouchableOpacity
             onPress={() => {
@@ -440,10 +584,26 @@ export default function StudentHomeView() {
                 Alert.alert(t('error'), t('verify_first_error'));
               }
             }}
-            style={{ width: '100%', borderWidth: 1.5, borderColor: BLUE, borderStyle: 'dashed', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, marginTop: 4 }}
+            style={{ 
+              width: '100%', 
+              backgroundColor: BLUE, 
+              paddingVertical: 16, 
+              borderRadius: 16, 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              flexDirection: 'row', 
+              gap: 8, 
+              marginTop: 14,
+              shadowColor: BLUE,
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              elevation: 4,
+            }}
+            activeOpacity={0.85}
           >
-            <Feather name="plus" size={14} color={BLUE} />
-            <Text style={{ fontFamily: 'Roboto', color: BLUE, fontWeight: '800', fontSize: 12 }}>{t('request_scribe')}</Text>
+            <Feather name="plus" size={18} color="#ffffff" />
+            <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 15, letterSpacing: 0.3 }}>{t('request_scribe')}</Text>
           </TouchableOpacity>
         )}
       </View>

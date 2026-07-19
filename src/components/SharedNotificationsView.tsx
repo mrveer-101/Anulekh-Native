@@ -119,7 +119,7 @@ export default function SharedNotificationsView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color={themeColor} />
       </View>
     );
@@ -127,7 +127,7 @@ export default function SharedNotificationsView() {
 
   return (
     <ScrollView 
-      style={{ flex: 1, backgroundColor: '#f8fafc' }} 
+      style={{ flex: 1, backgroundColor: '#f9fafb' }} 
       contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 12, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
       refreshControl={

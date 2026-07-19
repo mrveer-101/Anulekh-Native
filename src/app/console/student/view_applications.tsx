@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -21,6 +21,8 @@ interface Application {
     languages: string[];
     location: string;
     occupation: string;
+    first_time?: string;
+    verification_status?: string;
   };
 }
 
@@ -227,7 +229,7 @@ export default function ViewApplicationsPage() {
             .eq('urgent_calls', 'yes');
             
           if (emergencyScribes && emergencyScribes.length > 0) {
-            const emergencyNotifs = emergencyScribes.map(s => ({
+            const emergencyNotifs = emergencyScribes.map((s: any) => ({
               user_id: s.id,
               title: '✅ SOS Request Filled',
               message: `The emergency request for "${exam.subject}" today has been matched successfully. No need for anyone now, thank you!`,
@@ -289,10 +291,50 @@ export default function ViewApplicationsPage() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
+
+      {/* Top Header Bar (matches dashboard look) */}
+      <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)' }}>
+        <View style={{
+          height: 60,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 24,
+        }}>
+          {/* Logo */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{
+              width: 44, height: 44, borderRadius: 12,
+              backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+              alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden',
+            }}>
+              <Image 
+                source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="cover"
+              />
+            </View>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 }}>Anulekh</Text>
+          </View>
+
+          {/* Right Profile Initials */}
+          <TouchableOpacity
+            onPress={() => router.replace('/console/student?tab=settings')}
+            style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 18 }}>S</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
       
-      {/* Header */}
+      {/* Sub Header for Page Title */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
         <TouchableOpacity 
           onPress={() => {
@@ -663,6 +705,67 @@ export default function ViewApplicationsPage() {
         </View>
       </Modal>
 
-    </SafeAreaView>
+      {/* Bottom Nav Bar (matches dashboard look) */}
+      <SafeAreaView edges={['bottom']} style={{
+        backgroundColor: 'rgba(255,255,255,0.82)',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
+      }}>
+        <View style={{
+          flexDirection: 'row',
+          paddingVertical: 8,
+          paddingHorizontal: 8,
+          gap: 4,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(0,0,0,0.07)',
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+        }}>
+          {[
+            { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
+            { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
+            { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
+            { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
+          ].map((tab) => {
+            const active = tab.id === 'requests';
+            return (
+              <TouchableOpacity
+                key={tab.id}
+                onPress={() => {
+                  if (tab.id === 'requests') {
+                    router.replace('/console/student?tab=requests');
+                  } else {
+                    router.replace(`/console/student?tab=${tab.id}`);
+                  }
+                }}
+                style={{
+                  flex: 1, alignItems: 'center', paddingVertical: 9,
+                  borderRadius: 20,
+                  backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
+                }}
+              >
+                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
+                <Text style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 11, fontWeight: active ? '800' : '600',
+                  marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
+                }}>
+                  {tab.label}
+                </Text>
+                {active && (
+                  <View style={{
+                    position: 'absolute', bottom: 2,
+                    width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
+                  }} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+
+    </View>
   );
 }

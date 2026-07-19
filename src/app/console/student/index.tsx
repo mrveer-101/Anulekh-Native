@@ -36,7 +36,7 @@ const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
-const BG         = '#ffffff';   // clean white background
+const BG         = '#f9fafb';   // clean off-white background
 const SURFACE    = 'rgba(255,255,255,0.82)'; // glass surface
 const BORDER     = 'rgba(0,0,0,0.07)';
 const ACCENT     = '#2563eb';   // blue primary

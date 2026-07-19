@@ -16,6 +16,8 @@ interface ExamRequest {
   student_name: string;
   education_grade: string;
   is_prebooking?: string;
+  is_emergency?: string;
+  private_scribe_id?: string;
 }
 
 // Helper to parse search queries for date matching
@@ -116,7 +118,10 @@ export default function ScribeExploreView() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeSegment, setActiveSegment] = useState<'exams' | 'assignments'>('exams');
   const [availableExams, setAvailableExams] = useState<ExamRequest[]>([]);
+  const [availableAssignments, setAvailableAssignments] = useState<any[]>([]);
+  const [appMap, setAppMap] = useState<Map<string, string>>(new Map());
   const [scribeProfile, setScribeProfile] = useState<any>(null);
   
   // Search & Filter state
@@ -150,21 +155,52 @@ export default function ScribeExploreView() {
         .single();
       setScribeProfile(profile);
 
-      // 2. Fetch Available Exams
-      const { data, error } = await supabase
+      // 2. Fetch Scribe's Applications/Invitations to build appMap and filter rejections
+      const { data: myApps } = await supabase
+        .from('scribe_applications')
+        .select('*')
+        .eq('scribe_id', session.user.id);
+
+      const mapping = new Map<string, string>();
+      const rejectedExams = new Set<number>();
+      const rejectedAssignments = new Set<number>();
+
+      (myApps || []).forEach((app: any) => {
+        const typeStr = app.type || 'exam';
+        mapping.set(`${app.request_id}_${typeStr}`, app.status);
+        if (app.status === 'rejected') {
+          if (typeStr === 'assignment') {
+            rejectedAssignments.add(app.request_id);
+          } else {
+            rejectedExams.add(app.request_id);
+          }
+        }
+      });
+      setAppMap(mapping);
+
+      // 3. Fetch Available Exams
+      const { data: exams, error: examsErr } = await supabase
         .from('exam_requests')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (examsErr) throw examsErr;
 
-      // 3. Fetch all student reviews to calculate average ratings
+      // 4. Fetch Available Assignments
+      const { data: assignments, error: assignmentsErr } = await supabase
+        .from('assignment_requests')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (assignmentsErr) throw assignmentsErr;
+
+      // 5. Fetch all student reviews to calculate average ratings for prioritization
       const { data: studentReviews } = await supabase
         .from('student_reviews')
         .select('student_id, rating_overall');
 
-      // Map student_id -> { sum: number, count: number }
       const studentRatingsMap: { [studentId: string]: { sum: number; count: number } } = {};
       (studentReviews || []).forEach((r: any) => {
         if (!studentRatingsMap[r.student_id]) {
@@ -174,14 +210,13 @@ export default function ScribeExploreView() {
         studentRatingsMap[r.student_id].count += 1;
       });
 
-      // Map student_id -> avg_rating (default 5.0 for students with no reviews so they start with high priority)
       const getStudentAvgRating = (studentId: string): number => {
         const stats = studentRatingsMap[studentId];
-        if (!stats || stats.count === 0) return 5.0; // New student / no rating gets maximum priority
+        if (!stats || stats.count === 0) return 5.0;
         return stats.sum / stats.count;
       };
 
-      // 4. Fetch past matches to boost previously worked student requests
+      // 6. Fetch past matches to boost previously worked student requests
       const { data: pastMatches } = await supabase
         .from('exam_requests')
         .select('student_id')
@@ -189,45 +224,46 @@ export default function ScribeExploreView() {
 
       const pastStudentsSet = new Set((pastMatches || []).map((pm: any) => pm.student_id));
 
-      // 5. Exclude exams this scribe was already rejected from
-      const { data: rejectedApps } = await supabase
-        .from('scribe_applications')
-        .select('request_id')
-        .eq('scribe_id', session.user.id)
-        .eq('status', 'rejected');
-
-      const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
-      const visibleExams = (data || [])
+      // Filter and prioritize Exams
+      const visibleExams = (exams || [])
         .filter((exam: any) => {
-          // Exclude rejected opportunities
-          if (rejectedRequestIds.has(exam.id)) return false;
-          // Exclude private invitations meant for other scribes
+          if (rejectedExams.has(exam.id)) return false;
           if (exam.private_scribe_id && exam.private_scribe_id !== session.user.id) return false;
           return true;
         })
         .sort((a: any, b: any) => {
-          // 0. Emergency SOS check (highest priority booster)
           const aEmergency = a.is_emergency === 'yes' ? 1 : 0;
           const bEmergency = b.is_emergency === 'yes' ? 1 : 0;
           if (aEmergency !== bEmergency) return bEmergency - aEmergency;
 
-          // 1. Private invite check (booster)
           const aPrivate = a.private_scribe_id === session.user.id ? 1 : 0;
           const bPrivate = b.private_scribe_id === session.user.id ? 1 : 0;
           if (aPrivate !== bPrivate) return bPrivate - aPrivate;
 
-          // 2. Past student check (booster)
           const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
           const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
           if (aPast !== bPast) return bPast - aPast;
 
-          // 3. Fallback to student average rating
+          const ratingA = getStudentAvgRating(a.student_id);
+          const ratingB = getStudentAvgRating(b.student_id);
+          return ratingB - ratingA;
+        });
+
+      // Filter and prioritize Assignments
+      const visibleAssignments = (assignments || [])
+        .filter((assign: any) => !rejectedAssignments.has(assign.id))
+        .sort((a: any, b: any) => {
+          const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
+          const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
+          if (aPast !== bPast) return bPast - aPast;
+
           const ratingA = getStudentAvgRating(a.student_id);
           const ratingB = getStudentAvgRating(b.student_id);
           return ratingB - ratingA;
         });
 
       setAvailableExams(visibleExams);
+      setAvailableAssignments(visibleAssignments);
     } catch (error: any) {
       console.error('Error fetching scribe explore data:', error.message);
     } finally {
@@ -374,13 +410,11 @@ export default function ScribeExploreView() {
     selected: string,
     onSelect: (value: string) => void
   ) => (
-    <View>
-      <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-        {label}
-      </Text>
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{label}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {options.map(opt => {
-          const isActive = selected === opt;
+        {options.map((opt) => {
+          const active = selected === opt;
           return (
             <TouchableOpacity
               key={opt}
@@ -389,12 +423,12 @@ export default function ScribeExploreView() {
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 borderRadius: 10,
-                backgroundColor: isActive ? '#16a34a' : '#f8fafc',
+                backgroundColor: active ? '#059669' : '#f1f5f9',
                 borderWidth: 1,
-                borderColor: isActive ? '#16a34a' : 'rgba(0,0,0,0.06)',
+                borderColor: active ? '#059669' : '#e2e8f0'
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#fff' : '#64748b' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: active ? '#ffffff' : '#475569' }}>
                 {opt}
               </Text>
             </TouchableOpacity>
@@ -405,12 +439,13 @@ export default function ScribeExploreView() {
   );
 
   const renderExamCard = (exam: ExamRequest) => {
+    const examStatus = appMap.get(`${exam.id}_exam`);
     return (
       <TouchableOpacity 
         key={exam.id} 
         onPress={() => {
           if (isVerified) {
-            router.push(`/console/scribe/apply?id=${exam.id}` as any);
+            router.push(`/console/scribe/apply?id=${exam.id}&type=exam` as any);
           } else {
             Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
           }
@@ -465,9 +500,27 @@ export default function ScribeExploreView() {
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#2563eb' }}>PRE-BOOK</Text>
               </View>
             )}
-            <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
-            </View>
+            {(() => {
+              if (examStatus === 'pending') {
+                return (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+                  </View>
+                );
+              }
+              if (examStatus === 'invited') {
+                return (
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+                  </View>
+                );
+              }
+              return (
+                <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
+                </View>
+              );
+            })()}
           </View>
         </View>
 
@@ -501,19 +554,119 @@ export default function ScribeExploreView() {
     );
   };
 
+  const renderAssignmentCard = (assign: any) => {
+    const assignStatus = appMap.get(`${assign.id}_assignment`);
+    return (
+      <TouchableOpacity 
+        key={assign.id} 
+        onPress={() => {
+          if (isVerified) {
+            router.push(`/console/scribe/apply?id=${assign.id}&type=assignment` as any);
+          } else {
+            Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+          }
+        }}
+        activeOpacity={0.9}
+        style={{ 
+          backgroundColor: '#f8fafc', 
+          padding: 18, 
+          borderRadius: 24, 
+          borderWidth: 1, 
+          borderColor: '#e2e8f0', 
+          shadowColor: '#64748b', 
+          shadowOffset: { width: 0, height: 4 }, 
+          shadowOpacity: 0.08, 
+          shadowRadius: 12, 
+          elevation: 3, 
+          marginBottom: 12 
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{assign.subject}</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Level: {assign.academic_level}</Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {assignStatus === 'pending' && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+              </View>
+            )}
+            {assignStatus === 'invited' && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+              </View>
+            )}
+            {!assignStatus && (
+              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>OPEN</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 4, gap: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="file-text" size={12} color="#64748b" style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+              Title: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{assign.assignment_title}</Text>
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+              Deadline: <Text style={{ fontWeight: '700', color: '#b45309' }}>{assign.deadline}</Text>
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+              Student: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{assign.student_name}</Text>
+            </Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const filteredAssignments = availableAssignments.filter(assign => {
+    const matchesSearch =
+      !searchQuery.trim() ||
+      (assign.subject || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (assign.assignment_title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (assign.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  });
+
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color="#16a34a" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       
+      {/* Segment Switcher */}
+      <View style={{ flexDirection: 'row', backgroundColor: '#e2e8f0', marginHorizontal: 24, marginTop: 16, padding: 3, borderRadius: 12 }}>
+        <TouchableOpacity
+          onPress={() => setActiveSegment('exams')}
+          style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'exams' ? '#fff' : 'transparent', shadowColor: activeSegment === 'exams' ? '#000' : undefined, shadowOpacity: activeSegment === 'exams' ? 0.05 : 0, elevation: activeSegment === 'exams' ? 2 : 0 }}
+        >
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'exams' ? '#16a34a' : '#64748b' }}>Exam Matching</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveSegment('assignments')}
+          style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'assignments' ? '#fff' : 'transparent', shadowColor: activeSegment === 'assignments' ? '#000' : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.05 : 0, elevation: activeSegment === 'assignments' ? 2 : 0 }}
+        >
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'assignments' ? '#16a34a' : '#64748b' }}>Assignment Writing</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Search Header Bar */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 10, gap: 10 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
         
         {/* Search Input */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 12, height: 46 }}>
@@ -521,7 +674,7 @@ export default function ScribeExploreView() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search subject or venue..."
+            placeholder={activeSegment === 'exams' ? "Search subject or venue..." : "Search subject or title..."}
             placeholderTextColor="#94a3b8"
             style={{ flex: 1, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
           />
@@ -532,76 +685,78 @@ export default function ScribeExploreView() {
           ) : null}
         </View>
 
-        {/* Collapsible Filter Block */}
-        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-          {/* Toggle bar */}
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setShowFilters(!showFilters)}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Feather name="sliders" size={15} color="#16a34a" />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
-              {activeFilterCount > 0 && (
-                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeFilterCount}</Text>
-                </View>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {activeFilterCount > 0 && (
-                <TouchableOpacity onPress={clearFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
-                </TouchableOpacity>
-              )}
-              <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Expandable sections */}
-          {showFilters && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
-              {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
-              {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
-              {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
-              {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
-
-              {/* Exam Date Range */}
-              <View>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                  Exam Date Range
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
-                    <TextInput
-                      value={dateFrom}
-                      onChangeText={setDateFrom}
-                      placeholder="From DD/MM/YYYY"
-                      placeholderTextColor="#94a3b8"
-                      keyboardType="numbers-and-punctuation"
-                      style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
-                    />
+        {/* Collapsible Filter Block (Exams Only) */}
+        {activeSegment === 'exams' && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+            {/* Toggle bar */}
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setShowFilters(!showFilters)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="sliders" size={15} color="#16a34a" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
+                {activeFilterCount > 0 && (
+                  <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeFilterCount}</Text>
                   </View>
-                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
-                    <TextInput
-                      value={dateTo}
-                      onChangeText={setDateTo}
-                      placeholder="To DD/MM/YYYY"
-                      placeholderTextColor="#94a3b8"
-                      keyboardType="numbers-and-punctuation"
-                      style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
-                    />
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {activeFilterCount > 0 && (
+                  <TouchableOpacity onPress={clearFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
+                  </TouchableOpacity>
+                )}
+                <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
+              </View>
+            </TouchableOpacity>
+
+            {/* Expandable sections */}
+            {showFilters && (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+                {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
+                {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
+                {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
+                {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
+
+                {/* Exam Date Range */}
+                <View>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
+                    Exam Date Range
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
+                      <TextInput
+                        value={dateFrom}
+                        onChangeText={setDateFrom}
+                        placeholder="From DD/MM/YYYY"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numbers-and-punctuation"
+                        style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
+                      />
+                    </View>
+                    <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
+                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
+                      <TextInput
+                        value={dateTo}
+                        onChangeText={setDateTo}
+                        placeholder="To DD/MM/YYYY"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numbers-and-punctuation"
+                        style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
+                      />
+                    </View>
                   </View>
                 </View>
               </View>
-            </View>
-          )}
-        </View>
+            )}
+          </View>
+        )}
       </View>
 
-      {/* Main Oppurtunities List */}
+      {/* Main Opportunities List */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
@@ -611,7 +766,7 @@ export default function ScribeExploreView() {
       >
         
         {/* Scribe's Preferred Availability Windows */}
-        {scribeProfile?.availability_slots ? (
+        {activeSegment === 'exams' && scribeProfile?.availability_slots ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
             <Feather name="clock" size={13} color="#16a34a" style={{ marginRight: 2 }} />
             <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
@@ -625,37 +780,59 @@ export default function ScribeExploreView() {
           </View>
         ) : null}
 
-        {/* Nearby Opportunities Segment */}
-        {!!scribeLocation && nearbyExams.length > 0 && (
-          <View style={{ marginBottom: 18 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-              <Ionicons name="location" size={15} color="#16a34a" />
-              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Opportunities Near You ({scribeProfile?.location})
+        {activeSegment === 'exams' ? (
+          <>
+            {/* Nearby Opportunities Segment */}
+            {!!scribeLocation && nearbyExams.length > 0 && (
+              <View style={{ marginBottom: 18 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <Ionicons name="location" size={15} color="#16a34a" />
+                  <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Opportunities Near You ({scribeProfile?.location})
+                  </Text>
+                </View>
+                {nearbyExams.map(renderExamCard)}
+              </View>
+            )}
+
+            {/* Other / General Opportunities Segment */}
+            <View>
+              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>
+                {scribeLocation && nearbyExams.length > 0 ? 'All Other Opportunities' : t('available_opportunities')}
               </Text>
+              
+              {filteredExams.length === 0 ? (
+                <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="search" size={26} color="#94a3b8" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching exams</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
+                    Try adjusting your search query or filter selections.
+                  </Text>
+                </View>
+              ) : (
+                (scribeLocation && nearbyExams.length > 0 ? otherExams : filteredExams).map(renderExamCard)
+              )}
             </View>
-            {nearbyExams.map(renderExamCard)}
+          </>
+        ) : (
+          <View>
+            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>
+              Available Assignments
+            </Text>
+            
+            {filteredAssignments.length === 0 ? (
+              <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="search" size={26} color="#94a3b8" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching assignments</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
+                  Try adjusting your search query.
+                </Text>
+              </View>
+            ) : (
+              filteredAssignments.map(renderAssignmentCard)
+            )}
           </View>
         )}
-
-        {/* Other / General Opportunities Segment */}
-        <View>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>
-            {scribeLocation && nearbyExams.length > 0 ? 'All Other Opportunities' : t('available_opportunities')}
-          </Text>
-          
-          {filteredExams.length === 0 ? (
-            <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="search" size={26} color="#94a3b8" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching exams</Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
-                Try adjusting your search query or filter selections.
-              </Text>
-            </View>
-          ) : (
-            (scribeLocation && nearbyExams.length > 0 ? otherExams : filteredExams).map(renderExamCard)
-          )}
-        </View>
 
       </ScrollView>
 

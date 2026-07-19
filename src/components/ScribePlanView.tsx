@@ -16,14 +16,21 @@ interface ExamRequest {
   education_grade: string;
   phone?: string;
   id_proof?: string;
+  is_emergency?: string;
+  status?: string;
 }
 
 export default function ScribePlanView() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [plans, setPlans] = useState<ExamRequest[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [scribeProfile, setScribeProfile] = useState<any>(null);
+
+  // Custom Calendar & Filter States
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -52,15 +59,38 @@ export default function ScribePlanView() {
       setScribeProfile(profile);
 
       // Fetch only MATCHED exam requests (Confirmed Plans)
-      const { data, error } = await supabase
+      const { data: exams, error: examsErr } = await supabase
         .from('exam_requests')
         .select('*')
         .eq('status', 'matched')
-        .eq('scribe_id', session.user.id)
-        .order('created_at', { ascending: false });
+        .eq('scribe_id', session.user.id);
 
-      if (error) throw error;
-      setPlans(data || []);
+      if (examsErr) throw examsErr;
+
+      // Fetch only MATCHED assignment requests (Confirmed Plans)
+      const { data: assignments, error: assignmentsErr } = await supabase
+        .from('assignment_requests')
+        .select('*')
+        .eq('status', 'matched')
+        .eq('scribe_id', session.user.id);
+
+      if (assignmentsErr) throw assignmentsErr;
+
+      const mappedAssignments = (assignments || []).map((assign: any) => ({
+        id: assign.id,
+        subject: assign.subject || 'Assignment',
+        exam_type: 'Assignment: ' + assign.academic_level,
+        exam_date: assign.deadline,
+        exam_venue: assign.description || 'No instructions provided.',
+        exam_language: 'Written',
+        student_name: assign.student_name || 'Student',
+        education_grade: assign.academic_level,
+        status: assign.status,
+        is_assignment: true
+      }));
+
+      const allPlans = [...(exams || []), ...mappedAssignments];
+      setPlans(allPlans);
     } catch (error: any) {
       console.error('Error fetching scribe plans:', error.message);
     } finally {
@@ -82,16 +112,84 @@ export default function ScribePlanView() {
 
   const closeCallSheet = () => setIsCallOpen(false);
 
+  const changeMonth = (offset: number) => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
+    setCurrentMonth(next);
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const days = [];
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= totalDays; i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  };
+
+  const hasPlanOnDate = (day: Date) => {
+    if (!day) return false;
+    const year = day.getFullYear();
+    const month = String(day.getMonth() + 1).padStart(2, '0');
+    const date = String(day.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${date}`;
+    return plans.some(p => p.exam_date && p.exam_date.startsWith(dateStr));
+  };
+
+  const getPlansOnDate = (day: Date) => {
+    if (!day) return [];
+    const year = day.getFullYear();
+    const month = String(day.getMonth() + 1).padStart(2, '0');
+    const date = String(day.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${date}`;
+    return plans.filter(p => p.exam_date && p.exam_date.startsWith(dateStr));
+  };
+
+  // Sort and filter logic
+  const sortedPlans = [...plans].sort((a, b) => {
+    const dateA = a.exam_date ? a.exam_date.split(' ')[0] : '9999-12-31';
+    const dateB = b.exam_date ? b.exam_date.split(' ')[0] : '9999-12-31';
+    return dateA.localeCompare(dateB);
+  });
+
+  let filteredPlans = sortedPlans;
+  if (selectedDate) {
+    filteredPlans = filteredPlans.filter(p => p.exam_date && p.exam_date.startsWith(selectedDate));
+  }
+
+  const checkUpcoming = (dateStr: string) => {
+    if (!dateStr) return true;
+    const cleanDate = dateStr.split(' ')[0];
+    const examTime = new Date(cleanDate).getTime();
+    const todayTime = new Date(new Date().toISOString().split('T')[0]).getTime();
+    return examTime >= todayTime;
+  };
+
+  filteredPlans = filteredPlans.filter(p => {
+    if (activeFilter === 'upcoming') {
+      return checkUpcoming(p.exam_date);
+    }
+    if (activeFilter === 'completed') {
+      return !checkUpcoming(p.exam_date);
+    }
+    return true;
+  });
+
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color="#059669" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <ScrollView 
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
@@ -99,10 +197,179 @@ export default function ScribePlanView() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
       >
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>{t('exam_schedule')}</Text>
+        {/* ── CALENDAR BLOCK ── */}
+        <View style={{
+          backgroundColor: '#ffffff',
+          padding: 16,
+          borderRadius: 24,
+          borderWidth: 1.5,
+          borderColor: '#e2e8f0',
+          shadowColor: '#64748b',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.06,
+          shadowRadius: 16,
+          elevation: 3,
+          marginBottom: 16
+        }}>
+          {/* Header: Month Selector */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <TouchableOpacity onPress={() => changeMonth(-1)} style={{ padding: 6, backgroundColor: '#f1f5f9', borderRadius: 10 }}>
+              <Feather name="chevron-left" size={16} color="#475569" />
+            </TouchableOpacity>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
+              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </Text>
+            <TouchableOpacity onPress={() => changeMonth(1)} style={{ padding: 6, backgroundColor: '#f1f5f9', borderRadius: 10 }}>
+              <Feather name="chevron-right" size={16} color="#475569" />
+            </TouchableOpacity>
+          </View>
 
-        {plans.length === 0 ? (
-          <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+          {/* Weekdays Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day, idx) => (
+              <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Days Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+            {getDaysInMonth(currentMonth).map((day, idx) => {
+              if (!day) {
+                return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 36 }} />;
+              }
+              const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+              const isSelected = selectedDate === dateString;
+              const hasPlan = hasPlanOnDate(day);
+              const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+
+              // Determine background & text colors dynamically
+              let cellBg = 'transparent';
+              let cellTextColor = '#334155';
+              let cellBorder = {};
+              let dotColor = '#94a3b8';
+
+              if (isSelected) {
+                cellBg = '#059669';
+                cellTextColor = '#ffffff';
+                dotColor = '#ffffff';
+              } else if (hasPlan) {
+                const plansOnDay = getPlansOnDate(day);
+                const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
+                const hasMatched = plansOnDay.some(p => p.status === 'matched');
+
+                if (hasEmergency) {
+                  cellBg = 'rgba(239, 68, 68, 0.4)';
+                  cellTextColor = '#b91c1c';
+                  dotColor = '#dc2626';
+                } else if (hasMatched) {
+                  cellBg = 'rgba(16, 185, 129, 0.4)';
+                  cellTextColor = '#065f46';
+                  dotColor = '#059669';
+                } else {
+                  cellBg = 'rgba(249, 115, 22, 0.4)';
+                  cellTextColor = '#c2410c';
+                  dotColor = '#ea580c';
+                }
+              } else if (isToday) {
+                cellBg = '#e6f4ea';
+                cellTextColor = '#059669';
+                cellBorder = { borderWidth: 1, borderColor: '#a3cfbb' };
+              }
+
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => {
+                    if (isSelected) {
+                      setSelectedDate(null);
+                    } else {
+                      setSelectedDate(dateString);
+                    }
+                  }}
+                  style={{
+                    width: '14.2%',
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 10,
+                    backgroundColor: cellBg,
+                    ...cellBorder
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 12,
+                    fontWeight: '800',
+                    color: cellTextColor
+                  }}>
+                    {day.getDate()}
+                  </Text>
+                  {hasPlan && (
+                    <View style={{
+                      width: 4,
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor: dotColor,
+                      marginTop: 2
+                    }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── FILTER SELECTION BLOCK (one liner 3 filters) ── */}
+        <View style={{
+          flexDirection: 'row',
+          backgroundColor: '#ffffff',
+          padding: 5,
+          borderRadius: 16,
+          borderWidth: 1.5,
+          borderColor: '#e2e8f0',
+          marginBottom: 16,
+          gap: 4
+        }}>
+          {(['all', 'upcoming', 'completed'] as const).map((filter) => {
+            const isActive = activeFilter === filter;
+            const filterLabel = filter === 'all' ? 'All' : filter === 'upcoming' ? 'Upcoming' : 'Completed';
+            return (
+              <TouchableOpacity
+                key={filter}
+                onPress={() => setActiveFilter(filter)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isActive ? '#059669' : 'transparent',
+                  shadowColor: isActive ? '#059669' : 'transparent',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: isActive ? 0.15 : 0,
+                  shadowRadius: 8,
+                  elevation: isActive ? 2 : 0
+                }}
+              >
+                <Text style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 11,
+                  fontWeight: '900',
+                  textTransform: 'uppercase',
+                  color: isActive ? '#ffffff' : '#64748b',
+                  letterSpacing: 0.3
+                }}>
+                  {filterLabel}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {filteredPlans.length === 0 ? (
+          <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
             <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)' }}>
               <Feather name="calendar" size={26} color="#059669" />
             </View>
@@ -112,8 +379,8 @@ export default function ScribePlanView() {
             </Text>
           </View>
         ) : (
-          plans.map((exam) => (
-            <View key={exam.id} style={{ backgroundColor: '#f8fafc', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}>
+          filteredPlans.map((exam) => (
+            <View key={exam.id} style={{ backgroundColor: '#ffffff', padding: 18, borderRadius: 24, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, marginBottom: 14 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
@@ -128,44 +395,48 @@ export default function ScribePlanView() {
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="user" size={12} color="#059669" style={{ marginRight: 8 }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
+                    {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} {exam.is_assignment ? '' : `(${exam.education_grade})`}</Text>
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="calendar" size={12} color="#64748b" style={{ marginRight: 8 }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
+                    {exam.is_assignment ? 'Deadline' : t('exam_date')}: {exam.exam_date || t('date_not_specified')}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="map-pin" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                  <Feather name={exam.is_assignment ? 'info' : 'map-pin'} size={12} color="#64748b" style={{ marginRight: 8 }} />
                   <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                    {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
+                    {exam.is_assignment ? 'Instructions' : t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_language')}: {exam.exam_language}
-                  </Text>
-                </View>
+                {!exam.is_assignment && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
+                    <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                      {t('exam_language')}: {exam.exam_language}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* Matched Coordination Controls */}
               <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {/* Call Button */}
-                  <TouchableOpacity 
-                    onPress={() => openCallSheet(exam)}
-                    style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="phone" size={12} color="#334155" />
-                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                  </TouchableOpacity>
+                  {!exam.is_assignment && (
+                    <TouchableOpacity 
+                      onPress={() => openCallSheet(exam)}
+                      style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    >
+                      <Feather name="phone" size={12} color="#334155" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                    </TouchableOpacity>
+                  )}
 
                   {/* Chat Button */}
                   <TouchableOpacity 
-                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
+                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${exam.is_assignment ? 'assignment' : 'exam'}` as any)}
                     style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                   >
                     <Feather name="message-square" size={12} color="#334155" />
@@ -174,16 +445,18 @@ export default function ScribePlanView() {
                 </View>
 
                 {/* View Declaration Button */}
-                <TouchableOpacity 
-                  onPress={() => {
-                    setSelectedExam(exam);
-                    setIsDeclarationOpen(true);
-                  }}
-                  style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 }}
-                >
-                  <Feather name="file-text" size={12} color="white" />
-                  <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                </TouchableOpacity>
+                {!exam.is_assignment && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setSelectedExam(exam);
+                      setIsDeclarationOpen(true);
+                    }}
+                    style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 }}
+                  >
+                    <Feather name="file-text" size={12} color="white" />
+                    <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           ))

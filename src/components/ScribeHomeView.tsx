@@ -19,6 +19,7 @@ export default function ScribeHomeView() {
   const [loading, setLoading] = useState(true);
   const [availableExams, setAvailableExams] = useState<any[]>([]);
   const [scribeCommitments, setScribeCommitments] = useState<any[]>([]);
+  const [incomingInvitations, setIncomingInvitations] = useState<any[]>([]);
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
   const [completedExamsCount, setCompletedExamsCount] = useState(0);
   const [reviews, setReviews] = useState<any[]>([]);
@@ -185,10 +186,100 @@ export default function ScribeHomeView() {
 
       setReviews(reviewsData || []);
 
+      // 7. Fetch Incoming Invitations for Scribe
+      const { data: invitations } = await supabase
+        .from('scribe_applications')
+        .select('*')
+        .eq('scribe_id', session.user.id)
+        .eq('status', 'invited');
+
+      const enrichedInvitations = await Promise.all(
+        (invitations || []).map(async (invite: any) => {
+          let requestDetails = null;
+          if (invite.type === 'assignment') {
+            const { data } = await supabase
+              .from('assignment_requests')
+              .select('*')
+              .eq('id', invite.request_id)
+              .single();
+            requestDetails = data;
+          } else {
+            const { data } = await supabase
+              .from('exam_requests')
+              .select('*')
+              .eq('id', invite.request_id)
+              .single();
+            requestDetails = data;
+          }
+          return { ...invite, details: requestDetails };
+        })
+      );
+      setIncomingInvitations(enrichedInvitations.filter(inv => inv.details !== null));
+
     } catch (err: any) {
       console.log('Error fetching volunteer session:', err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAcceptInvitation = async (invite: any) => {
+    try {
+      const { error: appErr } = await supabase
+        .from('scribe_applications')
+        .update({ status: 'accepted' })
+        .eq('id', invite.id);
+
+      if (appErr) throw appErr;
+
+      const table = invite.type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+      const { error: reqErr } = await supabase
+        .from(table)
+        .update({ status: 'matched', scribe_id: profile.id })
+        .eq('id', invite.request_id);
+
+      if (reqErr) throw reqErr;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: invite.details.student_id,
+          title: invite.type === 'assignment' ? '📝 Writer Match Confirmed' : '📅 Scribe Match Confirmed',
+          message: `${profile.official_name || profile.full_name} accepted your invitation for "${invite.details.subject}".`,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+
+      Alert.alert('Success', 'You have accepted this invitation.');
+      fetchSession();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to accept invitation.');
+    }
+  };
+
+  const handleRejectInvitation = async (invite: any) => {
+    try {
+      const { error } = await supabase
+        .from('scribe_applications')
+        .update({ status: 'rejected' })
+        .eq('id', invite.id);
+
+      if (error) throw error;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: invite.details.student_id,
+          title: invite.type === 'assignment' ? '📝 Invitation Declined' : '📅 Invitation Declined',
+          message: `${profile.official_name || profile.full_name} declined your invitation for "${invite.details.subject}".`,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+
+      Alert.alert('Invitation Declined', 'You have declined this invitation.');
+      fetchSession();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to decline invitation.');
     }
   };
 
@@ -290,14 +381,107 @@ export default function ScribeHomeView() {
 
       {/* 3. Verified Badge */}
       {isVerified && (
-        <View style={{ backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 8 }}>
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderWidth: 1.5, borderColor: 'rgba(5,150,105,0.18)',
+          paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16,
+          flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10,
+          shadowColor: '#059669', shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
+        }}>
           <Feather name="check-circle" size={16} color="#059669" />
           <Text style={{ fontFamily: 'Roboto', color: '#047857', fontSize: 12, fontWeight: '800' }}>{t('verified_scribe_profile')}</Text>
         </View>
       )}
 
+      {/* Incoming Invitations List */}
+      {incomingInvitations.length > 0 && (
+        <View style={{ marginBottom: 20 }}>
+          <Text style={{ fontFamily: 'Roboto', color: '#db2777', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+            💌 Incoming Invitations ({incomingInvitations.length})
+          </Text>
+          {incomingInvitations.map((invite) => {
+            const isAssign = invite.type === 'assignment';
+            const details = invite.details || {};
+            return (
+              <View 
+                key={invite.id}
+                style={{ 
+                  backgroundColor: '#ffffff', 
+                  padding: 16, 
+                  borderRadius: 24, 
+                  borderWidth: 1.5, 
+                  borderColor: '#fca5a5', 
+                  shadowColor: '#ef4444', 
+                  shadowOffset: { width: 0, height: 4 }, 
+                  shadowOpacity: 0.08, 
+                  shadowRadius: 12, 
+                  elevation: 3, 
+                  marginBottom: 10 
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a' }}>
+                    {details.subject || 'Invitation'}
+                  </Text>
+                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.18)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>
+                      {isAssign ? '📝 WRITER' : '📅 SCRIBE'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ gap: 4, marginBottom: 14 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    Student: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{details.student_name || 'Student'}</Text>
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                    {isAssign ? 'Deadline: ' : 'Exam Date: '}
+                    <Text style={{ fontWeight: '700', color: '#0f172a' }}>
+                      {isAssign ? details.deadline : details.exam_date}
+                    </Text>
+                  </Text>
+                  {isAssign ? (
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }} numberOfLines={1}>
+                      Title: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{details.assignment_title}</Text>
+                    </Text>
+                  ) : (
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }} numberOfLines={1}>
+                      Venue: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{details.exam_venue}</Text>
+                    </Text>
+                  )}
+                </View>
+
+                {/* Actions */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => handleAcceptInvitation(invite)}
+                    style={{ flex: 1, backgroundColor: '#059669', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 12, fontWeight: '800' }}>Accept</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleRejectInvitation(invite)}
+                    style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#fca5a5', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', color: '#ef4444', fontSize: 12, fontWeight: '800' }}>Decline</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+
       {/* Scribe Stats Summary */}
-      <View style={{ backgroundColor: '#f8fafc', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+      <View style={{
+        backgroundColor: '#ffffff',
+        padding: 16, borderRadius: 24,
+        borderWidth: 1.5, borderColor: '#e2e8f0',
+        shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1, shadowRadius: 16, elevation: 3,
+        flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20
+      }}>
         <View style={{ alignItems: 'center', flex: 1 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>{scribeCommitments.length}</Text>
           <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 10, fontWeight: '800', marginTop: 2 }}>{t('commitments')}</Text>
@@ -319,7 +503,7 @@ export default function ScribeHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Contributions 🤝</Text>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Card 1: Hours Contributed */}
-          <View style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 }}>
+          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Feather name="clock" size={16} color="#059669" />
               <View style={{ backgroundColor: 'rgba(5,150,105,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -332,7 +516,7 @@ export default function ScribeHomeView() {
           </View>
 
           {/* Card 2: Requests Completed */}
-          <View style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 }}>
+          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <Feather name="award" size={16} color="#d97706" />
               <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -354,17 +538,17 @@ export default function ScribeHomeView() {
             <View 
               key={exam.id} 
               style={{ 
-                backgroundColor: '#f8fafc', 
+                backgroundColor: '#ffffff', 
                 padding: 18, 
                 borderRadius: 24, 
-                borderWidth: 1, 
+                borderWidth: 1.5, 
                 borderColor: '#e2e8f0', 
                 borderLeftWidth: 6, 
                 borderLeftColor: '#059669',
                 shadowColor: '#64748b', 
-                shadowOffset: { width: 0, height: 4 }, 
-                shadowOpacity: 0.08, 
-                shadowRadius: 12, 
+                shadowOffset: { width: 0, height: 8 }, 
+                shadowOpacity: 0.1, 
+                shadowRadius: 20, 
                 elevation: 3, 
                 marginBottom: 14 
               }}
@@ -436,7 +620,14 @@ export default function ScribeHomeView() {
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('available_opportunities')}</Text>
 
         {availableExams.length === 0 ? (
-          <View style={{ backgroundColor: '#f8fafc', padding: 24, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{
+            backgroundColor: '#ffffff',
+            padding: 24, borderRadius: 24,
+            borderWidth: 1.5, borderColor: '#e2e8f0',
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.08, shadowRadius: 16, elevation: 3,
+            alignItems: 'center', justifyContent: 'center'
+          }}>
             <Feather name="inbox" size={28} color="#94a3b8" />
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_opportunities_found')}</Text>
           </View>

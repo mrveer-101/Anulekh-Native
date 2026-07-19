@@ -11,6 +11,7 @@ interface Application {
   scribe_id: string;
   status: string;
   created_at: string;
+  type?: string;
 }
 
 interface EnrichedApplication extends Application {
@@ -105,18 +106,42 @@ export default function ScribeCommitmentsView() {
         .eq('scribe_id', session.user.id);
       setStudentReviews(studentReviewsData || []);
 
-      // Enrich with Exam Details
+      // Enrich with Request Details (Exam or Assignment)
       const enriched = await Promise.all(
         (data || []).map(async (app: any) => {
-          const { data: exam } = await supabase
-            .from('exam_requests')
-            .select('*')
-            .eq('id', app.request_id)
-            .single();
+          let details = null;
+          if (app.type === 'assignment') {
+            const { data: assign } = await supabase
+              .from('assignment_requests')
+              .select('*')
+              .eq('id', app.request_id)
+              .single();
+
+            if (assign) {
+              details = {
+                id: assign.id,
+                subject: assign.subject || 'Assignment',
+                exam_type: 'Assignment: ' + assign.academic_level,
+                exam_date: assign.deadline,
+                exam_venue: assign.description || 'No instructions provided.',
+                exam_language: 'Written',
+                student_name: assign.student_name || 'Student',
+                education_grade: assign.academic_level,
+                status: assign.status
+              };
+            }
+          } else {
+            const { data: exam } = await supabase
+              .from('exam_requests')
+              .select('*')
+              .eq('id', app.request_id)
+              .single();
+            details = exam;
+          }
           
           return {
             ...app,
-            examDetails: exam || undefined
+            examDetails: details || undefined
           };
         })
       );
@@ -197,7 +222,7 @@ export default function ScribeCommitmentsView() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color="#059669" />
       </View>
     );
@@ -339,17 +364,19 @@ export default function ScribeCommitmentsView() {
           <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {/* Call */}
-              <TouchableOpacity 
-                onPress={() => openCallSheet(exam)}
-                style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-              >
-                <Feather name="phone" size={12} color="#334155" />
-                <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-              </TouchableOpacity>
+              {app.type !== 'assignment' && (
+                <TouchableOpacity 
+                  onPress={() => openCallSheet(exam)}
+                  style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                >
+                  <Feather name="phone" size={12} color="#334155" />
+                  <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                </TouchableOpacity>
+              )}
 
               {/* Chat */}
               <TouchableOpacity 
-                onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
+                onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
                 style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
               >
                 <Feather name="message-square" size={12} color="#334155" />
@@ -358,16 +385,18 @@ export default function ScribeCommitmentsView() {
             </View>
 
             {/* View Declaration */}
-            <TouchableOpacity 
-              onPress={() => {
-                setSelectedExam(exam);
-                setIsDeclarationOpen(true);
-              }}
-              style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
-            >
-              <Feather name="file-text" size={12} color="white" />
-              <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-            </TouchableOpacity>
+            {app.type !== 'assignment' && (
+              <TouchableOpacity 
+                onPress={() => {
+                  setSelectedExam(exam);
+                  setIsDeclarationOpen(true);
+                }}
+                style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
+              >
+                <Feather name="file-text" size={12} color="white" />
+                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -447,7 +476,7 @@ export default function ScribeCommitmentsView() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
 
       {/* Filter Selection Tabs (equal width) */}
       <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 6 }}>

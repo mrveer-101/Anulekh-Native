@@ -36,9 +36,9 @@ const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }
   { id: 'settings',    iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
 ];
 
-// ── Design tokens (light theme — green accent for scribe) ──────
-const BG         = '#ffffff';   // clean white background
-const SURFACE    = 'rgba(255,255,255,0.82)';
+// ── Design tokens (light theme) ────────────────────────────────
+const BG         = '#f9fafb';   // clean off-white background
+const SURFACE    = 'rgba(255,255,255,0.82)'; // glass surface
 const BORDER     = 'rgba(0,0,0,0.07)';
 const ACCENT     = '#16a34a';   // green primary
 const ACCENT_BG  = 'rgba(22,163,74,0.09)';

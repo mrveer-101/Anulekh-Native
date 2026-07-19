@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
+
+interface Attachment {
+  uri: string;
+  name: string;
+  mimeType: string;
+  size?: number;
+  /** base64 data URI stored inline in the DB */
+  dataUri?: string;
+}
 
 export default function AssignmentRequestForm() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -13,77 +24,145 @@ export default function AssignmentRequestForm() {
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
 
-  // Form Fields
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [academicLevel, setAcademicLevel] = useState('College');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [convertingFiles, setConvertingFiles] = useState(false);
 
-  const ACADEMIC_LEVELS = ['High School', 'College', 'University'];
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedHour, setSelectedHour] = useState('05');
+  const [selectedMinute, setSelectedMinute] = useState('00');
+  const [selectedAmPm, setSelectedAmPm] = useState('PM');
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  const ACADEMIC_LEVELS = ['School', 'College'];
+
+  useEffect(() => { fetchProfile(); }, []);
 
   const fetchProfile = async () => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-
+      const { data: profileData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       setProfile(profileData);
 
       if (isEditing) {
-        const { data: requestData } = await supabase
-          .from('assignment_requests')
-          .select('*')
-          .eq('id', params.id)
-          .single();
-
+        const { data: requestData } = await supabase.from('assignment_requests').select('*').eq('id', params.id).single();
         if (requestData) {
           setSubject(requestData.subject || '');
           setTitle(requestData.assignment_title || '');
           setAcademicLevel(requestData.academic_level || 'College');
           setDescription(requestData.description || '');
           setDeadline(requestData.deadline || '');
+          // Restore saved attachments (stored as name::dataUri pairs)
+          if (requestData.attachments && Array.isArray(requestData.attachments)) {
+            const restored: Attachment[] = requestData.attachments.map((entry: string) => {
+              const sepIdx = entry.indexOf('::');
+              if (sepIdx === -1) return null;
+              const name = entry.substring(0, sepIdx);
+              const dataUri = entry.substring(sepIdx + 2);
+              const ext = name.split('.').pop()?.toLowerCase() || '';
+              const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext}`;
+              return { uri: dataUri, name, mimeType, dataUri };
+            }).filter(Boolean) as Attachment[];
+            setAttachments(restored);
+          }
         }
       }
     } catch (err: any) {
-      console.log('Error fetching assignment edit profile/details:', err.message);
+      console.log('Error loading form:', err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  /** Convert a file URI to base64 data URI using fetch + FileReader (works on web & native) */
+  const toDataUri = async (uri: string, mimeType: string): Promise<string> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const addFiles = async (newFiles: Omit<Attachment, 'dataUri'>[]) => {
+    setConvertingFiles(true);
+    const converted: Attachment[] = [];
+    for (const file of newFiles) {
+      try {
+        const dataUri = await toDataUri(file.uri, file.mimeType);
+        converted.push({ ...file, dataUri });
+      } catch (e) {
+        console.warn('Failed to read file:', file.name);
+        converted.push({ ...file });
+      }
+    }
+    setAttachments((prev) => [...prev, ...converted]);
+    setConvertingFiles(false);
+  };
+
+  const pickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: true, copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.length) return;
+      const newFiles = result.assets.map((a) => ({ uri: a.uri, name: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/octet-stream', size: a.size }));
+      await addFiles(newFiles);
+    } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick file.'); }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission Required', 'Please allow access to your photo library.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.6 });
+    if (result.canceled || !result.assets?.length) return;
+    const newFiles = result.assets.map((a) => {
+      const ext = a.uri.split('.').pop()?.toLowerCase() || 'jpg';
+      return { uri: a.uri, name: a.fileName || `image_${Date.now()}.${ext}`, mimeType: `image/${ext}`, size: a.fileSize };
+    });
+    await addFiles(newFiles);
+  };
+
+  const removeAttachment = (uri: string) => setAttachments((prev) => prev.filter((a) => a.uri !== uri));
+
+  const getFileIcon = (mimeType: string) => {
+    if (mimeType.includes('pdf')) return { name: 'file-text' as const, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' };
+    if (mimeType.includes('image')) return { name: 'image' as const, color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
+    return { name: 'file' as const, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' };
+  };
+
+  const formatSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const handleSave = async () => {
-    if (!subject.trim()) {
-      Alert.alert('Error', 'Subject is required.');
-      return;
-    }
-    if (!title.trim()) {
-      Alert.alert('Error', 'Assignment Title is required.');
-      return;
-    }
-    if (!deadline.trim()) {
-      Alert.alert('Error', 'Deadline is required.');
-      return;
-    }
+    if (!subject.trim()) { Alert.alert('Error', 'Subject is required.'); return; }
+    if (!title.trim()) { Alert.alert('Error', 'Assignment Title is required.'); return; }
+    if (!deadline.trim()) { Alert.alert('Error', 'Deadline is required.'); return; }
+    if (convertingFiles) { Alert.alert('Please Wait', 'Files are still being processed.'); return; }
 
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error("You must be logged in to create a request.");
-      }
+      if (!session) throw new Error('You must be logged in.');
 
-      const requestPayload = {
+      // Serialize attachments as "name::dataUri" strings
+      const attachmentEntries = attachments
+        .filter((a) => a.dataUri)
+        .map((a) => `${a.name}::${a.dataUri}`);
+
+      const basePayload = {
         student_id: session.user.id,
         student_name: profile?.official_name || profile?.full_name || 'Student',
         subject: subject.trim(),
@@ -91,150 +170,293 @@ export default function AssignmentRequestForm() {
         academic_level: academicLevel,
         description: description.trim(),
         deadline: deadline.trim(),
-        status: 'pending'
+        status: 'pending',
       };
 
-      if (isEditing) {
-        const { error } = await supabase
-          .from('assignment_requests')
-          .update(requestPayload)
-          .eq('id', params.id);
+      const save = async (payload: any) =>
+        isEditing
+          ? supabase.from('assignment_requests').update(payload).eq('id', params.id)
+          : supabase.from('assignment_requests').insert(payload);
 
-        if (error) throw error;
-        Alert.alert('Success', 'Your assignment request has been updated successfully!');
-      } else {
-        const { error } = await supabase
-          .from('assignment_requests')
-          .insert(requestPayload);
-
-        if (error) throw error;
-        Alert.alert('Success', 'Your assignment request has been posted successfully!');
+      // Try with attachments column; fallback without if column doesn't exist yet
+      let { error } = await save({ ...basePayload, attachments: attachmentEntries });
+      if (error && (error.message?.includes('column') || error.message?.includes('attachments') || (error as any).code === '42703')) {
+        const fallback = await save(basePayload);
+        error = fallback.error;
       }
+      if (error) throw new Error((error as any).message || 'Failed to save.');
 
+      Alert.alert('Success', isEditing ? 'Assignment request updated!' : 'Assignment request posted!');
       router.replace({ pathname: '/console/student' as any, params: { tab: 'requests' } });
     } catch (err: any) {
+      console.error('[AssignmentForm] Save error:', err);
       Alert.alert('Error', err.message || 'Failed to save request.');
     } finally {
       setLoading(false);
     }
   };
 
+  /* ─── Calendar ─── */
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  const getDaysInMonth = (m: number, y: number) => new Date(y, m + 1, 0).getDate();
+  const getFirstDayOfMonth = (m: number, y: number) => new Date(y, m, 1).getDay();
+
+  const changeMonth = (dir: 'next' | 'prev') => {
+    if (dir === 'prev') { if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); } else setCalendarMonth(m => m - 1); }
+    else { if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); } else setCalendarMonth(m => m + 1); }
+    setSelectedDay(null);
+  };
+
+  const handleConfirmDateTime = () => {
+    if (!selectedDay) { Alert.alert('Required', 'Please select a day.'); return; }
+    const d = selectedDay < 10 ? `0${selectedDay}` : selectedDay;
+    const mo = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
+    setDeadline(`${calendarYear}-${mo}-${d} ${selectedHour}:${selectedMinute} ${selectedAmPm}`);
+    setShowDatePicker(false);
+  };
+
+  const renderCalendarDays = () => {
+    const days = getDaysInMonth(calendarMonth, calendarYear);
+    const first = getFirstDayOfMonth(calendarMonth, calendarYear);
+    const slots = [];
+    for (let i = 0; i < first; i++) slots.push(<View key={`e-${i}`} style={{ width: '14%', height: 32 }} />);
+    for (let day = 1; day <= days; day++) {
+      const sel = selectedDay === day;
+      slots.push(
+        <TouchableOpacity key={`d-${day}`} onPress={() => setSelectedDay(day)}
+          style={{ width: '14%', height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: sel ? '#2563eb' : 'transparent' }}>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: sel ? '#fff' : '#1e293b' }}>{day}</Text>
+        </TouchableOpacity>
+      );
+    }
+    return slots;
+  };
+
   if (loading && !profile) {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-50">
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
 
-      {/* Header */}
-      <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
-        <TouchableOpacity
-          onPress={() => {
-            if (router.canGoBack()) router.back();
-            else router.replace('/console/student' as any);
-          }}
-          className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
-        >
-          <Feather name="arrow-left" size={24} color="#334155" />
+      {/* ── Header ── */}
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }} style={s.backBtn}>
+          <Feather name="arrow-left" size={22} color="#334155" />
         </TouchableOpacity>
-        <Text className="text-xl font-black text-slate-800">
-          {isEditing ? 'Edit Assignment Request' : 'New Assignment Request'}
-        </Text>
+        <Text style={s.headerTitle}>{isEditing ? 'Edit Assignment Request' : 'New Assignment Request'}</Text>
       </View>
 
-      <ScrollView className="flex-1 px-6 py-4" contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {/* Form Inputs */}
-        <View className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm gap-5">
-          
-          <View>
-            <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Subject</Text>
-            <TextInput
-              value={subject}
-              onChangeText={setSubject}
-              placeholder="e.g. Applied Physics, Chemistry-II"
-              placeholderTextColor="#94a3b8"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white"
-            />
+      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+
+        {/* ── Main Form Card ── */}
+        <View style={s.card}>
+
+          <View style={s.field}>
+            <Text style={s.label}>Subject</Text>
+            <TextInput value={subject} onChangeText={setSubject} placeholder="e.g. Applied Physics, Chemistry-II" placeholderTextColor="#94a3b8" style={s.input} />
           </View>
 
-          <View>
-            <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Assignment Title</Text>
-            <TextInput
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Lab Report 2, Term Paper 1"
-              placeholderTextColor="#94a3b8"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white"
-            />
+          <View style={s.field}>
+            <Text style={s.label}>Assignment Title</Text>
+            <TextInput value={title} onChangeText={setTitle} placeholder="e.g. Lab Report 2, Term Paper 1" placeholderTextColor="#94a3b8" style={s.input} />
           </View>
 
-          <View>
-            <Text className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Academic Level</Text>
-            <View className="flex-row gap-2">
+          <View style={s.field}>
+            <Text style={s.label}>Academic Level</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
               {ACADEMIC_LEVELS.map(level => {
-                const isActive = academicLevel === level;
+                const active = academicLevel === level;
                 return (
-                  <TouchableOpacity
-                    key={level}
-                    onPress={() => setAcademicLevel(level)}
-                    className={`flex-1 py-2 rounded-xl border items-center justify-center ${isActive ? 'bg-blue-600 border-blue-600' : 'bg-slate-50 border-slate-200'}`}
-                  >
-                    <Text className={`text-xs font-bold ${isActive ? 'text-white' : 'text-slate-500'}`}>{level}</Text>
+                  <TouchableOpacity key={level} onPress={() => setAcademicLevel(level)}
+                    style={[s.levelBtn, active ? s.levelBtnActive : s.levelBtnInactive]}>
+                    <Text style={[s.levelBtnText, active ? s.levelBtnTextActive : s.levelBtnTextInactive]}>{level}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
 
-          <View>
-            <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Deadline</Text>
-            <TextInput
-              value={deadline}
-              onChangeText={setDeadline}
-              placeholder="e.g. 2026-07-25 05:00 PM"
-              placeholderTextColor="#94a3b8"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white"
-            />
+          <View style={s.field}>
+            <Text style={s.label}>Deadline</Text>
+            <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.8} style={s.deadlineBtn}>
+              <Text style={[s.deadlineBtnText, !deadline && { color: '#94a3b8', fontWeight: '400' }]}>
+                {deadline || 'Select Deadline Date & Time'}
+              </Text>
+              <Feather name="calendar" size={16} color="#2563eb" />
+            </TouchableOpacity>
           </View>
 
-          <View>
-            <Text className="text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Description & Instructions</Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
+          <View style={s.field}>
+            <Text style={s.label}>Description & Instructions</Text>
+            <TextInput value={description} onChangeText={setDescription}
               placeholder="Write specifications, requirements, guidelines or instructions..."
-              placeholderTextColor="#94a3b8"
-              multiline
-              numberOfLines={4}
-              style={{ textAlignVertical: 'top' }}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 focus:border-blue-500 focus:bg-white"
-            />
+              placeholderTextColor="#94a3b8" multiline numberOfLines={4}
+              style={[s.input, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]} />
           </View>
-
         </View>
 
-        {/* Action Button */}
-        <TouchableOpacity
-          onPress={handleSave}
-          disabled={loading}
-          activeOpacity={0.85}
-          className="mt-6 w-full bg-blue-600 py-3.5 rounded-2xl items-center justify-center shadow-lg shadow-blue-500/20 active:bg-blue-700"
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text className="font-black text-white text-base">
-              {isEditing ? 'Update Request' : 'Post Assignment Request'}
-            </Text>
+        {/* ── Attachments Card ── */}
+        <View style={[s.card, { marginTop: 14 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <View>
+              <Text style={s.label}>Reference Attachments</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#94a3b8', marginTop: 2 }}>PDFs, images — multiple allowed</Text>
+            </View>
+            {attachments.length > 0 && (
+              <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>{attachments.length} file{attachments.length !== 1 ? 's' : ''}</Text>
+              </View>
+            )}
+          </View>
+
+          {convertingFiles && (
+            <View style={[s.banner, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={[s.bannerText, { color: '#1d4ed8' }]}>Reading files…</Text>
+            </View>
           )}
+
+          {attachments.map((file) => {
+            const icon = getFileIcon(file.mimeType);
+            const ready = !!file.dataUri;
+            return (
+              <View key={file.uri} style={[s.attachRow, { backgroundColor: icon.bg, borderColor: icon.border }]}>
+                <View style={[s.attachIcon, { borderColor: icon.border }]}>
+                  <Feather name={icon.name} size={16} color={icon.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>{file.name}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>
+                    {ready ? `Ready${file.size ? ' · ' + formatSize(file.size) : ''}` : 'Processing…'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {ready && <Feather name="check-circle" size={14} color="#059669" />}
+                  <TouchableOpacity onPress={() => removeAttachment(file.uri)} style={s.removeBtn}>
+                    <Feather name="x" size={12} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: attachments.length > 0 ? 8 : 0 }}>
+            <TouchableOpacity onPress={pickDocument} style={s.pickerBtn} activeOpacity={0.7}>
+              <Feather name="file-text" size={14} color="#ef4444" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#475569' }}>PDF / Doc</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={pickImage} style={s.pickerBtn} activeOpacity={0.7}>
+              <Feather name="image" size={14} color="#7c3aed" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#475569' }}>Image</Text>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#cbd5e1', textAlign: 'center', marginTop: 10 }}>
+            Files are stored as inline attachments in the request
+          </Text>
+        </View>
+
+        {/* ── Save Button ── */}
+        <TouchableOpacity onPress={handleSave} disabled={loading || convertingFiles} activeOpacity={0.85}
+          style={[s.saveBtn, (loading || convertingFiles) && { opacity: 0.65 }]}>
+          {loading
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={s.saveBtnText}>{isEditing ? 'Update Request' : 'Post Assignment Request'}</Text>}
         </TouchableOpacity>
 
       </ScrollView>
+
+      {/* ── Date & Time Picker Modal ── */}
+      <Modal animationType="slide" transparent visible={showDatePicker} onRequestClose={() => setShowDatePicker(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={s.pickerModal}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a', marginBottom: 16, textTransform: 'uppercase', letterSpacing: 0.5 }}>Select Date & Time</Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <TouchableOpacity onPress={() => changeMonth('prev')} style={s.navBtn}><Feather name="chevron-left" size={14} color="#334155" /></TouchableOpacity>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#1e293b' }}>{MONTHS[calendarMonth]} {calendarYear}</Text>
+              <TouchableOpacity onPress={() => changeMonth('next')} style={s.navBtn}><Feather name="chevron-right" size={14} color="#334155" /></TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
+              {WEEKDAYS.map((d) => (
+                <View key={d} style={{ width: '14.28%', alignItems: 'center', paddingVertical: 4 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' }}>{d}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingBottom: 12 }}>
+              {renderCalendarDays()}
+            </View>
+
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Set Deadline Time</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, padding: 10, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20 }}>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <TextInput value={selectedHour} onChangeText={(t) => { const h = parseInt(t); if (!t || (h >= 1 && h <= 12)) setSelectedHour(t); }}
+                  keyboardType="numeric" maxLength={2} style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, width: 44, paddingVertical: 6, textAlign: 'center' }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '700', color: '#94a3b8', marginTop: 3, textTransform: 'uppercase' }}>Hour</Text>
+              </View>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#cbd5e1', marginBottom: 16 }}>:</Text>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <TextInput value={selectedMinute} onChangeText={(t) => { const m = parseInt(t); if (!t || (m >= 0 && m <= 59)) setSelectedMinute(t); }}
+                  keyboardType="numeric" maxLength={2} style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, width: 44, paddingVertical: 6, textAlign: 'center' }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '700', color: '#94a3b8', marginTop: 3, textTransform: 'uppercase' }}>Min</Text>
+              </View>
+              <View style={{ flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 10, padding: 2, marginLeft: 8 }}>
+                {['AM', 'PM'].map((ap) => (
+                  <TouchableOpacity key={ap} onPress={() => setSelectedAmPm(ap)}
+                    style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: selectedAmPm === ap ? '#2563eb' : 'transparent' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: selectedAmPm === ap ? '#fff' : '#64748b' }}>{ap}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)}
+                style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#475569' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleConfirmDateTime}
+                style={{ flex: 1, backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 12, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const s = StyleSheet.create({
+  header: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', shadowColor: '#64748b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
+  backBtn: { marginRight: 14, padding: 6, marginLeft: -4, borderRadius: 10 },
+  headerTitle: { fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' },
+  card: { backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2, gap: 18 },
+  field: { gap: 6 },
+  label: { fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8 },
+  input: { fontFamily: 'Roboto', fontSize: 14, color: '#0f172a', backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  levelBtn: { flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, alignItems: 'center' },
+  levelBtnActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  levelBtnInactive: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
+  levelBtnText: { fontFamily: 'Roboto', fontSize: 13, fontWeight: '800' },
+  levelBtnTextActive: { color: '#fff' },
+  levelBtnTextInactive: { color: '#64748b' },
+  deadlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  deadlineBtnText: { fontFamily: 'Roboto', fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  banner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
+  bannerText: { fontFamily: 'Roboto', fontSize: 12, fontWeight: '700' },
+  attachRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 14, padding: 12, marginBottom: 8 },
+  attachIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  removeBtn: { width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(100,116,139,0.1)', alignItems: 'center', justifyContent: 'center' },
+  pickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingVertical: 13, backgroundColor: '#f8fafc' },
+  saveBtn: { marginTop: 20, backgroundColor: '#2563eb', borderRadius: 18, paddingVertical: 16, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
+  saveBtnText: { fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#fff' },
+  pickerModal: { backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, padding: 22, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 20, elevation: 6 },
+  navBtn: { padding: 8, backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+});

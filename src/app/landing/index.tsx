@@ -62,30 +62,30 @@ export default function LandingScreen() {
   const features = [
     {
       icon: 'search' as const,
-      color: '#0f172a',
-      bgColor: 'rgba(15,23,42,0.06)',
-      borderColor: 'rgba(15,23,42,0.10)',
-      shadowColor: 'rgba(0,0,0,0.08)',
+      color: '#2563eb',
+      bgColor: 'rgba(37,99,235,0.08)',
+      borderColor: 'rgba(37,99,235,0.18)',
+      shadowColor: '#2563eb',
       title: 'Smart Matching',
       desc: 'Find scribes within 10 km by language & subject',
       anim: card1Anim,
     },
     {
       icon: 'shield' as const,
-      color: '#0f172a',
-      bgColor: 'rgba(15,23,42,0.06)',
-      borderColor: 'rgba(15,23,42,0.10)',
-      shadowColor: 'rgba(0,0,0,0.08)',
+      color: '#16a34a',
+      bgColor: 'rgba(22,163,74,0.08)',
+      borderColor: 'rgba(22,163,74,0.18)',
+      shadowColor: '#16a34a',
       title: 'Verified Volunteers',
       desc: 'Every scribe is reviewed and approved before joining',
       anim: card2Anim,
     },
     {
       icon: 'message-circle' as const,
-      color: '#0f172a',
-      bgColor: 'rgba(15,23,42,0.06)',
-      borderColor: 'rgba(15,23,42,0.10)',
-      shadowColor: 'rgba(0,0,0,0.08)',
+      color: '#ea580c',
+      bgColor: 'rgba(234,88,12,0.08)',
+      borderColor: 'rgba(234,88,12,0.18)',
+      shadowColor: '#ea580c',
       title: 'Easy Coordination',
       desc: 'Built-in chat, calling & digital declaration form',
       anim: card3Anim,
@@ -170,12 +170,12 @@ export default function LandingScreen() {
               <Animated.View key={f.title} style={{ transform: [{ translateY: f.anim }] }}>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: 'rgba(255,255,255,0.72)',
+                  backgroundColor: 'rgba(255,255,255,0.85)',
                   borderWidth: 1, borderColor: f.borderColor,
                   borderRadius: 20, padding: 18,
                   shadowColor: f.shadowColor,
                   shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 1, shadowRadius: 16, elevation: 4,
+                  shadowOpacity: 0.12, shadowRadius: 16, elevation: 4,
                 }}>
                   <View style={{
                     width: 48, height: 48, borderRadius: 15,
@@ -239,13 +239,24 @@ export default function LandingScreen() {
           </View>
 
           {/* Footer */}
-          <Text style={{
-            fontFamily: 'Roboto',
-            textAlign: 'center', fontSize: 11,
-            color: '#94a3b8', marginTop: 16,
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: 'rgba(255,255,255,0.8)',
+            borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
+            borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16,
+            alignSelf: 'center', marginTop: 24,
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
           }}>
-            Made with ❤️ to help students.
-          </Text>
+            <Text style={{
+              fontFamily: 'Roboto',
+              fontSize: 13,
+              fontWeight: '700',
+              color: '#475569',
+            }}>
+              Made with <Text style={{ color: '#ef4444' }}>❤️</Text> to help students
+            </Text>
+          </View>
         </Animated.ScrollView>
       </SafeAreaView>
     </View>

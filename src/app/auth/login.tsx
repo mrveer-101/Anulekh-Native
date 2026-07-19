@@ -18,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height } = Dimensions.get('window');
 
@@ -39,6 +40,12 @@ export default function LoginScreen() {
   const [forgotError, setForgotError] = useState('');
   const [showForgotNewPass, setShowForgotNewPass] = useState(false);
   const [showForgotConfirmPass, setShowForgotConfirmPass] = useState(false);
+
+  // Google sign in modal state
+  const [googleModalVisible, setGoogleModalVisible] = useState(false);
+  const [googlePhone, setGooglePhone] = useState('');
+  const [googleRole, setGoogleRole] = useState<'student' | 'scribe'>('student');
+  const [googleError, setGoogleError] = useState('');
 
   // Forgot Password Flow Handlers
   const handleForgotSendOtp = async () => {
@@ -118,6 +125,47 @@ export default function LoginScreen() {
       setForgotError(err.message || 'Failed to reset password. Please try again.');
     } finally {
       setForgotLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async (phoneVal: string, roleVal: string) => {
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiHost}/api/auth/google-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id_token: 'mock-google-token',
+          role: roleVal,
+          phone: phoneVal,
+        }),
+      });
+
+      const resText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(resText);
+      } catch (e) {
+        data = { error: resText };
+      }
+
+      if (!res.ok) throw new Error(data.message || data.error || 'Google login failed');
+
+      if (data.user) {
+        const { data: profile } = await supabase
+          .from('profiles').select('role').eq('id', data.user.id).single();
+          
+        const session = { user: data.user };
+        await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
+
+        router.replace(profile?.role === 'scribe' ? '/console/scribe' : '/console/student');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed Google authentication.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -225,27 +273,29 @@ export default function LoginScreen() {
               <View
                 style={{
                   flex: 1, paddingVertical: 14, borderRadius: 14,
-                  alignItems: 'center',
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                   backgroundColor: 'rgba(37,99,235,0.08)',
                   borderWidth: 1,
                   borderColor: 'rgba(37,99,235,0.22)',
                 }}
               >
+                <Ionicons name="school" size={17} color="#334155" />
                 <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563eb' }}>
-                  🎓 Student
+                  Student
                 </Text>
               </View>
               <View
                 style={{
                   flex: 1, paddingVertical: 14, borderRadius: 14,
-                  alignItems: 'center',
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
                   backgroundColor: 'rgba(22,163,74,0.08)',
                   borderWidth: 1,
                   borderColor: 'rgba(22,163,74,0.22)',
                 }}
               >
+                <Ionicons name="pencil" size={16} color="#334155" />
                 <Text style={{ fontSize: 14, fontWeight: '800', color: '#16a34a' }}>
-                  🤝 Scribe
+                  Scribe
                 </Text>
               </View>
             </View>
@@ -380,6 +430,13 @@ export default function LoginScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
               {/* Google */}
               <TouchableOpacity
+                onPress={() => {
+                  setGooglePhone('');
+                  setGoogleRole('student');
+                  setGoogleError('');
+                  setGoogleModalVisible(true);
+                }}
+                disabled={loading}
                 style={{
                   width: 58, height: 58,
                   backgroundColor: 'rgba(255,255,255,0.85)',
@@ -609,6 +666,143 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
             )}
+
+          </View>
+        </View>
+      </Modal>
+
+      {/* Google Details Modal */}
+      <Modal
+        visible={googleModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setGoogleModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
+          <View style={{
+            backgroundColor: '#ffffff',
+            borderRadius: 28,
+            padding: 24,
+            borderWidth: 1.5,
+            borderColor: '#e2e8f0',
+            shadowColor: '#64748b',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.12,
+            shadowRadius: 20,
+            elevation: 8,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>
+                Google Sign-In Setup
+              </Text>
+              <TouchableOpacity onPress={() => setGoogleModalVisible(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Error Message */}
+            {googleError ? (
+              <View style={{
+                backgroundColor: 'rgba(239,68,68,0.05)',
+                borderWidth: 1, borderColor: 'rgba(239,68,68,0.18)',
+                borderRadius: 14, padding: 12, marginBottom: 16,
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+              }}>
+                <Feather name="alert-circle" size={14} color="#dc2626" />
+                <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '600', flex: 1 }}>{googleError}</Text>
+              </View>
+            ) : null}
+
+            <View style={{ gap: 16 }}>
+              <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
+                Provide your mobile phone number and choose your role to register or sign in with your Google account.
+              </Text>
+
+              {/* Account Type Selection */}
+              <View>
+                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                  Choose Account Type
+                </Text>
+                <View style={{
+                  backgroundColor: '#f8faff',
+                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
+                  borderRadius: 14, padding: 4,
+                  flexDirection: 'row',
+                }}>
+                  {(['student', 'scribe'] as const).map((r) => {
+                    const active = googleRole === r;
+                    const color = r === 'student' ? '#2563eb' : '#16a34a';
+                    const bg = r === 'student' ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
+                    const border = r === 'student' ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => setGoogleRole(r)}
+                        style={{
+                          flex: 1, paddingVertical: 12, borderRadius: 10,
+                          alignItems: 'center',
+                          backgroundColor: active ? bg : 'transparent',
+                          borderWidth: active ? 1 : 0,
+                          borderColor: active ? border : 'transparent',
+                        }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: active ? color : '#94a3b8' }}>
+                          {r === 'student' ? '🎓 Student' : '✍️ Scribe'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+              
+              {/* Phone Number Input */}
+              <View>
+                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                  Mobile Phone Number
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  backgroundColor: '#f8faff', borderWidth: 1.5,
+                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  paddingHorizontal: 14,
+                }}>
+                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
+                    placeholder="Enter 10-digit number"
+                    placeholderTextColor="#94a3b8"
+                    value={googlePhone}
+                    onChangeText={setGooglePhone}
+                    keyboardType="phone-pad"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!googlePhone.trim() || googlePhone.trim().length < 10) {
+                    setGoogleError('Please enter a valid 10-digit phone number.');
+                    return;
+                  }
+                  setGoogleModalVisible(false);
+                  await handleGoogleSignIn(googlePhone.trim(), googleRole);
+                }}
+                style={{
+                  backgroundColor: '#2563eb',
+                  borderRadius: 16, paddingVertical: 14,
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
+                  marginTop: 8
+                }}
+              >
+                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Continue with Google</Text>
+                <Feather name="arrow-right" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
 
           </View>
         </View>
