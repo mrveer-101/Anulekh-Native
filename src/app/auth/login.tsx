@@ -448,7 +448,8 @@ export default function LoginScreen() {
               >
                 <Image 
                   source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png' }} 
-                  style={{ width: 24, height: 24, resizeMode: 'contain' }}
+                  style={{ width: 24, height: 24 }}
+                  resizeMode="contain"
                 />
               </TouchableOpacity>
 
