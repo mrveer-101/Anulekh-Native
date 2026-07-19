@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
@@ -244,14 +244,74 @@ export default function StudentHomeView() {
 
   return (
     <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-      {/* Welcome Section */}
-      <View style={{ marginBottom: 16 }}>
-        <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1.5 }}>
-          {t('welcome_student_portal')}
-        </Text>
-        <Text style={{ fontFamily: 'Roboto', fontSize: 24, fontWeight: '900', color: TEXT, marginTop: 4, letterSpacing: -0.5 }}>
-          {t('hello_user', { name: getFirstName(profile?.full_name, 'Student') })}
-        </Text>
+      {/* Welcome & Profile Header Section */}
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 2,
+      }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 0.5 }}>
+              Student Portal
+            </Text>
+            <Ionicons name="school" size={12} color="#94a3b8" />
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 24, fontWeight: '900', color: TEXT, marginTop: 4, letterSpacing: -0.5 }}>
+            {t('hello_user', { name: getFirstName(profile?.full_name, 'Student') })}
+          </Text>
+        </View>
+
+        {/* Dynamic Avatar & Badge Container */}
+        <View style={{ position: 'relative' }}>
+          <View style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: BLUE_BG_LIGHT,
+            borderWidth: 2,
+            borderColor: 'rgba(37,99,235,0.18)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            shadowColor: BLUE,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 3,
+          }}>
+            <Text style={{ fontFamily: 'Roboto', color: BLUE, fontWeight: '900', fontSize: 18 }}>
+              {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
+            </Text>
+          </View>
+          {isVerified && (
+            <View style={{
+              position: 'absolute',
+              bottom: -4,
+              right: -4,
+              backgroundColor: '#10b981',
+              width: 20,
+              height: 20,
+              borderRadius: 10,
+              borderWidth: 2,
+              borderColor: '#fff',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <Feather name="check" size={10} color="#fff" />
+            </View>
+          )}
+        </View>
       </View>
 
       {/* 1. Complete Profile Onboarding Card */}
@@ -291,49 +351,77 @@ export default function StudentHomeView() {
         </View>
       )}
 
-      {/* 3. Verified Badge */}
+      {/* 3. Verified Badge (Vibrant soft banner) */}
       {isVerified && (
         <View style={{
-          backgroundColor: '#ffffff',
-          borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
-          paddingVertical: 12, paddingHorizontal: 16, borderRadius: 16,
-          flexDirection: 'row', alignItems: 'center', marginBottom: 20, gap: 10,
-          shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.08, shadowRadius: 12, elevation: 2,
+          backgroundColor: '#ecfdf5',
+          borderWidth: 1, borderColor: '#a7f3d0',
+          paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16,
+          flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10,
         }}>
-          <Feather name="check-circle" size={16} color={BLUE} />
-          <Text style={{ fontFamily: 'Roboto', color: BLUE, fontSize: 12, fontWeight: '800' }}>{t('verified_student_profile')}</Text>
+          <View style={{
+            width: 24, height: 24, borderRadius: 12, backgroundColor: '#10b981',
+            alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Feather name="shield" size={12} color="#fff" />
+          </View>
+          <Text style={{ fontFamily: 'Roboto', color: '#047857', fontSize: 12, fontWeight: '800' }}>
+            Verified Anulekh Candidate Profile
+          </Text>
         </View>
       )}
 
-      {/* Student Stats Summary */}
+      {/* Student Stats Summary (One block, color coded Blue, Orange, Green) */}
       <View style={{
         backgroundColor: '#ffffff',
-        padding: 16, borderRadius: 24,
-        borderWidth: 1.5, borderColor: '#e2e8f0',
-        shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1, shadowRadius: 16, elevation: 3,
-        flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20
+        borderRadius: 24,
+        borderWidth: 1, borderColor: '#e2e8f0',
+        paddingVertical: 14,
+        paddingHorizontal: 8,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        marginBottom: 20,
+        shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
       }}>
-        <View style={{ alignItems: 'center', flex: 1 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{examRequestsCount}</Text>
-          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Exam Requests</Text>
+        {/* Exams Stats (Blue) */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <Feather name="file-text" size={12} color="#2563eb" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Exams</Text>
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{examRequestsCount}</Text>
         </View>
-        <View style={{ width: 1, height: 32, backgroundColor: '#f1f5f9' }} />
-        <View style={{ alignItems: 'center', flex: 1 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{assignmentRequestsCount}</Text>
-          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Assignments</Text>
+
+        <View style={{ width: 1, height: 28, backgroundColor: '#e2e8f0' }} />
+
+        {/* Assignments Stats (Orange) */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <Feather name="book-open" size={12} color="#ea580c" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Assignments</Text>
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#ea580c' }}>{assignmentRequestsCount}</Text>
         </View>
-        <View style={{ width: 1, height: 32, backgroundColor: '#f1f5f9' }} />
-        <View style={{ alignItems: 'center', flex: 1 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT }}>{confirmedPlans.length + confirmedAssignmentsCount}</Text>
-          <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 10, fontWeight: '800', marginTop: 2, textAlign: 'center' }}>Matched Scribes</Text>
+
+        <View style={{ width: 1, height: 28, backgroundColor: '#e2e8f0' }} />
+
+        {/* Matched Stats (Green) */}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <Feather name="users" size={12} color="#10b981" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Matched</Text>
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#10b981' }}>
+            {confirmedPlans.length + confirmedAssignmentsCount}
+          </Text>
         </View>
       </View>
 
       {/* Upcoming Exam Schedule / Plan */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('upcoming_exams')}</Text>
+        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Schedule</Text>
 
         {confirmedPlans.length === 0 ? (
           <View style={{
@@ -390,7 +478,7 @@ export default function StudentHomeView() {
                   overflow: 'hidden',
                 }}
               >
-                {/* ── Collapsed Header Row (always visible) ── */}
+                {/* ── Collapsed Header Row (Icon + Subject + Status + Chevron) ── */}
                 <TouchableOpacity
                   onPress={() => toggleExamCard(exam.id)}
                   activeOpacity={0.8}
@@ -399,7 +487,7 @@ export default function StudentHomeView() {
                     paddingHorizontal: 16, paddingVertical: 14, gap: 10,
                   }}
                 >
-                  {/* Subject icon */}
+                  {/* Subject/Alert icon */}
                   <View style={{
                     width: 38, height: 38, borderRadius: 11,
                     backgroundColor: isEmergency ? '#fef2f2' : BLUE_BG_LIGHT,
@@ -411,13 +499,10 @@ export default function StudentHomeView() {
                       color={isEmergency ? '#dc2626' : BLUE} />
                   </View>
 
-                  {/* Subject + level */}
+                  {/* Subject Name */}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: TEXT }} numberOfLines={1}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: TEXT }} numberOfLines={1}>
                       {exam.subject || t('exam_fallback')}
-                    </Text>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>
-                      {exam.exam_type}{exam.exam_date ? '  ·  ' + exam.exam_date : ''}
                     </Text>
                   </View>
 
@@ -461,31 +546,44 @@ export default function StudentHomeView() {
                       </View>
                     )}
 
-                    {/* Detail rows */}
+                    {/* All details stacked inside expanded card */}
                     <View style={{ gap: 6 }}>
+                      {/* 1. Level of exam */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                          Level: {exam.exam_type}
+                        </Text>
+                      </View>
+
+                      {/* 2. Date and time */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                          Date & Time: {exam.exam_date || t('date_not_specified')}
+                        </Text>
+                      </View>
+
+                      {/* 3. Location */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                          Location: {exam.exam_venue || t('venue_not_specified')}
+                        </Text>
+                      </View>
+
                       {!isEmergency && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Feather name="user" size={12} color={BLUE} style={{ marginRight: 8, width: 16 }} />
-                          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Feather name="user" size={12} color={BLUE} style={{ width: 14 }} />
+                          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
                             {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
                           </Text>
                         </View>
                       )}
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="calendar" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                          {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="map-pin" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                          {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="globe" size={12} color={MUTED} style={{ marginRight: 8, width: 16 }} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Feather name="globe" size={12} color={MUTED} style={{ width: 14 }} />
+                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
                           {t('exam_language')}: {exam.exam_language}
                         </Text>
                       </View>

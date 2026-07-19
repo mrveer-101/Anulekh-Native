@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
+import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 
 const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -45,14 +47,40 @@ export default function CompleteProfileForm() {
   const [calendarYear, setCalendarYear] = useState(2003); // Default start year for volunteers
   const [showYearDropdown, setShowYearDropdown] = useState(false);
 
-  const handleSimulateUpload = () => {
-    setUploadedFile('highest_qualification_marksheet.pdf');
-    Alert.alert('Upload Simulated', 'Your certificate "highest_qualification_marksheet.pdf" has been prepared for upload.');
+  const handleSimulateUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const filename = asset.name || 'highest_qualification_marksheet.pdf';
+      setUploadedFile(filename);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to select file.');
+    }
   };
 
-  const handleSimulateAadharUpload = () => {
-    setAadharImage('aadhar_card_copy.jpg');
-    Alert.alert('Upload Simulated', 'Your Aadhar Card image "aadhar_card_copy.jpg" has been prepared for upload.');
+  const handleSimulateAadharUpload = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library to select an image.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const filename = asset.fileName || asset.uri.split('/').pop() || 'aadhar_card_copy.jpg';
+      setAadharImage(filename);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to select image.');
+    }
   };
 
   const toggleLanguage = (lang: string) => {
@@ -236,7 +264,7 @@ export default function CompleteProfileForm() {
       </View>
 
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
-        <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <View className="bg-white p-5 rounded-3xl border border-slate-200 shadow-md">
           
           {/* Progress Indicator */}
           <View className="mb-5">
@@ -264,17 +292,17 @@ export default function CompleteProfileForm() {
                     value={officialName}
                     onChangeText={setOfficialName}
                     placeholder="e.g. Rahul Ramesh Sharma"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                    className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
-
+ 
                 {/* DOB with Calendar Trigger */}
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Date of Birth *</Text>
                   <TouchableOpacity 
                     onPress={() => setShowCalendar(true)}
                     activeOpacity={0.8}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-emerald-500"
+                    className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-emerald-500"
                   >
                     <Text className={`text-sm ${dob ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
                       {dob || 'DD/MM/YYYY'}
@@ -282,24 +310,24 @@ export default function CompleteProfileForm() {
                     <Feather name="calendar" size={16} color="#059669" />
                   </TouchableOpacity>
                 </View>
-
+ 
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Occupation *</Text>
                   <TextInput 
                     value={occupation}
                     onChangeText={setOccupation}
                     placeholder="e.g. Student, Software Engineer"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                    className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
-
+ 
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Location (City / Area) *</Text>
                   <TextInput 
                     value={location}
                     onChangeText={setLocation}
                     placeholder="e.g. Andheri, Mumbai"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                    className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
               </View>
@@ -321,7 +349,7 @@ export default function CompleteProfileForm() {
                     keyboardType="numeric"
                     maxLength={12}
                     placeholder="12-digit Aadhar Number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 focus:bg-white transition-all"
+                    className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
 
@@ -330,8 +358,8 @@ export default function CompleteProfileForm() {
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image *</Text>
                   <TouchableOpacity 
                     onPress={handleSimulateAadharUpload}
-                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
-                      aadharImage ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50'
+                    className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
+                      aadharImage ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-300 bg-white'
                     }`}
                   >
                     {aadharImage ? (
@@ -356,7 +384,7 @@ export default function CompleteProfileForm() {
                   <View className="w-full">
                     <TouchableOpacity 
                       onPress={() => setIsEduDropdownOpen(!isEduDropdownOpen)}
-                      className={`w-full bg-slate-50 border border-slate-200 px-3 py-2.5 flex-row items-center justify-between transition-all ${
+                      className={`w-full bg-white border border-slate-200 shadow-sm px-3 py-2.5 flex-row items-center justify-between transition-all ${
                         isEduDropdownOpen ? 'rounded-t-xl border-b-0' : 'rounded-xl'
                       }`}
                     >
@@ -395,8 +423,8 @@ export default function CompleteProfileForm() {
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Certificate Proof *</Text>
                   <TouchableOpacity 
                     onPress={handleSimulateUpload}
-                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
-                      uploadedFile ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-200 bg-slate-50'
+                    className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
+                      uploadedFile ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-300 bg-white'
                     }`}
                   >
                     {uploadedFile ? (

@@ -79,6 +79,12 @@ export default function StudentRequestsView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
+  // Expanded Cards State
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  const toggleCard = (id: string | number) => {
+    setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const fetchRequests = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -869,6 +875,8 @@ export default function StudentRequestsView() {
             );
           };
 
+          const isExpanded = expandedCards[item.id] || false;
+
           return (
             <View style={{
               backgroundColor: '#fff',
@@ -885,9 +893,9 @@ export default function StudentRequestsView() {
             }}>
 
               {/* ── Top section: icon + exam name + status badge ── */}
-              <View style={{ padding: 18, paddingBottom: 14 }}>
-                {/* Status badge — top right */}
-                <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+              <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.7} style={{ padding: 18, paddingBottom: 14 }}>
+                {/* Status badge & chevron — top right */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12, gap: 10 }}>
                   <View style={{
                     paddingVertical: 5, paddingHorizontal: 12,
                     borderRadius: 20,
@@ -899,6 +907,7 @@ export default function StudentRequestsView() {
                       {statusLabel}
                     </Text>
                   </View>
+                  <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color="#94a3b8" />
                 </View>
 
                 {/* Icon + subject + date row */}
@@ -951,10 +960,13 @@ export default function StudentRequestsView() {
                     </TouchableOpacity>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              {/* ── Divider ── */}
-              <View style={{ height: 1, backgroundColor: '#f1f5f9', marginHorizontal: 18 }} />
+              {/* ── Expanded Content ── */}
+              {isExpanded && (
+                <View>
+                  {/* ── Divider ── */}
+                  <View style={{ height: 1, backgroundColor: '#f1f5f9', marginHorizontal: 18 }} />
 
               {/* ── Exam Center block ── */}
               <View style={{ paddingHorizontal: 18, paddingVertical: 14 }}>
@@ -1180,6 +1192,8 @@ export default function StudentRequestsView() {
                   </View>
                 )}
               </View>
+                </View>
+              )}
             </View>
           );
         }}
@@ -1232,6 +1246,19 @@ export default function StudentRequestsView() {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{item.full_name || item.official_name}</Text>
                     <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 1 }}>{item.occupation || 'Volunteer Scribe'}</Text>
+                  </View>
+
+                  {/* Star Rating on the Right */}
+                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="star" size={14} color={(item.reviews_count > 0) ? "#eab308" : "#cbd5e1"} />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: (item.reviews_count > 0) ? '#0f172a' : '#64748b' }}>
+                        {(item.reviews_count > 0) ? (item.rating ? Number(item.rating).toFixed(1) : "5.0") : "New"}
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#94a3b8', marginTop: 2, fontWeight: '700' }}>
+                      {item.reviews_count || 0} {item.reviews_count === 1 ? 'Review' : 'Reviews'}
+                    </Text>
                   </View>
                 </View>
 

@@ -136,6 +136,25 @@ export default function ScribeExploreView() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  const [expandedExamIds, setExpandedExamIds] = useState<Set<number>>(new Set());
+  const [expandedAssignmentIds, setExpandedAssignmentIds] = useState<Set<number>>(new Set());
+
+  const toggleExamCard = (id: number) => {
+    setExpandedExamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAssignmentCard = (id: number) => {
+    setExpandedAssignmentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchSession();
@@ -440,192 +459,314 @@ export default function ScribeExploreView() {
 
   const renderExamCard = (exam: ExamRequest) => {
     const examStatus = appMap.get(`${exam.id}_exam`);
+    const isExpanded = expandedExamIds.has(exam.id);
+    const isEmergency = exam.is_emergency === 'yes';
+    const isVerified = scribeProfile?.verification_status === 'approved';
+
     return (
-      <TouchableOpacity 
+      <View 
         key={exam.id} 
-        onPress={() => {
-          if (isVerified) {
-            router.push(`/console/scribe/apply?id=${exam.id}&type=exam` as any);
-          } else {
-            Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
-          }
-        }}
-        activeOpacity={0.9}
         style={{ 
-          backgroundColor: '#f8fafc', 
-          padding: 18, 
-          borderRadius: 24, 
-          borderWidth: 1, 
-          borderColor: '#e2e8f0', 
-          shadowColor: '#64748b', 
-          shadowOffset: { width: 0, height: 4 }, 
-          shadowOpacity: 0.08, 
-          shadowRadius: 12, 
+          backgroundColor: '#ffffff', 
+          borderRadius: 20, 
+          borderWidth: isEmergency ? 2 : 1.5, 
+          borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
+          shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+          shadowOffset: { width: 0, height: 6 }, 
+          shadowOpacity: isEmergency ? 0.12 : 0.07, 
+          shadowRadius: 16, 
           elevation: 3, 
-          marginBottom: 12 
+          marginBottom: 10,
+          overflow: 'hidden'
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
+        {/* ── Collapsed Header Row ── */}
+        <TouchableOpacity
+          onPress={() => toggleExamCard(exam.id)}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+          }}
+        >
+          {/* Subject icon */}
+          <View style={{
+            width: 38, height: 38, borderRadius: 11,
+            backgroundColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.08)',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: isEmergency ? '#fca5a5' : 'rgba(37,99,235,0.18)',
+          }}>
+            <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
+              color={isEmergency ? '#dc2626' : '#2563eb'} />
           </View>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {exam.is_emergency === 'yes' && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '900', color: '#b91c1c' }}>🚨 EMERGENCY SOS</Text>
+
+          {/* Subject Name */}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
+              {exam.subject || 'Exam'}
+            </Text>
+          </View>
+
+          {/* Badges container */}
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
+            {isEmergency && (
+              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>🚨 SOS</Text>
               </View>
             )}
             {!!exam.private_scribe_id && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>💌 PRIVATE INVITE</Text>
-              </View>
-            )}
-            {(() => {
-              const tomorrow = new Date();
-              tomorrow.setDate(tomorrow.getDate() + 1);
-              const tomorrowStr = tomorrow.toISOString().split('T')[0];
-              const examDateOnly = exam.exam_date ? exam.exam_date.split('|')[0].trim() : '';
-              if (examDateOnly === tomorrowStr) {
-                return (
-                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(239,68,68,0.08)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#ef4444' }}>⚠️ URGENT</Text>
-                  </View>
-                );
-              }
-              return null;
-            })()}
-            {exam.is_prebooking === 'yes' && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#2563eb' }}>PRE-BOOK</Text>
+              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITE</Text>
               </View>
             )}
             {(() => {
               if (examStatus === 'pending') {
                 return (
-                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+                  <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
                   </View>
                 );
               }
               if (examStatus === 'invited') {
                 return (
-                  <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+                  <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
                   </View>
                 );
               }
               return (
-                <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
+                <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
                 </View>
               );
             })()}
           </View>
-        </View>
 
-        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 4, gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('candidate_student')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
-            </Text>
+          {/* Chevron */}
+          <Feather
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16} color="#64748b"
+          />
+        </TouchableOpacity>
+
+        {/* ── Expanded Detail Panel ── */}
+        {isExpanded && (
+          <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
+            <View style={{ gap: 6 }}>
+              {/* 1. Level of exam */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Level: {exam.exam_type}
+                </Text>
+              </View>
+
+              {/* 2. Date and time */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Date & Time: {exam.exam_date}
+                </Text>
+              </View>
+
+              {/* 3. Location */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                  Location: {exam.exam_venue}
+                </Text>
+              </View>
+
+              {/* 4. Student profile */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="user" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
+                  Student: {exam.student_name} ({exam.education_grade})
+                </Text>
+              </View>
+
+              {/* 5. Language */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="globe" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
+                  Language: {exam.exam_language}
+                </Text>
+              </View>
+            </View>
+
+            {/* Apply Action Button */}
+            <TouchableOpacity 
+              onPress={() => {
+                if (isVerified) {
+                  router.push(`/console/scribe/apply?id=${exam.id}&type=exam` as any);
+                } else {
+                  Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                }
+              }}
+              style={{ 
+                width: '100%', 
+                backgroundColor: 'rgba(22,163,74,0.08)', 
+                paddingVertical: 11, 
+                borderRadius: 12, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flexDirection: 'row', 
+                gap: 6,
+                borderWidth: 1,
+                borderColor: 'rgba(22,163,74,0.22)'
+              }}
+            >
+              <Feather name="file-text" size={12} color="#16a34a" />
+              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '800', fontSize: 12 }}>{t('view_details_apply')}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="calendar" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('exam_date')}: {exam.exam_date}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="map-pin" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-              {t('exam_venue')}: {exam.exam_venue}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('exam_language')}: {exam.exam_language}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+        )}
+      </View>
     );
   };
 
   const renderAssignmentCard = (assign: any) => {
     const assignStatus = appMap.get(`${assign.id}_assignment`);
+    const isExpanded = expandedAssignmentIds.has(assign.id);
+    const isVerified = scribeProfile?.verification_status === 'approved';
+
     return (
-      <TouchableOpacity 
+      <View 
         key={assign.id} 
-        onPress={() => {
-          if (isVerified) {
-            router.push(`/console/scribe/apply?id=${assign.id}&type=assignment` as any);
-          } else {
-            Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
-          }
-        }}
-        activeOpacity={0.9}
         style={{ 
-          backgroundColor: '#f8fafc', 
-          padding: 18, 
-          borderRadius: 24, 
-          borderWidth: 1, 
+          backgroundColor: '#ffffff', 
+          borderRadius: 20, 
+          borderWidth: 1.5, 
           borderColor: '#e2e8f0', 
           shadowColor: '#64748b', 
-          shadowOffset: { width: 0, height: 4 }, 
-          shadowOpacity: 0.08, 
-          shadowRadius: 12, 
+          shadowOffset: { width: 0, height: 6 }, 
+          shadowOpacity: 0.07, 
+          shadowRadius: 16, 
           elevation: 3, 
-          marginBottom: 12 
+          marginBottom: 10,
+          overflow: 'hidden'
         }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <View style={{ flex: 1, paddingRight: 8 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{assign.subject}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Level: {assign.academic_level}</Text>
+        {/* ── Collapsed Header Row ── */}
+        <TouchableOpacity
+          onPress={() => toggleAssignmentCard(assign.id)}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+          }}
+        >
+          {/* Assignment icon */}
+          <View style={{
+            width: 38, height: 38, borderRadius: 11,
+            backgroundColor: 'rgba(234,88,12,0.08)',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: 'rgba(234,88,12,0.18)',
+          }}>
+            <Feather name="book-open" size={16}
+              color="#ea580c" />
           </View>
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+
+          {/* Subject Name */}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
+              {assign.subject || 'Assignment'}
+            </Text>
+          </View>
+
+          {/* Badges container */}
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
             {assignStatus === 'pending' && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
               </View>
             )}
             {assignStatus === 'invited' && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
               </View>
             )}
             {!assignStatus && (
-              <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>OPEN</Text>
+              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#16a34a' }}>OPEN</Text>
               </View>
             )}
           </View>
-        </View>
 
-        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 4, gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="file-text" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              Title: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{assign.assignment_title}</Text>
-            </Text>
+          {/* Chevron */}
+          <Feather
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16} color="#64748b"
+          />
+        </TouchableOpacity>
+
+        {/* ── Expanded Detail Panel ── */}
+        {isExpanded && (
+          <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
+            <View style={{ gap: 6 }}>
+              {/* 1. Title */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="file-text" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Title: {assign.assignment_title}
+                </Text>
+              </View>
+
+              {/* 2. Level */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Level: {assign.academic_level}
+                </Text>
+              </View>
+
+              {/* 3. Deadline */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="clock" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Deadline: {assign.deadline}
+                </Text>
+              </View>
+
+              {/* 4. Student */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="user" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
+                  Student: {assign.student_name}
+                </Text>
+              </View>
+            </View>
+
+            {/* Apply Action Button */}
+            <TouchableOpacity 
+              onPress={() => {
+                if (isVerified) {
+                  router.push(`/console/scribe/apply?id=${assign.id}&type=assignment` as any);
+                } else {
+                  Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                }
+              }}
+              style={{ 
+                width: '100%', 
+                backgroundColor: 'rgba(22,163,74,0.08)', 
+                paddingVertical: 11, 
+                borderRadius: 12, 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                flexDirection: 'row', 
+                gap: 6,
+                borderWidth: 1,
+                borderColor: 'rgba(22,163,74,0.22)'
+              }}
+            >
+              <Feather name="file-text" size={12} color="#16a34a" />
+              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '800', fontSize: 12 }}>{t('view_details_apply')}</Text>
+            </TouchableOpacity>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              Deadline: <Text style={{ fontWeight: '700', color: '#b45309' }}>{assign.deadline}</Text>
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              Student: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{assign.student_name}</Text>
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
+        )}
+      </View>
     );
   };
 

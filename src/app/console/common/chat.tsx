@@ -76,8 +76,8 @@ export default function ChatRoomScreen() {
           const isStudent = session.user.id === examData.student_id;
           
           if (isStudent) {
-            setOtherPartyName(examData.scribe_id ? 'સ્ક્રાઇબ' : 'સ્વયંસેવક');
-            setOtherPartyRole(t('volunteer_scribe'));
+            setOtherPartyName(examData.scribe_id ? 'Scribe' : 'Volunteer');
+            setOtherPartyRole('Volunteer');
             
             if (examData.scribe_id) {
               const { data: scribeProfile } = await supabase
@@ -93,7 +93,7 @@ export default function ChatRoomScreen() {
             }
           } else {
             setOtherPartyName(examData.student_name);
-            setOtherPartyRole(t('candidate_student'));
+            setOtherPartyRole('Student');
             
             const { data: studentProfile } = await supabase
               .from('profiles')
@@ -341,32 +341,32 @@ export default function ChatRoomScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: isStudent ? '#d4e3ed' : '#efeae2' }}>
       <StatusBar style="light" />
       
-      <View style={{ paddingHorizontal: 16, paddingVertical: 14, backgroundColor: headerBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}>
+      <View style={{ paddingHorizontal: 16, paddingVertical: 18, backgroundColor: headerBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
           <TouchableOpacity 
             onPress={handleBack} 
             style={{ marginRight: 10, padding: 4 }}
           >
-            <Feather name="arrow-left" size={22} color="white" />
+            <Feather name="arrow-left" size={25} color="white" />
           </TouchableOpacity>
 
-          <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 15 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 19, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false }}>
               {otherPartyName.charAt(0).toUpperCase()}
             </Text>
           </View>
 
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 15 }} numberOfLines={1}>
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 18, lineHeight: 22 }} numberOfLines={1}>
               {otherPartyName}
             </Text>
-            <Text style={{ fontFamily: 'Roboto', color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 }}>
-              {otherPartyRole} • ઓનલાઇન
+            <Text style={{ fontFamily: 'Roboto', color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>
+              {otherPartyRole} • Online
             </Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
           {/* Call Icon Button — only available on the day of the exam (hidden otherwise),
               and locked once the exam has ended. */}
           {examToday ? (
@@ -383,7 +383,7 @@ export default function ChatRoomScreen() {
                 }}
                 style={{ padding: 4 }}
               >
-                <Feather name="phone" size={20} color="white" />
+                <Feather name="phone" size={24} color="white" />
               </TouchableOpacity>
             ) : (
               // Exam day but already ended → locked
@@ -391,7 +391,7 @@ export default function ChatRoomScreen() {
                 onPress={() => Alert.alert('Calling Locked', 'Calling is disabled now that the exam has ended.')}
                 style={{ padding: 4, opacity: 0.5 }}
               >
-                <Feather name="phone-off" size={20} color="white" />
+                <Feather name="phone-off" size={24} color="white" />
               </TouchableOpacity>
             )
           ) : null}
@@ -402,7 +402,7 @@ export default function ChatRoomScreen() {
               onPress={() => setIsDeclarationOpen(true)}
               style={{ padding: 4 }}
             >
-              <Feather name="file-text" size={20} color="white" />
+              <Feather name="file-text" size={24} color="white" />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -585,14 +585,13 @@ export default function ChatRoomScreen() {
                   <Feather name="paperclip" size={17} color={themeColor} />
                 </TouchableOpacity>
 
-                {/* Text Input */}
                 <TextInput
                   value={newMessage}
                   onChangeText={setNewMessage}
                   placeholder={t('type_message')}
                   placeholderTextColor="#94a3b8"
-                  style={{ flex: 1, fontFamily: 'Roboto', backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, fontSize: 13, color: '#1e293b', maxHeight: 80, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
-                  multiline={true}
+                  style={{ flex: 1, fontFamily: 'Roboto', backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 14, height: 36, fontSize: 13, color: '#1e293b', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
+                  multiline={false}
                 />
 
                 {/* Voice Record Button */}

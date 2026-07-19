@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '../app/core/translation';
+import * as ImagePicker from 'expo-image-picker';
 
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
@@ -15,6 +16,7 @@ export default function ScribeProfileView() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   
   // Expanded Detail fields
   const [isExpanded, setIsExpanded] = useState(false);
@@ -31,6 +33,42 @@ export default function ScribeProfileView() {
   const [updating, setUpdating] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
+  const toDataUri = async (uri: string): Promise<string> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const handleSelectPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const dataUri = await toDataUri(asset.uri);
+      setProfilePhoto(dataUri);
+      if (user) {
+        await AsyncStorage.setItem(`profile_photo_${user.id}`, dataUri);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to select image.');
+    }
+  };
+
   useEffect(() => {
     fetchProfile();
   }, []);
@@ -41,6 +79,11 @@ export default function ScribeProfileView() {
       if (!session) return;
       setUser(session.user);
       setEmail(session.user.email || '');
+
+      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      if (localPhoto) {
+        setProfilePhoto(localPhoto);
+      }
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -139,25 +182,32 @@ export default function ScribeProfileView() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1, paddingHorizontal: 20, backgroundColor: '#f8fafc' }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
       {/* Profile Header Card */}
-      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, marginTop: 12, marginBottom: 16 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: 'rgba(22,163,74,0.09)', borderWidth: 2, borderColor: 'rgba(22,163,74,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-          <Text style={{ fontSize: 24, fontWeight: '900', color: '#16a34a' }}>
-            {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
-          </Text>
+      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginTop: 12, marginBottom: 16 }}>
+        <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: 'rgba(22,163,74,0.09)', borderWidth: 2, borderColor: 'rgba(22,163,74,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden' }}>
+          {profilePhoto ? (
+            <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+          ) : (
+            <Text style={{ fontSize: 24, fontWeight: '900', color: '#16a34a' }}>
+              {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
+            </Text>
+          )}
         </View>
         <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{fullName || 'Volunteer'}</Text>
         <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{email}</Text>
         
-        <TouchableOpacity style={{ marginTop: 8, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.18)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
+        <TouchableOpacity 
+          onPress={handleSelectPhoto}
+          style={{ marginTop: 8, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.18)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}
+        >
           <Text style={{ fontSize: 9, fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Upload Photo</Text>
         </TouchableOpacity>
       </View>
 
       {/* Editable Account Information Card */}
-      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 16 }}>
+      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 16 }}>
         
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Basic Information</Text>
@@ -345,7 +395,7 @@ export default function ScribeProfileView() {
       </View>
 
       {/* Scribe Preferences Card */}
-      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 16 }}>
+      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <Feather name="globe" size={13} color="#16a34a" style={{ marginRight: 6 }} />
           <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Preferred Scribe Languages</Text>
@@ -377,7 +427,7 @@ export default function ScribeProfileView() {
       </View>
 
       {/* App Settings Card (Language Toggle Display) */}
-      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 20 }}>
+      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 20 }}>
         <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>{t('language_display')}</Text>
         <Text style={{ fontSize: 10, color: '#64748b', marginBottom: 12 }}>{t('select_language_desc')}</Text>
         

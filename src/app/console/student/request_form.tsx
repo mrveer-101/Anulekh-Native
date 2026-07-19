@@ -556,46 +556,66 @@ export default function ScribeRequestForm() {
             >
               <Feather name="arrow-left" size={24} color="#334155" />
             </TouchableOpacity>
-            <Text style={{ fontSize: 20, fontWeight: '900', color: '#1e293b' }}>Request a Scribe</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '700', color: '#1e293b' }}>Request a Scribe</Text>
           </View>
         </SafeAreaView>
 
-        <View className="flex-1 px-6 py-8 justify-center">
-          <Text className="text-lg font-black text-slate-800 text-center mb-2">How would you like to create this request?</Text>
-          <Text className="text-sm text-slate-500 text-center mb-8">
-            Upload your admit card and we'll auto-fill the exam details for you — or fill everything in yourself.
-          </Text>
+        <ScrollView className="flex-1 px-6 pt-6 pb-8" contentContainerStyle={{ paddingBottom: 40 }}>
+          <Text className="text-xl font-bold text-slate-800 mb-6" style={{ fontFamily: 'Roboto' }}>Select Request Type</Text>
 
-          <TouchableOpacity
-            onPress={startAutoFillEntry}
-            activeOpacity={0.85}
-            className="w-full bg-blue-500 rounded-2xl p-5 flex-row items-center mb-4 shadow-md shadow-blue-500/30"
-          >
-            <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
-              <Feather name="upload-cloud" size={22} color="#fff" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-white font-black text-base">Auto-Fill from Admit Card</Text>
-              <Text className="text-blue-100 text-xs mt-0.5">Upload a photo or PDF — subject, date & venue filled automatically</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="#fff" />
-          </TouchableOpacity>
+          {/* Request Assignment Block */}
+          <View className="mb-8">
+            <TouchableOpacity
+              onPress={() => Alert.alert("Coming Soon", "Assignment Request flow will be available soon.")}
+              activeOpacity={0.85}
+              className="w-full bg-indigo-500 rounded-2xl p-5 flex-row items-center shadow-md shadow-indigo-500/30"
+            >
+              <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
+                <Feather name="file-text" size={22} color="#fff" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Request Assignment</Text>
+                <Text className="text-indigo-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Get help with your assignments</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#fff" />
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity
-            onPress={() => setEntryMode('form')}
-            activeOpacity={0.85}
-            className="w-full bg-white border border-slate-200 rounded-2xl p-5 flex-row items-center shadow-sm"
-          >
-            <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mr-4">
-              <Feather name="edit-3" size={22} color="#334155" />
-            </View>
-            <View className="flex-1">
-              <Text className="text-slate-800 font-black text-base">Fill Manually</Text>
-              <Text className="text-slate-400 text-xs mt-0.5">Enter exam details yourself, step by step</Text>
-            </View>
-            <Feather name="chevron-right" size={20} color="#334155" />
-          </TouchableOpacity>
-        </View>
+          {/* Exam Request Block */}
+          <View>
+            <Text className="text-lg font-bold text-slate-800 mb-4" style={{ fontFamily: 'Roboto' }}>Exam Request</Text>
+
+            <TouchableOpacity
+              onPress={startAutoFillEntry}
+              activeOpacity={0.85}
+              className="w-full bg-blue-500 rounded-2xl p-5 flex-row items-center mb-4 shadow-md shadow-blue-500/30"
+            >
+              <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
+                <Feather name="upload-cloud" size={22} color="#fff" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Auto-Fill (ADMIT Card)</Text>
+                <Text className="text-blue-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Upload a photo or PDF — details filled automatically</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#fff" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setEntryMode('form')}
+              activeOpacity={0.85}
+              className="w-full bg-white border border-slate-200 rounded-2xl p-5 flex-row items-center shadow-sm"
+            >
+              <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mr-4">
+                <Feather name="edit-3" size={22} color="#334155" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-slate-800 font-bold text-base" style={{ fontFamily: 'Roboto' }}>Manual Fill Form</Text>
+                <Text className="text-slate-400 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Enter exam details yourself, step by step</Text>
+              </View>
+              <Feather name="chevron-right" size={20} color="#334155" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
 
         {/* Replicated Bottom Nav Bar */}
         <SafeAreaView edges={['bottom']} style={{

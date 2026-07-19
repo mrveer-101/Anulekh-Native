@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,7 +15,23 @@ export default function ScribeApplyDetailsPage() {
   const [exam, setExam] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [hasApplied, setHasApplied] = useState(false);
+  const [appStatus, setAppStatus] = useState<string | null>(null);
+  const [appId, setAppId] = useState<number | null>(null);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
+
+  const parsedAttachments = React.useMemo(() => {
+    if (!exam || !exam.attachments || !Array.isArray(exam.attachments)) return [];
+    return exam.attachments.map((entry: string) => {
+      const sepIdx = entry.indexOf('::');
+      if (sepIdx === -1) return null;
+      const name = entry.substring(0, sepIdx);
+      const dataUri = entry.substring(sepIdx + 2);
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+      const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext}`;
+      return { uri: dataUri, name, mimeType, dataUri };
+    }).filter(Boolean) as any[];
+  }, [exam]);
 
   useEffect(() => {
     fetchExamAndProfile();
@@ -67,8 +83,16 @@ export default function ScribeApplyDetailsPage() {
           .eq('scribe_id', session.user.id)
           .eq('type', type);
 
-        const hasActiveApp = (existingApps || []).some((app: any) => app.status !== 'rejected');
-        setHasApplied(hasActiveApp);
+        const activeApp = (existingApps || []).find((app: any) => app.status !== 'rejected');
+        if (activeApp) {
+          setHasApplied(true);
+          setAppStatus(activeApp.status);
+          setAppId(activeApp.id);
+        } else {
+          setHasApplied(false);
+          setAppStatus(null);
+          setAppId(null);
+        }
       }
     } catch (err) {
       console.error('Error fetching details:', err);
@@ -91,27 +115,59 @@ export default function ScribeApplyDetailsPage() {
     setSubmitting(true);
 
     try {
-      const { error } = await supabase
+      // 1. Insert this application as 'accepted'
+      const { error: insertError } = await supabase
         .from('scribe_applications')
         .insert({
           request_id: exam.id,
           scribe_id: profile.id,
           scribe_name: profile.official_name || profile.full_name,
-          status: 'pending',
+          status: 'accepted',
           type: type
         });
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      // Create a notification for the Student
+      // 2. Update all other applications for this request to 'rejected'
+      await supabase
+        .from('scribe_applications')
+        .update({ status: 'rejected' })
+        .eq('request_id', exam.id)
+        .eq('type', type)
+        .neq('scribe_id', profile.id);
+
+      // 3. Update the request (exam or assignment) to 'matched' and assign the scribe_id
+      const table = type === 'exam' ? 'exam_requests' : 'assignment_requests';
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ 
+          status: 'matched',
+          scribe_id: profile.id
+        })
+        .eq('id', exam.id);
+
+      if (updateError) throw updateError;
+
+      // 4. Create a notification for the Student
       await supabase
         .from('notifications')
         .insert({
           user_id: exam.student_id,
-          title: type === 'exam' ? 'New Scribe Application' : 'New Writer Application',
+          title: type === 'exam' ? 'Scribe Confirmed' : 'Writer Confirmed',
           message: type === 'exam'
-            ? `${profile.official_name || profile.full_name} has applied to be a scribe for your "${exam.subject || 'Exam'}" exam.`
-            : `${profile.official_name || profile.full_name} has applied to write your assignment "${exam.subject || 'Assignment'}".`,
+            ? `${profile.official_name || profile.full_name} has been auto-confirmed as a scribe for your "${exam.subject || 'Exam'}" exam.`
+            : `${profile.official_name || profile.full_name} has been auto-confirmed to write your assignment "${exam.subject || 'Assignment'}".`,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+
+      // 5. Create a notification for the Scribe
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: profile.id,
+          title: 'Application Confirmed! 🎉',
+          message: `Your application to be a ${type === 'exam' ? 'scribe' : 'writer'} for "${exam.subject || 'Request'}" has been auto-approved!`,
           is_read: 0,
           created_at: new Date().toISOString()
         });
@@ -126,6 +182,73 @@ export default function ScribeApplyDetailsPage() {
     } catch (err: any) {
       Alert.alert('Application Failed', err.message || 'Failed to submit application.');
     } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAcceptInviteDirect = async () => {
+    if (!appId || !exam) return;
+    setSubmitting(true);
+    try {
+      const { error: appErr } = await supabase
+        .from('scribe_applications')
+        .update({ status: 'accepted' })
+        .eq('id', appId);
+
+      if (appErr) throw appErr;
+
+      const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+      const { error: reqErr } = await supabase
+        .from(table)
+        .update({ status: 'matched', scribe_id: profile.id })
+        .eq('id', exam.id);
+
+      if (reqErr) throw reqErr;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: exam.student_id,
+          title: type === 'assignment' ? '📝 Writer Match Confirmed' : '📅 Scribe Match Confirmed',
+          message: `${profile.official_name || profile.full_name} accepted your invitation for "${exam.subject || 'Request'}".`,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+
+      Alert.alert('Success', 'You have accepted this invitation.');
+      await fetchExamAndProfile();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to accept invitation.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRejectInviteDirect = async () => {
+    if (!appId || !exam) return;
+    setSubmitting(true);
+    try {
+      const { error: appErr } = await supabase
+        .from('scribe_applications')
+        .update({ status: 'rejected' })
+        .eq('id', appId);
+
+      if (appErr) throw appErr;
+
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: exam.student_id,
+          title: type === 'assignment' ? '📝 Invitation Declined' : '📅 Invitation Declined',
+          message: `${profile.official_name || profile.full_name} declined your invitation for "${exam.subject || 'Request'}".`,
+          is_read: 0,
+          created_at: new Date().toISOString()
+        });
+
+      Alert.alert('Declined', 'You have declined this invitation.');
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to decline invitation.');
       setSubmitting(false);
     }
   };
@@ -181,8 +304,12 @@ export default function ScribeApplyDetailsPage() {
                 {type === 'exam' ? exam.exam_type : `Level: ${exam.academic_level}`}
               </Text>
             </View>
-            <View className="py-1 px-3 rounded-full border bg-amber-50 border-amber-200">
-              <Text className="text-[10px] font-bold uppercase text-amber-700">{exam.status}</Text>
+            <View className={`py-1 px-3 rounded-full border ${
+              exam.status === 'matched' ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
+            }`}>
+              <Text className={`text-[10px] font-bold uppercase ${
+                exam.status === 'matched' ? 'text-emerald-700' : 'text-amber-700'
+              }`}>{exam.status}</Text>
             </View>
           </View>
  
@@ -277,13 +404,89 @@ export default function ScribeApplyDetailsPage() {
           ) : null}
  
         </View>
- 
-        {/* Action Button */}
-        {hasApplied ? (
-          <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
-            <Feather name="clock" size={16} color="#059669" className="mr-2" />
-            <Text className="text-emerald-800 text-xs font-bold">Application Pending Approval</Text>
+
+        {/* Attachments Section (Only for Assignments / if attachments exist) */}
+        {parsedAttachments.length > 0 ? (
+          <View className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-4">
+            <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Attachments</Text>
+            <View className="space-y-2.5">
+              {parsedAttachments.map((file, index) => {
+                const isPdf = file.mimeType.includes('pdf');
+                return (
+                  <View key={index} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex-row items-center justify-between">
+                    <View className="flex-row items-center flex-1 pr-2">
+                      <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3 border ${
+                        isPdf ? 'bg-red-50 border-red-100' : 'bg-purple-50 border-purple-100'
+                      }`}>
+                        <Feather name={isPdf ? 'file-text' : 'image'} size={18} color={isPdf ? '#ef4444' : '#7c3aed'} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-xs font-bold text-slate-850" numberOfLines={1}>{file.name}</Text>
+                        <Text className="text-[9px] text-slate-400 mt-0.5">{isPdf ? 'PDF Document' : 'Image File'}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity 
+                      onPress={() => setSelectedAttachment(file)}
+                      className="p-2 bg-slate-200/40 rounded-lg"
+                    >
+                      <Feather name="eye" size={14} color="#059669" />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
           </View>
+        ) : null}
+
+        {/* Action Button */}
+        {hasApplied || (exam && exam.scribe_id === (profile ? profile.id : '')) ? (
+          (() => {
+            if (appStatus === 'accepted' || (exam && exam.scribe_id === (profile ? profile.id : ''))) {
+              return (
+                <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
+                  <Feather name="check-circle" size={16} color="#059669" className="mr-2" />
+                  <Text className="text-emerald-800 text-xs font-bold">Assigned Scribe (Confirmed) 🎉</Text>
+                </View>
+              );
+            }
+            if (appStatus === 'invited') {
+              return (
+                <View className="bg-white border border-slate-150 p-4 rounded-3xl">
+                  <Text className="text-xs font-bold text-slate-500 text-center mb-3">You have been invited to this request by the student.</Text>
+                  <View className="flex-row gap-3">
+                    <TouchableOpacity
+                      onPress={handleAcceptInviteDirect}
+                      disabled={submitting}
+                      className="flex-1 bg-emerald-500 active:bg-emerald-600 py-3 rounded-2xl items-center justify-center shadow-md shadow-emerald-500/10"
+                    >
+                      {submitting ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Text className="text-white font-bold text-xs">Accept Invite</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleRejectInviteDirect}
+                      disabled={submitting}
+                      className="flex-1 bg-rose-500 active:bg-rose-600 py-3 rounded-2xl items-center justify-center shadow-md shadow-rose-500/10"
+                    >
+                      {submitting ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Text className="text-white font-bold text-xs">Decline</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
+            return (
+              <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
+                <Feather name="clock" size={16} color="#059669" className="mr-2" />
+                <Text className="text-emerald-800 text-xs font-bold">Application Pending Approval</Text>
+              </View>
+            );
+          })()
         ) : (
           <TouchableOpacity
             onPress={handleApply}
@@ -300,7 +503,7 @@ export default function ScribeApplyDetailsPage() {
           </TouchableOpacity>
         )}
       </ScrollView>
- 
+
       {/* 100% APPLICATION SUCCESS OVERLAY */}
       {showSuccessOverlay && (
         <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
@@ -323,7 +526,63 @@ export default function ScribeApplyDetailsPage() {
           </View>
         </View>
       )}
- 
+
+      {/* Attachment Preview Modal */}
+      <Modal
+        visible={!!selectedAttachment}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedAttachment(null)}
+      >
+        <View className="flex-1 bg-slate-950/95 justify-between">
+          {/* Header */}
+          <SafeAreaView className="bg-slate-900 px-6 py-4 flex-row items-center justify-between border-b border-slate-800">
+            <Text className="text-sm font-bold text-white flex-1 mr-4" numberOfLines={1}>
+              {selectedAttachment?.name || 'Attachment Preview'}
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setSelectedAttachment(null)}
+              className="p-2 rounded-lg bg-slate-800"
+            >
+              <Feather name="x" size={16} color="white" />
+            </TouchableOpacity>
+          </SafeAreaView>
+
+          {/* Body */}
+          <View className="flex-1 items-center justify-center p-6">
+            {selectedAttachment?.mimeType.includes('pdf') ? (
+              <View className="items-center bg-slate-900 p-8 rounded-3xl border border-slate-800">
+                <Feather name="file-text" size={64} color="#ef4444" className="mb-4" />
+                <Text className="text-base font-bold text-white text-center">PDF Document</Text>
+                <Text className="text-xs text-slate-400 text-center mt-2 max-w-[240px]">
+                  PDF documents are securely stored inside the application database.
+                </Text>
+              </View>
+            ) : (
+              selectedAttachment?.uri ? (
+                <Image 
+                  source={{ uri: selectedAttachment.uri }} 
+                  style={{ width: '100%', height: '85%' }}
+                  resizeMode="contain" 
+                />
+              ) : (
+                <Text className="text-slate-400 text-sm">Unable to load preview</Text>
+              )
+            )}
+          </View>
+
+          {/* Footer */}
+          <SafeAreaView className="bg-slate-900 p-4 border-t border-slate-800">
+            <TouchableOpacity 
+              onPress={() => setSelectedAttachment(null)}
+              className="w-full bg-emerald-500 py-3 rounded-xl items-center justify-center"
+            >
+              <Text className="text-white font-bold text-xs">Close Preview</Text>
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }

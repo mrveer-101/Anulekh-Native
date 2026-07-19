@@ -26,6 +26,7 @@ interface EnrichedApplication extends Application {
     education_grade: string;
     phone?: string;
     status?: string;
+    is_emergency?: string;
   };
 }
 
@@ -297,179 +298,222 @@ export default function ScribeCommitmentsView() {
 
     const review = reviews.find(r => r.request_id === app.request_id);
     const isExpanded = expandedIds.includes(app.id);
+    const isEmergency = exam.is_emergency === 'yes';
 
     return (
-      <View key={app.id} style={{ backgroundColor: '#f8fafc', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', borderLeftWidth: 6, borderLeftColor: badgeText, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 14 }}>
-        {/* Header row (tappable to expand/collapse) */}
+      <View 
+        key={app.id} 
+        style={{ 
+          backgroundColor: '#ffffff', 
+          borderRadius: 20, 
+          borderWidth: isEmergency ? 2 : 1.5, 
+          borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
+          shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+          shadowOffset: { width: 0, height: 6 }, 
+          shadowOpacity: isEmergency ? 0.12 : 0.07, 
+          shadowRadius: 16, 
+          elevation: 3, 
+          marginBottom: 10,
+          overflow: 'hidden'
+        }}
+      >
+        {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
-          activeOpacity={0.7}
           onPress={() => toggleExpanded(app.id)}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row', alignItems: 'center',
+            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+          }}
         >
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
+          {/* Subject icon */}
+          <View style={{
+            width: 38, height: 38, borderRadius: 11,
+            backgroundColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.08)',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: isEmergency ? '#fca5a5' : 'rgba(37,99,235,0.18)',
+          }}>
+            <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
+              color={isEmergency ? '#dc2626' : '#2563eb'} />
           </View>
-          <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: badgeBg, borderWidth: 1, borderColor: badgeBorder }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: badgeText }}>{statusLabel}</Text>
+
+          {/* Subject Name */}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
+              {exam.subject || 'Exam'}
+            </Text>
           </View>
-          <View style={{ marginLeft: 10, width: 26, height: 26, borderRadius: 13, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+
+          {/* Status pill */}
+          <View style={{ 
+            backgroundColor: badgeBg, borderWidth: 1, borderColor: badgeBorder, 
+            paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20, marginRight: 4
+          }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: badgeText }}>
+              {statusLabel}
+            </Text>
           </View>
+
+          {/* Chevron */}
+          <Feather
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16} color="#64748b"
+          />
         </TouchableOpacity>
 
-        {/* Collapsed summary line (only when NOT expanded) */}
-        {!isExpanded && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 }}>
-            <Feather name="calendar" size={11} color="#94a3b8" />
-            <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, flexShrink: 1 }} numberOfLines={1}>
-              {exam.exam_date || t('date_not_specified')}
-              {exam.exam_venue ? `  •  ${exam.exam_venue}` : ''}
-            </Text>
-          </View>
-        )}
-
-        {/* Detailed view (only when expanded) */}
+        {/* ── Expanded Detail Panel ── */}
         {isExpanded && (
-        <>
-        <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginTop: 12, marginBottom: 12, gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="user" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('candidate_student')}: <Text style={{ fontFamily: 'Roboto', fontWeight: '700', color: '#0f172a' }}>{exam.student_name} ({exam.education_grade})</Text>
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="calendar" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('exam_date')}: {exam.exam_date || t('date_not_specified')}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="map-pin" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-              {t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              {t('exam_language')}: {exam.exam_language}
-            </Text>
-          </View>
-        </View>
+          <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
+            <View style={{ gap: 6 }}>
+              {/* 1. Level of exam */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Level: {exam.exam_type}
+                </Text>
+              </View>
 
-        {/* If Confirmed, render Chat, Call, and Declaration Buttons */}
-        {type === 'confirmed' && (
-          <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {/* Call */}
-              {app.type !== 'assignment' && (
-                <TouchableOpacity 
-                  onPress={() => openCallSheet(exam)}
-                  style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                >
-                  <Feather name="phone" size={12} color="#334155" />
-                  <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                </TouchableOpacity>
-              )}
+              {/* 2. Date and time */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
+                  Date & Time: {exam.exam_date || t('date_not_specified')}
+                </Text>
+              </View>
 
-              {/* Chat */}
-              <TouchableOpacity 
-                onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
-                style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-              >
-                <Feather name="message-square" size={12} color="#334155" />
-                <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-              </TouchableOpacity>
+              {/* 3. Location */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                  Location: {exam.exam_venue || t('venue_not_specified')}
+                </Text>
+              </View>
+
+              {/* 4. Student profile */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="user" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
+                  Student: {exam.student_name} ({exam.education_grade})
+                </Text>
+              </View>
+
+              {/* 5. Language */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="globe" size={12} color="#64748b" style={{ width: 14 }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
+                  Language: {exam.exam_language}
+                </Text>
+              </View>
             </View>
 
-            {/* View Declaration */}
-            {app.type !== 'assignment' && (
-              <TouchableOpacity 
-                onPress={() => {
-                  setSelectedExam(exam);
-                  setIsDeclarationOpen(true);
-                }}
-                style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
-              >
-                <Feather name="file-text" size={12} color="white" />
-                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-              </TouchableOpacity>
+            {/* If Confirmed, render Chat, Call, and Declaration Buttons */}
+            {type === 'confirmed' && (
+              <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {/* Call */}
+                  {app.type !== 'assignment' && (
+                    <TouchableOpacity 
+                      onPress={() => openCallSheet(exam)}
+                      style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    >
+                      <Feather name="phone" size={12} color="#334155" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Chat */}
+                  <TouchableOpacity 
+                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
+                    style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                  >
+                    <Feather name="message-square" size={12} color="#334155" />
+                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* View Declaration */}
+                {app.type !== 'assignment' && (
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setSelectedExam(exam);
+                      setIsDeclarationOpen(true);
+                    }}
+                    style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 11, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
+                  >
+                    <Feather name="file-text" size={12} color="white" />
+                    <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            {/* If Completed and Review exists, render Star Feedback */}
+            {type === 'completed' && review && (
+              <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Ratings</Text>
+                
+                <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Punctuality:</Text>
+                    <StarDisplay rating={review.rating_punctuality} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Communication:</Text>
+                    <StarDisplay rating={review.rating_communication} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Writing Speed:</Text>
+                    <StarDisplay rating={review.rating_speed} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Politeness & Behavior:</Text>
+                    <StarDisplay rating={review.rating_behavior} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, marginTop: 2 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>Overall Rating:</Text>
+                    <StarDisplay rating={review.rating_overall} />
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Scribe's Feedback for Student (Rate Student) */}
+            {type === 'completed' && (
+              <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
+                {(() => {
+                  const studentReview = studentReviews.find(r => r.request_id === app.request_id);
+                  if (studentReview) {
+                    return (
+                      <View style={{ gap: 4 }}>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Rating for Student</Text>
+                        <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', fontWeight: '700' }}>Overall Rating:</Text>
+                            <StarDisplay rating={studentReview.rating_overall} />
+                          </View>
+                          {studentReview.remark ? (
+                            <View style={{ borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, marginTop: 2 }}>
+                              <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>"{studentReview.remark}"</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity 
+                      onPress={() => openRatingModal(app)}
+                      style={{ width: '100%', backgroundColor: 'rgba(234,88,12,0.08)', borderWidth: 1, borderColor: 'rgba(234,88,12,0.22)', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    >
+                      <Feather name="star" size={12} color="#ea580c" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#ea580c', fontWeight: '800', fontSize: 12 }}>Rate Candidate Student</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
+              </View>
             )}
           </View>
-        )}
-
-        {/* If Completed and Review exists, render Star Feedback */}
-        {type === 'completed' && review && (
-          <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Ratings</Text>
-            
-            <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Punctuality:</Text>
-                <StarDisplay rating={review.rating_punctuality} />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Communication:</Text>
-                <StarDisplay rating={review.rating_communication} />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Writing Speed:</Text>
-                <StarDisplay rating={review.rating_speed} />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Politeness & Behavior:</Text>
-                <StarDisplay rating={review.rating_behavior} />
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, marginTop: 2 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>Overall Rating:</Text>
-                <StarDisplay rating={review.rating_overall} />
-              </View>
-              {/* Review privacy: the student's written remark is intentionally NOT shown to
-                  the scribe. Scribes see numerical ratings only; remarks stay in the
-                  candidate's dashboard. */}
-            </View>
-          </View>
-        )}
-
-        {/* Scribe's Feedback for Student (Rate Student) */}
-        {type === 'completed' && (
-          <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
-            {(() => {
-              const studentReview = studentReviews.find(r => r.request_id === app.request_id);
-              if (studentReview) {
-                return (
-                  <View style={{ gap: 4 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Rating for Student</Text>
-                    <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', fontWeight: '700' }}>Overall Rating:</Text>
-                        <StarDisplay rating={studentReview.rating_overall} />
-                      </View>
-                      {studentReview.remark ? (
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontStyle: 'italic', marginTop: 2 }}>
-                          "{studentReview.remark}"
-                        </Text>
-                      ) : null}
-                    </View>
-                  </View>
-                );
-              } else {
-                return (
-                  <TouchableOpacity
-                    onPress={() => openRatingModal(app)}
-                    style={{ width: '100%', backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="edit-3" size={12} color="#2563eb" style={{ marginRight: 4 }} />
-                    <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>Rate Student</Text>
-                  </TouchableOpacity>
-                );
-              }
-            })()}
-          </View>
-        )}
-        </>
         )}
       </View>
     );
