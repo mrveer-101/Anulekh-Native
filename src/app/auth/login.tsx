@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -25,6 +26,83 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]         = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Forgot password modal state
+  const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPass, setForgotNewPass] = useState('');
+  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
+  const [forgotStep, setForgotStep] = useState(1); // 1 = Email, 2 = OTP + reset passwords
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [showForgotNewPass, setShowForgotNewPass] = useState(false);
+  const [showForgotConfirmPass, setShowForgotConfirmPass] = useState(false);
+
+  // Forgot Password Flow Handlers
+  const handleForgotSendOtp = async () => {
+    if (!forgotEmail.trim()) {
+      setForgotError('Please enter your registered email address.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiHost}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to send verification OTP.');
+      
+      setForgotStep(2);
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to send OTP. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleForgotResetPassword = async () => {
+    if (!forgotOtp.trim()) {
+      setForgotError('Verification code (OTP) is required.');
+      return;
+    }
+    if (forgotNewPass.length < 6) {
+      setForgotError('New Password must be at least 6 characters.');
+      return;
+    }
+    if (forgotNewPass !== forgotConfirmPass) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const res = await fetch(`${apiHost}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: forgotEmail.trim(),
+          otp: forgotOtp.trim(),
+          new_password: forgotNewPass,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to reset password.');
+
+      Alert.alert('Success', 'Your password has been reset successfully! Please log in.');
+      setForgotModalVisible(false);
+    } catch (err: any) {
+      setForgotError(err.message || 'Failed to reset password. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   const accentColor  = '#2563eb';
   const accentBg     = 'rgba(37,99,235,0.08)';
@@ -220,7 +298,18 @@ export default function LoginScreen() {
               </View>
 
               {/* Forgot */}
-              <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: -6 }}>
+              <TouchableOpacity 
+                onPress={() => {
+                  setForgotEmail('');
+                  setForgotOtp('');
+                  setForgotNewPass('');
+                  setForgotConfirmPass('');
+                  setForgotStep(1);
+                  setForgotError('');
+                  setForgotModalVisible(true);
+                }}
+                style={{ alignSelf: 'flex-end', marginTop: -6 }}
+              >
                 <Text style={{ color: accentColor, fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
@@ -311,6 +400,207 @@ export default function LoginScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={forgotModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setForgotModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
+          <View style={{
+            backgroundColor: '#ffffff',
+            borderRadius: 28,
+            padding: 24,
+            borderWidth: 1.5,
+            borderColor: '#e2e8f0',
+            shadowColor: '#64748b',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.12,
+            shadowRadius: 20,
+            elevation: 8,
+          }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>
+                {forgotStep === 1 ? 'Reset Password' : 'Set New Password'}
+              </Text>
+              <TouchableOpacity onPress={() => setForgotModalVisible(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Error Message */}
+            {forgotError ? (
+              <View style={{
+                backgroundColor: 'rgba(239,68,68,0.05)',
+                borderWidth: 1, borderColor: 'rgba(239,68,68,0.18)',
+                borderRadius: 14, padding: 12, marginBottom: 16,
+                flexDirection: 'row', alignItems: 'center', gap: 8,
+              }}>
+                <Feather name="alert-circle" size={14} color="#dc2626" />
+                <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '600', flex: 1 }}>{forgotError}</Text>
+              </View>
+            ) : null}
+
+            {forgotStep === 1 ? (
+              <View style={{ gap: 16 }}>
+                <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
+                  Enter your registered email address below. We'll send you a 6-digit OTP code to verify your identity.
+                </Text>
+                
+                <View>
+                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                    Email Address
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
+                      placeholder="email@example.com"
+                      placeholderTextColor="#94a3b8"
+                      value={forgotEmail}
+                      onChangeText={setForgotEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleForgotSendOtp}
+                  disabled={forgotLoading}
+                  style={{
+                    backgroundColor: '#2563eb',
+                    borderRadius: 16, paddingVertical: 14,
+                    alignItems: 'center', justifyContent: 'center',
+                    shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
+                    marginTop: 8
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Send OTP</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ gap: 14 }}>
+                <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
+                  We have sent an email with a 6-digit verification code to <Text style={{ fontWeight: '700', color: '#0f172a' }}>{forgotEmail}</Text>.
+                </Text>
+
+                <View>
+                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                    Verification Code (OTP)
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="key" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
+                      placeholder="Enter 6-digit code"
+                      placeholderTextColor="#94a3b8"
+                      value={forgotOtp}
+                      onChangeText={setForgotOtp}
+                      keyboardType="number-pad"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                    New Password
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
+                      placeholder="Minimum 6 characters"
+                      placeholderTextColor="#94a3b8"
+                      value={forgotNewPass}
+                      onChangeText={setForgotNewPass}
+                      secureTextEntry={!showForgotNewPass}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity onPress={() => setShowForgotNewPass(v => !v)} style={{ padding: 4 }}>
+                      <Feather name={showForgotNewPass ? 'eye-off' : 'eye'} size={15} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
+                    Confirm Password
+                  </Text>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
+                      placeholder="Confirm new password"
+                      placeholderTextColor="#94a3b8"
+                      value={forgotConfirmPass}
+                      onChangeText={setForgotConfirmPass}
+                      secureTextEntry={!showForgotConfirmPass}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity onPress={() => setShowForgotConfirmPass(v => !v)} style={{ padding: 4 }}>
+                      <Feather name={showForgotConfirmPass ? 'eye-off' : 'eye'} size={15} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  onPress={handleForgotResetPassword}
+                  disabled={forgotLoading}
+                  style={{
+                    backgroundColor: '#2563eb',
+                    borderRadius: 16, paddingVertical: 14,
+                    alignItems: 'center', justifyContent: 'center',
+                    shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
+                    shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
+                    marginTop: 10
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Reset Password</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
