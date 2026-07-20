@@ -367,57 +367,57 @@ export default function ScribeHomeView() {
     }
   };
 
-  const handleApplyConfirmDirect = async (exam: any) => {
-    if (profile.verification_status !== 'approved') {
+  const handleApplyDirect = async (exam: any) => {
+    if (profile?.verification_status !== 'approved') {
       Alert.alert(
         'Verification Required',
-        'Your profile must be approved by an administrator before you can apply.'
+        'Your profile must be completed before you can apply.'
       );
       return;
     }
 
     setLoading(true);
     try {
-      // 1. Insert accepted application
+      // Check if already applied
+      const { data: existingApps } = await supabase
+        .from('scribe_applications')
+        .select('id')
+        .eq('request_id', exam.id)
+        .eq('scribe_id', profile.id)
+        .eq('type', 'exam');
+
+      if (existingApps && existingApps.length > 0) {
+        Alert.alert('Already Applied', 'You have already submitted an application for this exam request.');
+        setLoading(false);
+        return;
+      }
+
+      // 1. Insert pending application for manual student review
       await supabase
         .from('scribe_applications')
         .insert({
           request_id: exam.id,
           scribe_id: profile.id,
           scribe_name: profile.official_name || profile.full_name,
-          status: 'accepted',
+          status: 'pending',
           type: 'exam'
         });
 
-      // 2. Reject other applications
-      await supabase
-        .from('scribe_applications')
-        .update({ status: 'rejected' })
-        .eq('request_id', exam.id)
-        .eq('type', 'exam')
-        .neq('scribe_id', profile.id);
-
-      // 3. Update exam requests table to matched
-      await supabase
-        .from('exam_requests')
-        .update({ status: 'matched', scribe_id: profile.id })
-        .eq('id', exam.id);
-
-      // 4. Notify student
+      // 2. Notify student
       await supabase
         .from('notifications')
         .insert({
           user_id: exam.student_id,
-          title: 'Scribe Confirmed',
-          message: `${profile.official_name || profile.full_name} has confirmed to scribe for your "${exam.subject || 'Exam'}" exam.`,
+          title: 'New Scribe Application',
+          message: `${profile.official_name || profile.full_name} has applied to scribe for your "${exam.subject || 'Exam'}" exam.`,
           is_read: 0,
           created_at: new Date().toISOString()
         });
 
-      Alert.alert('Success', 'Exam request confirmed! It is now added to your plans.');
+      Alert.alert('Application Sent!', 'Your application has been sent to the student for manual review.');
       fetchSession();
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to confirm request.');
+      Alert.alert('Error', e.message || 'Failed to submit application.');
       setLoading(false);
     }
   };
@@ -1283,7 +1283,7 @@ export default function ScribeHomeView() {
                           if (exam.private_scribe_id) {
                             handleAcceptInviteDirect(exam);
                           } else {
-                            handleApplyConfirmDirect(exam);
+                            handleApplyDirect(exam);
                           }
                         } else {
                           Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
@@ -1302,14 +1302,14 @@ export default function ScribeHomeView() {
                         borderColor: 'rgba(5,150,105,0.22)'
                       }}
                     >
-                      <Feather name={exam.private_scribe_id ? "check-circle" : "check"} size={12} color={exam.private_scribe_id ? "#fff" : "#059669"} />
+                      <Feather name={exam.private_scribe_id ? "check-circle" : "file-text"} size={12} color={exam.private_scribe_id ? "#fff" : "#059669"} />
                       <Text style={{ 
                         fontFamily: 'Roboto', 
                         color: exam.private_scribe_id ? '#fff' : '#047857', 
                         fontWeight: '800', 
                         fontSize: 12 
                       }}>
-                        {exam.private_scribe_id ? 'Accept Invitation' : 'Apply & Confirm'}
+                        {exam.private_scribe_id ? 'Accept Invitation' : 'Apply as Scribe'}
                       </Text>
                     </TouchableOpacity>
                   </View>

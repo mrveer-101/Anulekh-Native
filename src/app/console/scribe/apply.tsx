@@ -107,7 +107,7 @@ export default function ScribeApplyDetailsPage() {
     if (profile.verification_status !== 'approved') {
       Alert.alert(
         'Verification Required',
-        'Your profile must be approved by an administrator before you can apply. Please complete your profile and wait for admin approval.'
+        'Your profile must be approved before you can apply. Please complete your profile.'
       );
       return;
     }
@@ -115,59 +115,28 @@ export default function ScribeApplyDetailsPage() {
     setSubmitting(true);
 
     try {
-      // 1. Insert this application as 'accepted'
+      // Insert application as 'pending' for manual student approval
       const { error: insertError } = await supabase
         .from('scribe_applications')
         .insert({
           request_id: exam.id,
           scribe_id: profile.id,
           scribe_name: profile.official_name || profile.full_name,
-          status: 'accepted',
+          status: 'pending',
           type: type
         });
 
       if (insertError) throw insertError;
 
-      // 2. Update all other applications for this request to 'rejected'
-      await supabase
-        .from('scribe_applications')
-        .update({ status: 'rejected' })
-        .eq('request_id', exam.id)
-        .eq('type', type)
-        .neq('scribe_id', profile.id);
-
-      // 3. Update the request (exam or assignment) to 'matched' and assign the scribe_id
-      const table = type === 'exam' ? 'exam_requests' : 'assignment_requests';
-      const { error: updateError } = await supabase
-        .from(table)
-        .update({ 
-          status: 'matched',
-          scribe_id: profile.id
-        })
-        .eq('id', exam.id);
-
-      if (updateError) throw updateError;
-
-      // 4. Create a notification for the Student
+      // Create notification for the Student to manually review
       await supabase
         .from('notifications')
         .insert({
           user_id: exam.student_id,
-          title: type === 'exam' ? 'Scribe Confirmed' : 'Writer Confirmed',
+          title: type === 'exam' ? 'New Scribe Application' : 'New Writer Application',
           message: type === 'exam'
-            ? `${profile.official_name || profile.full_name} has been auto-confirmed as a scribe for your "${exam.subject || 'Exam'}" exam.`
-            : `${profile.official_name || profile.full_name} has been auto-confirmed to write your assignment "${exam.subject || 'Assignment'}".`,
-          is_read: 0,
-          created_at: new Date().toISOString()
-        });
-
-      // 5. Create a notification for the Scribe
-      await supabase
-        .from('notifications')
-        .insert({
-          user_id: profile.id,
-          title: 'Application Confirmed! 🎉',
-          message: `Your application to be a ${type === 'exam' ? 'scribe' : 'writer'} for "${exam.subject || 'Request'}" has been auto-approved!`,
+            ? `${profile.official_name || profile.full_name} has applied to be a scribe for your "${exam.subject || 'Exam'}" exam.`
+            : `${profile.official_name || profile.full_name} has applied to write your assignment "${exam.subject || 'Assignment'}".`,
           is_read: 0,
           created_at: new Date().toISOString()
         });

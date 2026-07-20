@@ -211,7 +211,7 @@ export default function CompleteProfileForm() {
           aadhar_image_proof: aadharImage,
           languages: selectedLanguages,
           availability_slots: availabilitySlots.join(', '),
-          verification_status: 'pending'
+          verification_status: 'approved'
         })
         .eq('id', session.user.id);
 
