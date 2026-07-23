@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../core/supabase';
 import { Feather } from '@expo/vector-icons';
+import PolicyModal from '@/components/PolicyModal';
 
 const { height } = Dimensions.get('window');
 
@@ -34,6 +35,8 @@ export default function RegisterScreen() {
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   const isStudent   = role === 'student';
   const accentColor = isStudent ? '#2563eb' : '#16a34a';
@@ -57,6 +60,10 @@ export default function RegisterScreen() {
     }
     if (password.length < 6) {
       setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+    if (!agreedToTerms) {
+      setErrorMessage(`Please agree to the ${isStudent ? 'Student' : 'Scribe'} Terms & Conditions to proceed.`);
       return;
     }
 
@@ -317,6 +324,41 @@ export default function RegisterScreen() {
               )}
             </View>
 
+            {/* Terms and Conditions Checkbox */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: 16,
+              paddingHorizontal: 4,
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  borderWidth: 2,
+                  borderColor: agreedToTerms ? accentColor : '#94a3b8',
+                  backgroundColor: agreedToTerms ? accentColor : '#ffffff',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {agreedToTerms && <Feather name="check" size={14} color="#ffffff" />}
+              </TouchableOpacity>
+              
+              <Text style={{ flex: 1, fontSize: 13, color: '#475569', lineHeight: 18 }}>
+                I agree to the{' '}
+                <Text
+                  onPress={() => setShowTermsModal(true)}
+                  style={{ color: accentColor, fontWeight: '800', textDecorationLine: 'underline' }}
+                >
+                  {isStudent ? 'Student Terms & Conditions' : 'Scribe Terms & Conditions'}
+                </Text>
+              </Text>
+            </View>
+
             {/* CTA */}
             <TouchableOpacity
               onPress={handleRegister}
@@ -531,6 +573,14 @@ export default function RegisterScreen() {
           </View>
         </View>
       )}
+
+      {/* Policy Terms Modal */}
+      <PolicyModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        type={isStudent ? 'student_terms' : 'scribe_terms'}
+        onAgree={() => setAgreedToTerms(true)}
+      />
     </View>
   );
 }

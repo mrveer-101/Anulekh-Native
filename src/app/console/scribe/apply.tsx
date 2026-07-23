@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
+import PolicyModal from '@/components/PolicyModal';
 
 export default function ScribeApplyDetailsPage() {
   const params = useLocalSearchParams<{ id: string; type?: string }>();
@@ -19,6 +20,8 @@ export default function ScribeApplyDetailsPage() {
   const [appId, setAppId] = useState<number | null>(null);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
+  const [agreedGuidelines, setAgreedGuidelines] = useState(false);
+  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
   const parsedAttachments = React.useMemo(() => {
     if (!exam || !exam.attachments || !Array.isArray(exam.attachments)) return [];
@@ -112,6 +115,14 @@ export default function ScribeApplyDetailsPage() {
       return;
     }
 
+    if (!agreedGuidelines) {
+      Alert.alert(
+        'Policy Agreement Required',
+        'Please agree to the Anulekh Scribe Guidelines & Code of Conduct before applying.'
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -157,6 +168,15 @@ export default function ScribeApplyDetailsPage() {
 
   const handleAcceptInviteDirect = async () => {
     if (!appId || !exam) return;
+
+    if (!agreedGuidelines) {
+      Alert.alert(
+        'Policy Agreement Required',
+        'Please agree to the Anulekh Scribe Guidelines & Code of Conduct before accepting this invitation.'
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error: appErr } = await supabase
@@ -407,6 +427,53 @@ export default function ScribeApplyDetailsPage() {
           </View>
         ) : null}
 
+        {/* Guidelines & Policy Agreement Checkbox */}
+        {!hasApplied && appStatus !== 'accepted' && (
+          <View style={{
+            backgroundColor: '#ffffff',
+            padding: 16,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: '#e2e8f0',
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            shadowColor: '#64748b',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.05,
+            shadowRadius: 10,
+            elevation: 2,
+          }}>
+            <TouchableOpacity
+              onPress={() => setAgreedGuidelines(!agreedGuidelines)}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: 6,
+                borderWidth: 2,
+                borderColor: agreedGuidelines ? '#16a34a' : '#94a3b8',
+                backgroundColor: agreedGuidelines ? '#16a34a' : '#ffffff',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {agreedGuidelines && <Feather name="check" size={14} color="#ffffff" />}
+            </TouchableOpacity>
+
+            <Text style={{ flex: 1, fontSize: 12, color: '#334155', lineHeight: 18 }}>
+              I agree to the{' '}
+              <Text
+                onPress={() => setShowGuidelinesModal(true)}
+                style={{ color: '#16a34a', fontWeight: '800', textDecorationLine: 'underline' }}
+              >
+                Anulekh Scribe Guidelines & Code of Conduct
+              </Text>{' '}
+              (Write only what is dictated, 0 money/gifts, stay on-platform).
+            </Text>
+          </View>
+        )}
+
         {/* Action Button */}
         {hasApplied || (exam && exam.scribe_id === (profile ? profile.id : '')) ? (
           (() => {
@@ -552,6 +619,13 @@ export default function ScribeApplyDetailsPage() {
         </View>
       </Modal>
 
+      {/* Guidelines Policy Modal */}
+      <PolicyModal
+        visible={showGuidelinesModal}
+        onClose={() => setShowGuidelinesModal(false)}
+        type="guidelines"
+        onAgree={() => setAgreedGuidelines(true)}
+      />
     </SafeAreaView>
   );
 }

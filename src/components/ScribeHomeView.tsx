@@ -4,6 +4,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
+import PolicyModal from '../components/PolicyModal';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -58,6 +59,9 @@ export default function ScribeHomeView() {
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
+  const [agreedGuidelines, setAgreedGuidelines] = useState(false);
+  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
+  const [pendingTargetAction, setPendingTargetAction] = useState<{ exam: any; isInvite: boolean } | null>(null);
 
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
@@ -493,7 +497,8 @@ export default function ScribeHomeView() {
   const GREEN_BD = 'rgba(5,150,105,0.22)';
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <>
+      <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Welcome & Profile Header Section */}
       <View style={{
         flexDirection: 'row',
@@ -1280,10 +1285,15 @@ export default function ScribeHomeView() {
                     <TouchableOpacity 
                       onPress={() => {
                         if (isVerified) {
-                          if (exam.private_scribe_id) {
-                            handleAcceptInviteDirect(exam);
+                          if (!agreedGuidelines) {
+                            setPendingTargetAction({ exam, isInvite: !!exam.private_scribe_id });
+                            setShowGuidelinesModal(true);
                           } else {
-                            handleApplyDirect(exam);
+                            if (exam.private_scribe_id) {
+                              handleAcceptInviteDirect(exam);
+                            } else {
+                              handleApplyDirect(exam);
+                            }
                           }
                         } else {
                           Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
@@ -1450,5 +1460,25 @@ export default function ScribeHomeView() {
       </Modal>
 
     </ScrollView>
+
+      {/* Guidelines Policy Modal */}
+      <PolicyModal
+        visible={showGuidelinesModal}
+        onClose={() => setShowGuidelinesModal(false)}
+        type="guidelines"
+        onAgree={() => {
+          setAgreedGuidelines(true);
+          if (pendingTargetAction) {
+            const { exam, isInvite } = pendingTargetAction;
+            setPendingTargetAction(null);
+            if (isInvite) {
+              handleAcceptInviteDirect(exam);
+            } else {
+              handleApplyDirect(exam);
+            }
+          }
+        }}
+      />
+    </>
   );
 }
