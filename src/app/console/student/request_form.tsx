@@ -566,7 +566,7 @@ export default function ScribeRequestForm() {
           {/* Request Assignment Block */}
           <View className="mb-8">
             <TouchableOpacity
-              onPress={() => Alert.alert("Coming Soon", "Assignment Request flow will be available soon.")}
+              onPress={() => router.push('/console/student/assignment_form' as any)}
               activeOpacity={0.85}
               className="w-full bg-indigo-500 rounded-2xl p-5 flex-row items-center shadow-md shadow-indigo-500/30"
             >

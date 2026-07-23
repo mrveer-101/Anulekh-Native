@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/app/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/app/core/translation';
@@ -54,6 +54,7 @@ export default function ScribeDashboard() {
   const [activeTab, setActiveTab]   = useState<Tab>('home');
   const [unreadNotifs, setUnread]   = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const welcomeOpacity = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => { fetchSession(); }, []);
@@ -84,6 +85,11 @@ export default function ScribeDashboard() {
       setProfile(profileData);
       fetchUnread(session.user.id);
 
+      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      if (localPhoto) {
+        setProfilePhoto(localPhoto);
+      }
+
       const shown = await AsyncStorage.getItem('scribe_welcome_shown');
       if (!shown) {
         setShowWelcome(true);
@@ -95,6 +101,16 @@ export default function ScribeDashboard() {
       setLoading(false);
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      if (profile?.id) {
+        AsyncStorage.getItem(`profile_photo_${profile.id}`).then((photo) => {
+          if (photo) setProfilePhoto(photo);
+        });
+      }
+    }, [profile?.id, activeTab])
+  );
 
   const fetchUnread = async (uid: string) => {
     const { data } = await supabase
@@ -134,24 +150,24 @@ export default function ScribeDashboard() {
 
       {/* ── HEADER ── */}
       <SafeAreaView edges={['top']} style={{
-        backgroundColor: SURFACE,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
+        backgroundColor: '#ffffff',
+        borderBottomLeftRadius: 24,
+        borderBottomRightRadius: 24,
+        shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
         zIndex: 10,
       }}>
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 20, paddingVertical: 12,
-          borderBottomWidth: 1, borderBottomColor: BORDER,
-          borderBottomLeftRadius: 20,
-          borderBottomRightRadius: 20,
+          paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
+          borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
+          borderBottomLeftRadius: 24,
+          borderBottomRightRadius: 24,
         }}>
-          {/* Logo */}
+          {/* Logo & Portal Tag */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{
-              width: 44, height: 44, borderRadius: 12,
+              width: 44, height: 44, borderRadius: 14,
               backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
               alignItems: 'center', justifyContent: 'center',
               overflow: 'hidden',
@@ -165,46 +181,53 @@ export default function ScribeDashboard() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
             <View style={{
               backgroundColor: ACCENT_BG, borderWidth: 1, borderColor: ACCENT_BD,
-              borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3,
+              borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
             }}>
               <Text style={{ fontFamily: 'Roboto', color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>SCRIBE</Text>
             </View>
           </View>
 
-          {/* Icons */}
+          {/* Right Action Icons */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
+              activeOpacity={0.75}
               style={{
-                width: 44, height: 44, borderRadius: 12,
-                backgroundColor: activeTab === 'notifications' ? ACCENT_BG : 'rgba(255,255,255,0.8)',
-                borderWidth: 1, borderColor: activeTab === 'notifications' ? ACCENT_BD : BORDER,
+                width: 44, height: 44, borderRadius: 15,
+                backgroundColor: activeTab === 'notifications' ? ACCENT_BG : 'rgba(248,250,252,0.9)',
+                borderWidth: 1, borderColor: activeTab === 'notifications' ? ACCENT_BD : 'rgba(226,232,240,0.8)',
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Ionicons name="notifications" size={20} color={activeTab === 'notifications' ? ACCENT : MUTED} />
+              <Ionicons name="notifications" size={21} color={activeTab === 'notifications' ? ACCENT : '#64748b'} />
               {unreadNotifs > 0 && (
                 <View style={{
                   position: 'absolute', top: 6, right: 6,
-                  width: 8, height: 8, borderRadius: 4,
-                  backgroundColor: '#f97316', borderWidth: 1.5, borderColor: '#fff',
+                  width: 9, height: 9, borderRadius: 4.5,
+                  backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: '#ffffff',
                 }} />
               )}
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={() => setActiveTab('settings')}
+              activeOpacity={0.8}
               style={{
                 width: 44, height: 44, borderRadius: 22,
                 backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
                 alignItems: 'center', justifyContent: 'center',
                 shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
+                shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
+                overflow: 'hidden',
               }}
             >
-              <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
-                {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
-              </Text>
+              {profilePhoto ? (
+                <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+              ) : (
+                <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
+                  {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -221,21 +244,23 @@ export default function ScribeDashboard() {
 
       {/* ── BOTTOM NAV — top corners rounded ── */}
       <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: SURFACE,
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
+        backgroundColor: '#ffffff',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        shadowColor: '#0f172a', shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
       }}>
         <View style={{
           flexDirection: 'row',
-          paddingVertical: 8,
-          paddingHorizontal: 8,
-          gap: 4,
+          alignItems: 'center',
+          paddingTop: 12,
+          paddingBottom: 12,
+          paddingHorizontal: 16,
+          gap: 6,
           borderTopWidth: 1,
-          borderTopColor: BORDER,
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
+          borderTopColor: 'rgba(0,0,0,0.05)',
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
         }}>
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
@@ -247,26 +272,29 @@ export default function ScribeDashboard() {
               <TouchableOpacity
                 key={tab.id}
                 onPress={() => setActiveTab(tab.id)}
+                activeOpacity={0.7}
                 style={{
-                  flex: 1, alignItems: 'center', paddingVertical: 9,
-                  borderRadius: 20,
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 9,
+                  paddingHorizontal: 4,
+                  borderRadius: 18,
                   backgroundColor: active ? ACCENT_BG : 'transparent',
+                  borderWidth: 1,
+                  borderColor: active ? ACCENT_BD : 'transparent',
                 }}
               >
                 <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? ACCENT : '#94a3b8'} />
                 <Text style={{
                   fontFamily: 'Roboto',
-                  fontSize: 11, fontWeight: active ? '800' : '600',
-                  marginTop: 3, color: active ? ACCENT : '#94a3b8',
+                  fontSize: 11.5,
+                  fontWeight: active ? '800' : '600',
+                  marginTop: 3,
+                  color: active ? ACCENT : '#64748b',
                 }}>
                   {translatedLabel}
                 </Text>
-                {active && (
-                  <View style={{
-                    position: 'absolute', bottom: 2,
-                    width: 4, height: 4, borderRadius: 2, backgroundColor: ACCENT,
-                  }} />
-                )}
               </TouchableOpacity>
             );
           })}

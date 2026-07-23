@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 import { hoursUntilExam } from '../app/core/examDate';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -31,6 +32,7 @@ export default function StudentHomeView() {
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,6 +45,11 @@ export default function StudentHomeView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       setUser(session.user);
+
+      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      if (localPhoto) {
+        setProfilePhoto(localPhoto);
+      }
 
       // 1. Fetch Profile
       const { data: profileData } = await supabase
@@ -278,7 +285,10 @@ export default function StudentHomeView() {
           <View style={{
             width: 48,
             height: 48,
-            borderRadius: 24,
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 10,
+            borderBottomLeftRadius: 14,
+            borderBottomRightRadius: 22,
             backgroundColor: BLUE_BG_LIGHT,
             borderWidth: 2,
             borderColor: 'rgba(37,99,235,0.18)',
@@ -290,9 +300,7 @@ export default function StudentHomeView() {
             shadowRadius: 8,
             elevation: 3,
           }}>
-            <Text style={{ fontFamily: 'Roboto', color: BLUE, fontWeight: '900', fontSize: 18 }}>
-              {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
-            </Text>
+            <Feather name="award" size={22} color={BLUE} />
           </View>
           {isVerified && (
             <View style={{

@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 import PolicyModal from '../components/PolicyModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -62,6 +63,7 @@ export default function ScribeHomeView() {
   const [agreedGuidelines, setAgreedGuidelines] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [pendingTargetAction, setPendingTargetAction] = useState<{ exam: any; isInvite: boolean } | null>(null);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
@@ -96,6 +98,11 @@ export default function ScribeHomeView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       setUser(session.user);
+
+      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      if (localPhoto) {
+        setProfilePhoto(localPhoto);
+      }
 
       // 1. Fetch Profile
       const { data: profileData } = await supabase
@@ -533,10 +540,13 @@ export default function ScribeHomeView() {
           <View style={{
             width: 48,
             height: 48,
-            borderRadius: 24,
-            backgroundColor: 'rgba(16,185,129,0.08)',
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 10,
+            borderBottomLeftRadius: 14,
+            borderBottomRightRadius: 22,
+            backgroundColor: 'rgba(16,185,129,0.12)',
             borderWidth: 2,
-            borderColor: 'rgba(16,185,129,0.18)',
+            borderColor: 'rgba(16,185,129,0.25)',
             alignItems: 'center',
             justifyContent: 'center',
             shadowColor: '#10b981',
@@ -545,9 +555,7 @@ export default function ScribeHomeView() {
             shadowRadius: 8,
             elevation: 3,
           }}>
-            <Text style={{ fontFamily: 'Roboto', color: '#10b981', fontWeight: '900', fontSize: 18 }}>
-              {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
-            </Text>
+            <Feather name="edit-3" size={22} color="#059669" />
           </View>
           {isVerified && (
             <View style={{

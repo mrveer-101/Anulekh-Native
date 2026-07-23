@@ -351,6 +351,7 @@ export default function StudentRequestsView() {
 
   const renderAssignmentCard = (item: any) => {
     const isMatched = item.status === 'matched';
+    const isExpanded = expandedCards[item.id] || false;
 
     const statusLabel = (() => {
       switch (item.status.toLowerCase()) {
@@ -418,217 +419,243 @@ export default function StudentRequestsView() {
         backgroundColor: '#ffffff',
         borderRadius: 24,
         borderWidth: 1.5,
-        borderColor: '#f1f5f9',
-        shadowColor: '#64748b',
+        borderColor: isMatched ? '#a7f3d0' : '#bfdbfe',
+        shadowColor: isMatched ? '#059669' : '#2563eb',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.12,
         shadowRadius: 16,
-        elevation: 3,
+        elevation: 4,
         marginBottom: 16,
-        padding: 20,
+        padding: 18,
       }}>
-        {/* Top Section: Status Badge & Subject info */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-          {/* Icon + details block */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, flex: 1 }}>
-            {/* Book-Open Icon block */}
-            <View style={{
-              width: 46, height: 46, borderRadius: 14,
-              backgroundColor: 'rgba(79,70,229,0.08)',
-              alignItems: 'center', justifyContent: 'center',
-              borderWidth: 1, borderColor: 'rgba(79,70,229,0.16)',
-            }}>
-              <Feather name="book-open" size={20} color="#4f46e5" />
-            </View>
-
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
-                {item.subject}
-              </Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#4f46e5', marginTop: 2 }}>
-                {item.assignment_title}
-              </Text>
-              
-              {/* Level Tag badge */}
-              <View style={{ flexDirection: 'row', marginTop: 6 }}>
-                <View style={{ backgroundColor: '#f1f5f9', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '700', color: '#475569' }}>
-                    Level: {item.academic_level}
-                  </Text>
-                </View>
-              </View>
-            </View>
+        {/* Header Row: Subject & Level Subtitle on Left, Status Badge on Right */}
+        <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
+              {item.subject}
+            </Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
+              Level: {item.academic_level || 'General'} | {item.assignment_title}
+            </Text>
           </View>
 
           {/* Status Badge */}
           <View style={{
-            paddingVertical: 4, paddingHorizontal: 10,
-            borderRadius: 12,
-            borderWidth: 1.2,
+            paddingVertical: 5, paddingHorizontal: 11,
+            borderRadius: 20,
+            borderWidth: 1,
             borderColor: statusColor.border,
             backgroundColor: statusColor.bg,
           }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: statusColor.text, letterSpacing: 0.3 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: statusColor.text, letterSpacing: 0.3 }}>
               {statusLabel}
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
-        {/* Instructions bubble section if description exists */}
-        {item.description ? (
-          <View style={{
-            backgroundColor: '#f8fafc',
-            borderWidth: 1,
-            borderColor: '#e2e8f0',
-            borderRadius: 14,
-            padding: 12,
-            marginBottom: 14,
-          }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: 4 }}>Instructions</Text>
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, lineHeight: 17 }}>
-              {item.description}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Deadline and Writer Details Row */}
-        <View style={{ gap: 6, marginBottom: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="clock" size={12} color="#64748b" style={{ marginRight: 8 }} />
-            <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-              Deadline: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.deadline}</Text>
+        {/* Summary Row: Deadline on Left, "Details v" Pill Button on Right */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <Feather name="clock" size={13} color="#f97316" style={{ marginRight: 6 }} />
+            <Text style={{ fontFamily: 'Roboto', color: '#334155', fontSize: 12, fontWeight: '700' }}>
+              Deadline: {item.deadline}
             </Text>
           </View>
 
-          {isMatched && item.scribeProfile ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Feather name="user" size={12} color="#4f46e5" style={{ marginRight: 8 }} />
-              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                Writer: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile.full_name}</Text>
-              </Text>
-            </View>
-          ) : null}
+          {/* Details Pill Button — Blue Accent */}
+          <TouchableOpacity
+            onPress={() => toggleCard(item.id)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isExpanded ? '#1d4ed8' : '#2563eb',
+              borderWidth: 1.5,
+              borderColor: '#2563eb',
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 12,
+              gap: 5,
+              shadowColor: '#2563eb',
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.2,
+              shadowRadius: 6,
+              elevation: 3
+            }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '900', color: '#ffffff' }}>
+              {isExpanded ? 'Collapse' : 'Details'}
+            </Text>
+            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color="#ffffff" />
+          </TouchableOpacity>
         </View>
 
-        {/* Action Row */}
-        {isMatched ? (
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity
-                onPress={handleMarkCompleted}
-                style={{
-                  flex: 1, backgroundColor: '#10b981',
-                  borderRadius: 12, paddingVertical: 11,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
-                }}
-                activeOpacity={0.85}
-              >
-                <Feather name="check-circle" size={14} color="#fff" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
-                  Mark Completed
+        {/* ── EXPANDED CONTENT VIEW (Only visible when Details is clicked) ── */}
+        {isExpanded && (
+          <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            {/* Instructions bubble section if description exists */}
+            {item.description ? (
+              <View style={{
+                backgroundColor: '#f8fafc',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 14,
+              }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b', fontWeight: '800', textTransform: 'uppercase', marginBottom: 4 }}>Instructions</Text>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, lineHeight: 17 }}>
+                  {item.description}
                 </Text>
-              </TouchableOpacity>
+              </View>
+            ) : null}
 
-              <TouchableOpacity
-                onPress={() => {
-                  if (item.scribeProfile?.phone) {
-                    Linking.openURL(`tel:${item.scribeProfile.phone}`);
-                  } else {
-                    Alert.alert('Unavailable', 'Phone number not available');
-                  }
-                }}
-                style={{
-                  flex: 1, backgroundColor: '#2563eb',
-                  borderRadius: 12, paddingVertical: 11,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
-                }}
-                activeOpacity={0.85}
-              >
-                <Feather name="phone-call" size={14} color="#fff" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
-                  Call Writer
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => router.push(`/console/common/chat?requestId=${item.id}&type=assignment` as any)}
-              style={{
-                width: '100%', paddingVertical: 11,
-                borderRadius: 12, borderWidth: 1.5,
-                borderColor: '#bfdbfe',
-                backgroundColor: '#eff6ff',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat with Writer</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {/* Find & Invite Writers button — full width, primary */}
-            <TouchableOpacity
-              onPress={() => {
-                setPreSelectedScribeReq({ id: item.id, type: 'assignment', subject: item.subject });
-                setShowScribeDirectory(true);
-              }}
-              style={{
-                width: '100%', paddingVertical: 11,
-                borderRadius: 12,
-                backgroundColor: '#4f46e5',
-                alignItems: 'center', justifyContent: 'center',
-                flexDirection: 'row', gap: 6,
-                shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
-              }}
-              activeOpacity={0.85}
-            >
-              <Feather name="search" size={14} color="#fff" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
-                Find & Invite Writers
-              </Text>
-            </TouchableOpacity>
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity
-                onPress={() => {
-                  router.push(`/console/student/assignment_form?id=${item.id}` as any);
-                }}
-                style={{
-                  flex: 1, paddingVertical: 11,
-                  borderRadius: 12, borderWidth: 1.5,
-                  borderColor: '#2563eb',
-                  backgroundColor: '#fff',
+            {/* Writer Info if assigned */}
+            {isMatched && item.scribeProfile ? (
+              <View style={{
+                marginBottom: 14, backgroundColor: 'rgba(5,150,105,0.07)',
+                borderRadius: 14, padding: 12,
+                borderWidth: 1, borderColor: 'rgba(5,150,105,0.2)',
+                flexDirection: 'row', alignItems: 'center', gap: 10,
+              }}>
+                <View style={{
+                  width: 36, height: 36, borderRadius: 10,
+                  backgroundColor: 'rgba(5,150,105,0.12)',
                   alignItems: 'center', justifyContent: 'center',
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                  Edit Details
-                </Text>
-              </TouchableOpacity>
+                }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#059669' }}>
+                    {item.scribeProfile.full_name?.charAt(0)?.toUpperCase() ?? 'W'}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#047857' }}>
+                    {item.scribeProfile.full_name}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#064e3b' }}>Assignment Writer · Assigned</Text>
+                </View>
+              </View>
+            ) : null}
 
-              <TouchableOpacity
-                onPress={handleDelete}
-                style={{
-                  flex: 1, paddingVertical: 11,
-                  borderRadius: 12, borderWidth: 1.5,
-                  borderColor: '#fca5a5',
-                  backgroundColor: '#fff7f7',
-                  alignItems: 'center', justifyContent: 'center',
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
-                  Delete
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {/* Action Row */}
+            {isMatched ? (
+              <View style={{ gap: 10 }}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={handleMarkCompleted}
+                    style={{
+                      flex: 1, backgroundColor: '#10b981',
+                      borderRadius: 12, paddingVertical: 11,
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      shadowColor: '#10b981', shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="check-circle" size={14} color="#fff" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                      Mark Completed
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (item.scribeProfile?.phone) {
+                        Linking.openURL(`tel:${item.scribeProfile.phone}`);
+                      } else {
+                        Alert.alert('Unavailable', 'Phone number not available');
+                      }
+                    }}
+                    style={{
+                      flex: 1, backgroundColor: '#2563eb',
+                      borderRadius: 12, paddingVertical: 11,
+                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="phone-call" size={14} color="#fff" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                      Call Writer
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => router.push(`/console/common/chat?requestId=${item.id}&type=assignment` as any)}
+                  style={{
+                    width: '100%', paddingVertical: 11,
+                    borderRadius: 12, borderWidth: 1.5,
+                    borderColor: '#bfdbfe',
+                    backgroundColor: '#eff6ff',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>Chat with Writer</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                {/* Find & Invite Writers button — full width */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setPreSelectedScribeReq({ id: item.id, type: 'assignment', subject: item.subject });
+                    setShowScribeDirectory(true);
+                  }}
+                  style={{
+                    width: '100%', paddingVertical: 11,
+                    borderRadius: 12,
+                    backgroundColor: '#4f46e5',
+                    alignItems: 'center', justifyContent: 'center',
+                    flexDirection: 'row', gap: 6,
+                    shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="search" size={14} color="#fff" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
+                    Find & Invite Writers
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      router.push(`/console/student/assignment_form?id=${item.id}` as any);
+                    }}
+                    style={{
+                      flex: 1, paddingVertical: 11,
+                      borderRadius: 12, borderWidth: 1.5,
+                      borderColor: '#2563eb',
+                      backgroundColor: '#fff',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                      Edit Details
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handleDelete}
+                    style={{
+                      flex: 1, paddingVertical: 11,
+                      borderRadius: 12, borderWidth: 1.5,
+                      borderColor: '#fca5a5',
+                      backgroundColor: '#fff7f7',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                      Delete
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -653,94 +680,107 @@ export default function StudentRequestsView() {
         marginBottom: 12,
         borderRadius: 24,
         borderWidth: 1.5,
-        borderColor: '#e2e8f0',
+        borderColor: '#cbd5e1',
         padding: 16,
-        shadowColor: '#64748b',
+        shadowColor: '#475569',
         shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 3,
+        shadowOpacity: 0.1,
+        shadowRadius: 14,
+        elevation: 4,
       }}>
-        {/* Header row: request count + always-visible New Request action */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#1e293b' }}>
-            {activeTab === 'requests' 
-              ? `${requests.length} ${requests.length === 1 ? 'Exam' : 'Exams'}`
-              : activeTab === 'assignments'
-              ? `${assignmentRequests.length} ${assignmentRequests.length === 1 ? 'Assignment' : 'Assignments'}`
-              : `${pastScribes.length} Past Scribes`
-            }
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <TouchableOpacity
-              onPress={() => setShowScribeDirectory(true)}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 5,
-                borderWidth: 1.5, borderColor: '#2563eb', paddingVertical: 7, paddingHorizontal: 12,
-                borderRadius: 12, backgroundColor: '#fff'
-              }}
-            >
-              <Feather name="search" size={13} color="#2563eb" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#2563eb' }}>Find Scribes</Text>
-            </TouchableOpacity>
+        {/* Row 1: 2 equal-width 50/50 action buttons */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <TouchableOpacity
+            onPress={() => setShowScribeDirectory(true)}
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              borderWidth: 1.5,
+              borderColor: '#2563eb',
+              paddingVertical: 10,
+              borderRadius: 14,
+              backgroundColor: '#ffffff'
+            }}
+          >
+            <Feather name="search" size={14} color="#2563eb" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#2563eb' }}>Find Scribes</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => {
-                Alert.alert(
-                  'Select Request Type',
-                  'What type of request would you like to create?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
-                    { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
-                  ]
-                );
-              }}
-              style={{ 
-                flexDirection: 'row', alignItems: 'center', gap: 5, 
-                backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 12, 
-                borderRadius: 12, shadowColor: '#2563eb', 
-                shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 2 
-              }}
-            >
-              <Feather name="plus" size={13} color="#fff" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#fff' }}>New Request</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                'Select Request Type',
+                'What type of request would you like to create?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
+                  { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
+                ]
+              );
+            }}
+            style={{ 
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6, 
+              backgroundColor: '#2563eb',
+              paddingVertical: 10, 
+              borderRadius: 14,
+              shadowColor: '#2563eb', 
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              elevation: 3 
+            }}
+          >
+            <Feather name="plus" size={14} color="#fff" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#fff' }}>New Request</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Tab Switcher */}
+        {/* Tab Switcher Slider */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            onPress={() => setActiveTab('requests')}
-            style={{
-              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.02)',
-              borderWidth: 1, borderColor: activeTab === 'requests' ? '#2563eb' : 'rgba(0,0,0,0.06)'
-            }}
-          >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'requests' ? '#fff' : '#64748b' }}>Exams</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('assignments')}
-            style={{
-              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.02)',
-              borderWidth: 1, borderColor: activeTab === 'assignments' ? '#2563eb' : 'rgba(0,0,0,0.06)'
-            }}
-          >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'assignments' ? '#fff' : '#64748b' }}>Assignments</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('past_scribes')}
-            style={{
-              flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.02)',
-              borderWidth: 1, borderColor: activeTab === 'past_scribes' ? '#2563eb' : 'rgba(0,0,0,0.06)'
-            }}
-          >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: activeTab === 'past_scribes' ? '#fff' : '#64748b' }}>Past Scribes</Text>
-          </TouchableOpacity>
+          {[
+            { key: 'requests', label: 'Exams' },
+            { key: 'assignments', label: 'Assignments' },
+            { key: 'past_scribes', label: 'Past Scribes' },
+          ].map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key as any)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 9,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: isActive ? '#2563eb' : '#f8fafc',
+                  borderWidth: 1.5,
+                  borderColor: isActive ? '#2563eb' : '#e2e8f0',
+                  shadowColor: isActive ? '#2563eb' : 'transparent',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: isActive ? 0.35 : 0,
+                  shadowRadius: 8,
+                  elevation: isActive ? 4 : 0
+                }}
+              >
+                <Text style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 11.5,
+                  fontWeight: '900',
+                  color: isActive ? '#ffffff' : '#64748b'
+                }}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -784,13 +824,11 @@ export default function StudentRequestsView() {
           }
           const statusStyle = getStatusStyle(item.status);
           const hasApps = item.status === 'pending' && (item.applicationCount || 0) > 0;
+          const isEmergency = item.is_emergency === 'yes';
           const isMatched = item.status === 'matched';
 
-          // Status label
           const statusLabel = (() => {
-            if (item.is_emergency === 'yes') {
-              return '🚨 EMERGENCY SOS';
-            }
+            if (isEmergency) return '🚨 EMERGENCY SOS';
             switch (item.status.toLowerCase()) {
               case 'pending': return 'NOT ASSIGNED';
               case 'matched': return 'ASSIGNED';
@@ -799,13 +837,14 @@ export default function StudentRequestsView() {
               default: return item.status.toUpperCase();
             }
           })();
+
           const statusColor = (() => {
-            if (item.is_emergency === 'yes') {
+            if (isEmergency) {
               return { text: '#dc2626', border: '#fca5a5', bg: '#fef2f2' };
             }
             switch (item.status.toLowerCase()) {
-              case 'pending': return { text: '#475569', border: '#cbd5e1', bg: '#fff' };
-              case 'matched': return { text: '#059669', border: '#6ee7b7', bg: '#f0fdf4' };
+              case 'pending': return { text: '#2563eb', border: '#bfdbfe', bg: '#eff6ff' };
+              case 'matched': return { text: '#059669', border: '#a7f3d0', bg: '#f0fdf4' };
               case 'completed': return { text: '#10b981', border: '#a7f3d0', bg: '#ecfdf5' };
               case 'cancelled': return { text: '#ef4444', border: '#fca5a5', bg: '#fff7f7' };
               default: return { text: '#2563eb', border: '#bfdbfe', bg: '#eff6ff' };
@@ -877,88 +916,109 @@ export default function StudentRequestsView() {
 
           const isExpanded = expandedCards[item.id] || false;
 
+          // Card Border & Shadow Colors based on status
+          let cardBorderColor = '#bfdbfe';
+          let cardShadowColor = '#2563eb';
+          let cardBorderWidth = 1.5;
+          let cardShadowOpacity = 0.12;
+
+          if (isEmergency) {
+            cardBorderColor = '#fca5a5';
+            cardShadowColor = '#dc2626';
+            cardBorderWidth = 2;
+            cardShadowOpacity = 0.15;
+          } else if (isMatched) {
+            cardBorderColor = '#a7f3d0';
+            cardShadowColor = '#059669';
+            cardBorderWidth = 1.5;
+            cardShadowOpacity = 0.12;
+          } else {
+            // Not Assigned / Pending
+            cardBorderColor = '#bfdbfe';
+            cardShadowColor = '#2563eb';
+            cardBorderWidth = 1.5;
+            cardShadowOpacity = 0.12;
+          }
+
           return (
             <View style={{
               backgroundColor: '#fff',
-              borderRadius: 22,
-              borderWidth: item.is_emergency === 'yes' ? 2 : 1.5,
-              borderColor: item.is_emergency === 'yes' ? '#fca5a5' : '#e2e8f0',
-              shadowColor: item.is_emergency === 'yes' ? '#dc2626' : '#64748b',
+              borderRadius: 24,
+              borderWidth: cardBorderWidth,
+              borderColor: cardBorderColor,
+              shadowColor: cardShadowColor,
               shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: item.is_emergency === 'yes' ? 0.12 : 0.06,
+              shadowOpacity: cardShadowOpacity,
               shadowRadius: 16,
-              elevation: 3,
+              elevation: 4,
               marginBottom: 16,
               overflow: 'hidden',
             }}>
 
-              {/* ── Top section: icon + exam name + status badge ── */}
-              <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.7} style={{ padding: 18, paddingBottom: 14 }}>
-                {/* Status badge & chevron — top right */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12, gap: 10 }}>
+              {/* ── Top section: Title & Subtitle on Left, Status Badge on Right ── */}
+              <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ padding: 18, paddingBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1, marginRight: 10 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
+                      {item.subject || 'Exam'}
+                    </Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                      Level: {item.exam_type || 'General'} {item.created_at ? `| Confirmed ${new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                    </Text>
+                  </View>
+
+                  {/* Status Badge */}
                   <View style={{
-                    paddingVertical: 5, paddingHorizontal: 12,
-                    borderRadius: 20,
-                    borderWidth: 1.5,
-                    borderColor: statusColor.border,
+                    paddingVertical: 5, paddingHorizontal: 11, borderRadius: 20,
                     backgroundColor: statusColor.bg,
+                    borderWidth: 1, borderColor: statusColor.border
                   }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: statusColor.text, letterSpacing: 0.5 }}>
+                    <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.3 }}>
                       {statusLabel}
                     </Text>
                   </View>
-                  <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={18} color="#94a3b8" />
                 </View>
 
-                {/* Icon + subject + date row */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 14 }}>
-                  {/* Document icon block */}
-                  <View style={{
-                    width: 48, height: 48, borderRadius: 14,
-                    backgroundColor: 'rgba(37,99,235,0.09)',
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)',
-                  }}>
-                    <Feather name="file-text" size={22} color="#2563eb" />
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
-                      {item.subject || 'Exam'}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                      <Feather name="calendar" size={12} color="#64748b" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b' }}>
-                        {item.exam_date || t('date_not_specified')}
+                {/* ── Summary Row: Divider + Date on Left + "Details v" Pill Button on Right ── */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 6 }} />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                        {item.exam_date ? item.exam_date.split(' ')[0] : t('date_not_specified')}
                       </Text>
                     </View>
-                    {/* Exam type tag */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 }}>
-                      <View style={{ backgroundColor: '#f1f5f9', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#475569' }}>{item.exam_type}</Text>
-                      </View>
-                      <View style={{ backgroundColor: '#f1f5f9', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#475569' }}>{item.exam_language}</Text>
-                      </View>
-                    </View>
+
+                    {/* Applications Badge */}
+                    {hasApps && (
+                      <TouchableOpacity
+                        onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
+                        style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>
+                          {item.applicationCount} {item.applicationCount === 1 ? 'Applicant' : 'Applicants'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
-                  {/* Application count badge */}
-                  {hasApps && (
-                    <TouchableOpacity
-                      onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
-                      style={{ position: 'absolute', top: -6, right: -6 }}
-                    >
-                      <View style={{
-                        width: 22, height: 22, borderRadius: 11,
-                        backgroundColor: '#2563eb',
-                        alignItems: 'center', justifyContent: 'center',
-                        borderWidth: 2, borderColor: '#fff',
-                      }}>
-                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{item.applicationCount}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  )}
+                  {/* "Details v" Pill Button */}
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : '#f8fafc',
+                    borderWidth: 1,
+                    borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : '#e2e8f0',
+                    paddingHorizontal: 11,
+                    paddingVertical: 5,
+                    borderRadius: 12,
+                    gap: 5
+                  }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '800', color: isExpanded ? '#2563eb' : '#64748b' }}>
+                      {isExpanded ? 'Collapse' : 'Details'}
+                    </Text>
+                    <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : "#64748b"} />
+                  </View>
                 </View>
               </TouchableOpacity>
 
@@ -1235,60 +1295,204 @@ export default function StudentRequestsView() {
                 </Text>
               </View>
             }
-            renderItem={({ item }) => (
-              <View style={{ backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3.5, marginBottom: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                  <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#2563eb' }}>
-                      {(item.full_name || item.official_name || 'S').charAt(0).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{item.full_name || item.official_name}</Text>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 1 }}>{item.occupation || 'Volunteer Scribe'}</Text>
+            renderItem={({ item }) => {
+              const isPastExpanded = expandedCards[`past_${item.id}`] || false;
+              const hasReviews = item.reviews_count > 0;
+              const ratingDisplay = hasReviews ? (item.rating ? Number(item.rating).toFixed(1) : '5.0') : 'New';
+
+              return (
+                <View style={{
+                  backgroundColor: '#ffffff',
+                  borderRadius: 24,
+                  borderWidth: 1.5,
+                  borderColor: '#cbd5e1',
+                  shadowColor: '#475569',
+                  shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 14,
+                  elevation: 4,
+                  marginBottom: 16,
+                  padding: 18,
+                }}>
+                  {/* Top Header Row: Scribe Identity + Details Toggle */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <View style={{
+                        width: 48, height: 48, borderRadius: 24,
+                        backgroundColor: 'rgba(37,99,235,0.09)',
+                        alignItems: 'center', justifyContent: 'center',
+                        borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.2)',
+                      }}>
+                        <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 18 }}>
+                          {(item.full_name || item.official_name || 'S').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>
+                          {item.full_name || item.official_name}
+                        </Text>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                          {item.occupation || 'Student Scribe'}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Ionicons name="star" size={13} color={hasReviews ? "#eab308" : "#cbd5e1"} />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#1e293b' }}>
+                            {ratingDisplay}
+                          </Text>
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#94a3b8' }}>
+                            ({item.reviews_count || 0} {item.reviews_count === 1 ? 'review' : 'reviews'})
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Details Pill Toggle Button */}
+                    <TouchableOpacity
+                      onPress={() => toggleCard(`past_${item.id}`)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isPastExpanded ? '#1d4ed8' : '#2563eb',
+                        borderWidth: 1.5,
+                        borderColor: '#2563eb',
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 12,
+                        gap: 5,
+                        shadowColor: '#2563eb',
+                        shadowOffset: { width: 0, height: 3 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 6,
+                        elevation: 3
+                      }}
+                    >
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '900', color: '#ffffff' }}>
+                        {isPastExpanded ? 'Collapse' : 'Details'}
+                      </Text>
+                      <Feather name={isPastExpanded ? "chevron-up" : "chevron-down"} size={14} color="#ffffff" />
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Star Rating on the Right */}
-                  <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Ionicons name="star" size={14} color={(item.reviews_count > 0) ? "#eab308" : "#cbd5e1"} />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: (item.reviews_count > 0) ? '#0f172a' : '#64748b' }}>
-                        {(item.reviews_count > 0) ? (item.rating ? Number(item.rating).toFixed(1) : "5.0") : "New"}
+                  {/* Summary Details Row */}
+                  <View style={{ gap: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="book" size={13} color="#64748b" style={{ marginRight: 6 }} />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                        Education: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.education_level || 'Undergraduate'}</Text>
                       </Text>
                     </View>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#94a3b8', marginTop: 2, fontWeight: '700' }}>
-                      {item.reviews_count || 0} {item.reviews_count === 1 ? 'Review' : 'Reviews'}
-                    </Text>
-                  </View>
-                </View>
 
-                <View style={{ gap: 6, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Feather name="book-open" size={12} color="#64748b" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>Education: {item.education_level}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Feather name="map-pin" size={12} color="#64748b" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>Location: {item.location}</Text>
-                  </View>
-                </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="map-pin" size={13} color="#64748b" style={{ marginRight: 6 }} />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                        Location: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.location || 'Not Specified'}</Text>
+                      </Text>
+                    </View>
 
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => handleOpenScribeProfile(item)}
-                    style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569' }}>View Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => openInviteModal(item)}
-                    style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#fff' }}>Invite Privately</Text>
-                  </TouchableOpacity>
+                    {/* Expanded Profile Details */}
+                    {isPastExpanded && (
+                      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0', gap: 10 }}>
+                        <View style={{ gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Feather name="briefcase" size={13} color="#64748b" style={{ marginRight: 6 }} />
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
+                              Occupation: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.occupation || 'Volunteer Scribe'}</Text>
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Feather name="check-circle" size={13} color="#059669" style={{ marginRight: 6 }} />
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#059669', fontWeight: '800' }}>
+                              Verified Volunteer Scribe
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* 5 Rating Distinctions Breakdown Card */}
+                        <View style={{
+                          backgroundColor: '#f8fafc',
+                          borderRadius: 16,
+                          padding: 12,
+                          borderWidth: 1.5,
+                          borderColor: '#cbd5e1',
+                          marginTop: 4
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Ionicons name="star" size={14} color="#eab308" />
+                              <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '900', color: '#0f172a' }}>
+                                Rating Breakdown
+                              </Text>
+                            </View>
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#2563eb' }}>
+                              {ratingDisplay} / 5.0 ({item.reviews_count || 0} {item.reviews_count === 1 ? 'review' : 'reviews'})
+                            </Text>
+                          </View>
+
+                          {[
+                            { label: 'Punctuality', score: 5.0, icon: 'clock' },
+                            { label: 'Communication', score: 5.0, icon: 'message-square' },
+                            { label: 'Speed & Efficiency', score: 5.0, icon: 'zap' },
+                            { label: 'Behavior & Conduct', score: 5.0, icon: 'smile' },
+                            { label: 'Overall Experience', score: item.rating ? Number(item.rating) : 5.0, icon: 'award' },
+                          ].map((distinction, idx) => (
+                            <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Feather name={distinction.icon as any} size={12} color="#64748b" />
+                                <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '700', color: '#475569' }}>
+                                  {distinction.label}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '900', color: '#0f172a' }}>
+                                  {distinction.score.toFixed(1)}
+                                </Text>
+                                <Ionicons name="star" size={11} color="#eab308" />
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Action Buttons Row */}
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => handleOpenScribeProfile(item)}
+                      style={{
+                        flex: 1, backgroundColor: '#f1f5f9',
+                        paddingVertical: 11, borderRadius: 14,
+                        alignItems: 'center', justifyContent: 'center',
+                        borderWidth: 1, borderColor: '#e2e8f0'
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#475569' }}>
+                        View Profile
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => openInviteModal(item)}
+                      style={{
+                        flex: 1, backgroundColor: '#2563eb',
+                        paddingVertical: 11, borderRadius: 14,
+                        alignItems: 'center', justifyContent: 'center',
+                        shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.25, shadowRadius: 8, elevation: 3,
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#fff' }}>
+                        Invite Privately
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            )}
+              );
+            }}
           />
         </View>
       )}

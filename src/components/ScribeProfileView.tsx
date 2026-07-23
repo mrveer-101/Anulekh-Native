@@ -185,24 +185,75 @@ export default function ScribeProfileView() {
     <ScrollView style={{ flex: 1, paddingHorizontal: 20, backgroundColor: '#f8fafc' }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
       {/* Profile Header Card */}
-      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginTop: 12, marginBottom: 16 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: 'rgba(22,163,74,0.09)', borderWidth: 2, borderColor: 'rgba(22,163,74,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12, overflow: 'hidden' }}>
-          {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
-          ) : (
-            <Text style={{ fontSize: 24, fontWeight: '900', color: '#16a34a' }}>
-              {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
-            </Text>
-          )}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 24,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+        elevation: 4,
+        marginTop: 12,
+        marginBottom: 16,
+      }}>
+        {/* Profile Photo Avatar (Left Corner) */}
+        <TouchableOpacity onPress={handleSelectPhoto} activeOpacity={0.8}>
+          <View style={{
+            width: 58,
+            height: 58,
+            borderRadius: 20,
+            backgroundColor: 'rgba(22,163,74,0.09)',
+            borderWidth: 2,
+            borderColor: 'rgba(22,163,74,0.2)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}>
+            {profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <Text style={{ fontSize: 24, fontWeight: '900', color: '#16a34a' }}>
+                {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* User Info (In Between / Middle) */}
+        <View style={{ flex: 1, marginLeft: 16, marginRight: 12, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }} numberOfLines={1}>
+            {fullName || 'Volunteer'}
+          </Text>
+          <Text style={{ fontSize: 11.5, fontWeight: '500', color: '#64748b', marginTop: 4 }} numberOfLines={1}>
+            {email}
+          </Text>
         </View>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{fullName || 'Volunteer'}</Text>
-        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{email}</Text>
-        
+
+        {/* Upload Photo Button (Right Corner) */}
         <TouchableOpacity 
           onPress={handleSelectPhoto}
-          style={{ marginTop: 8, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.18)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: 'rgba(22,163,74,0.08)',
+            borderWidth: 1,
+            borderColor: 'rgba(22,163,74,0.2)',
+            paddingHorizontal: 11,
+            paddingVertical: 8,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
         >
-          <Text style={{ fontSize: 9, fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Upload Photo</Text>
+          <Feather name="camera" size={14} color="#16a34a" style={{ marginBottom: 2 }} />
+          <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Upload
+          </Text>
         </TouchableOpacity>
       </View>
 

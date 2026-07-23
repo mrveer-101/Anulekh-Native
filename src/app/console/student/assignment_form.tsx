@@ -94,16 +94,33 @@ export default function AssignmentRequestForm() {
     });
   };
 
+  const formatAttachmentFileName = (userName: string, originalName: string, mimeType: string): string => {
+    const sanitizedUser = (userName || 'student').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const ext = originalName.includes('.') ? originalName.split('.').pop()?.toLowerCase() || 'jpg' : 'jpg';
+    const baseName = originalName.includes('.') ? originalName.substring(0, originalName.lastIndexOf('.')) : originalName;
+    const sanitizedBase = (baseName || 'file').toLowerCase().replace(/[^a-z0-9]/g, '_');
+    
+    let fileType = 'file';
+    if (mimeType.includes('pdf') || ext === 'pdf') fileType = 'pdf';
+    else if (mimeType.includes('image') || ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) fileType = 'image';
+    else if (['doc', 'docx', 'txt'].includes(ext)) fileType = 'doc';
+
+    return `${sanitizedUser}_${sanitizedBase}_${fileType}.${ext}`;
+  };
+
   const addFiles = async (newFiles: Omit<Attachment, 'dataUri'>[]) => {
     setConvertingFiles(true);
     const converted: Attachment[] = [];
+    const username = profile?.official_name || profile?.full_name || 'student';
     for (const file of newFiles) {
       try {
+        const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
         const dataUri = await toDataUri(file.uri, file.mimeType);
-        converted.push({ ...file, dataUri });
+        converted.push({ ...file, name: formattedName, dataUri });
       } catch (e) {
         console.warn('Failed to read file:', file.name);
-        converted.push({ ...file });
+        const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
+        converted.push({ ...file, name: formattedName });
       }
     }
     setAttachments((prev) => [...prev, ...converted]);
@@ -112,23 +129,25 @@ export default function AssignmentRequestForm() {
 
   const pickDocument = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], multiple: true, copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], multiple: true, copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.length) return;
-      const newFiles = result.assets.map((a) => ({ uri: a.uri, name: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/octet-stream', size: a.size }));
+      const newFiles = result.assets.map((a) => ({ uri: a.uri, name: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/pdf', size: a.size }));
       await addFiles(newFiles);
     } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick file.'); }
   };
 
   const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission Required', 'Please allow access to your photo library.'); return; }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.6 });
-    if (result.canceled || !result.assets?.length) return;
-    const newFiles = result.assets.map((a) => {
-      const ext = a.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      return { uri: a.uri, name: a.fileName || `image_${Date.now()}.${ext}`, mimeType: `image/${ext}`, size: a.fileSize };
-    });
-    await addFiles(newFiles);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') { Alert.alert('Permission Required', 'Please allow access to your photo library.'); return; }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.6 });
+      if (result.canceled || !result.assets?.length) return;
+      const newFiles = result.assets.map((a) => {
+        const ext = a.uri.split('.').pop()?.toLowerCase() || 'jpg';
+        return { uri: a.uri, name: a.fileName || `image_${Date.now()}.${ext}`, mimeType: `image/${ext}`, size: a.fileSize };
+      });
+      await addFiles(newFiles);
+    } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick image.'); }
   };
 
   const removeAttachment = (uri: string) => setAttachments((prev) => prev.filter((a) => a.uri !== uri));
@@ -148,7 +167,6 @@ export default function AssignmentRequestForm() {
 
   const handleSave = async () => {
     if (!subject.trim()) { Alert.alert('Error', 'Subject is required.'); return; }
-    if (!title.trim()) { Alert.alert('Error', 'Assignment Title is required.'); return; }
     if (!deadline.trim()) { Alert.alert('Error', 'Deadline is required.'); return; }
     if (convertingFiles) { Alert.alert('Please Wait', 'Files are still being processed.'); return; }
 
@@ -157,16 +175,22 @@ export default function AssignmentRequestForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('You must be logged in.');
 
-      // Serialize attachments as "name::dataUri" strings
+      const username = profile?.official_name || profile?.full_name || 'student';
+      const formattedTitle = title.trim() || subject.trim();
+
+      // Format attachments with naming convention: username_filename_filetype.ext
       const attachmentEntries = attachments
-        .filter((a) => a.dataUri)
-        .map((a) => `${a.name}::${a.dataUri}`);
+        .map((a) => {
+          const formattedName = formatAttachmentFileName(username, a.name, a.mimeType);
+          const relativePath = `/media/assignment/attachments/${formattedName}`;
+          return `${formattedName}::${relativePath}::${a.dataUri || a.uri}`;
+        });
 
       const basePayload = {
         student_id: session.user.id,
         student_name: profile?.official_name || profile?.full_name || 'Student',
         subject: subject.trim(),
-        assignment_title: title.trim(),
+        assignment_title: formattedTitle,
         academic_level: academicLevel,
         description: description.trim(),
         deadline: deadline.trim(),
@@ -178,13 +202,29 @@ export default function AssignmentRequestForm() {
           ? supabase.from('assignment_requests').update(payload).eq('id', params.id)
           : supabase.from('assignment_requests').insert(payload);
 
-      // Try with attachments column; fallback without if column doesn't exist yet
-      let { error } = await save({ ...basePayload, attachments: attachmentEntries });
-      if (error && (error.message?.includes('column') || error.message?.includes('attachments') || (error as any).code === '42703')) {
-        const fallback = await save(basePayload);
-        error = fallback.error;
+      // Attempt save with attachments column
+      let res = await save({ ...basePayload, attachments: attachmentEntries });
+
+      if (res.error) {
+        console.warn('Primary save with full data URIs failed, retrying with file reference paths:', res.error.message);
+        // Fallback 1: Save with file paths instead of huge base64
+        const pathEntries = attachments.map((a) => {
+          const formattedName = formatAttachmentFileName(username, a.name, a.mimeType);
+          return `${formattedName}::/media/assignment/attachments/${formattedName}`;
+        });
+        res = await save({ ...basePayload, attachments: pathEntries });
       }
-      if (error) throw new Error((error as any).message || 'Failed to save.');
+
+      if (res.error) {
+        console.warn('Secondary save with path references failed, falling back to base payload:', res.error.message);
+        // Fallback 2: Append attachment summary to description & save base payload
+        const attachmentSummary = attachments.length > 0
+          ? `\n\n[Attachments: ${attachments.map(a => formatAttachmentFileName(username, a.name, a.mimeType)).join(', ')}]`
+          : '';
+        res = await save({ ...basePayload, description: `${basePayload.description}${attachmentSummary}`.trim() });
+      }
+
+      if (res.error) throw new Error(res.error.message || 'Failed to save.');
 
       Alert.alert('Success', isEditing ? 'Assignment request updated!' : 'Assignment request posted!');
       router.replace({ pathname: '/console/student' as any, params: { tab: 'requests' } });

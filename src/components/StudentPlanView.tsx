@@ -38,6 +38,7 @@ export default function StudentPlanView() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
+  const [expandedPlanIds, setExpandedPlanIds] = useState<Set<number>>(new Set());
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -233,35 +234,45 @@ export default function StudentPlanView() {
             {/* ── CALENDAR BLOCK ── */}
             <View style={{
               backgroundColor: '#ffffff',
-              padding: 16,
+              padding: 18,
               borderRadius: 24,
               borderWidth: 1.5,
               borderColor: '#e2e8f0',
-              shadowColor: '#64748b',
+              shadowColor: '#2563eb',
               shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.06,
+              shadowOpacity: 0.08,
               shadowRadius: 16,
-              elevation: 3,
+              elevation: 4,
               marginBottom: 16
             }}>
-              {/* Header: Month Selector */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <TouchableOpacity onPress={() => changeMonth(-1)} style={{ padding: 6, backgroundColor: '#f1f5f9', borderRadius: 10 }}>
-                  <Feather name="chevron-left" size={16} color="#475569" />
+              {/* Header: Month Selector with Both Blue Buttons & Orange Month Title */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <TouchableOpacity 
+                  onPress={() => changeMonth(-1)} 
+                  style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+                >
+                  <Feather name="chevron-left" size={18} color="#2563eb" />
                 </TouchableOpacity>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>
-                  {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                </Text>
-                <TouchableOpacity onPress={() => changeMonth(1)} style={{ padding: 6, backgroundColor: '#f1f5f9', borderRadius: 10 }}>
-                  <Feather name="chevron-right" size={16} color="#475569" />
+                
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
+                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </Text>
+                </View>
+
+                <TouchableOpacity 
+                  onPress={() => changeMonth(1)} 
+                  style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+                >
+                  <Feather name="chevron-right" size={18} color="#2563eb" />
                 </TouchableOpacity>
               </View>
 
-              {/* Weekdays Row */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day, idx) => (
+              {/* Weekdays Row with All Orange Accents */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, idx) => (
                   <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>{day}</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
                   </View>
                 ))}
               </View>
@@ -270,14 +281,13 @@ export default function StudentPlanView() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
                 {getDaysInMonth(currentMonth).map((day, idx) => {
                   if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 36 }} />;
+                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
                   }
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
                   const hasPlan = hasPlanOnDate(day);
                   const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
-                  // Determine background & text colors dynamically
                   let cellBg = 'transparent';
                   let cellTextColor = '#334155';
                   let cellBorder = {};
@@ -290,25 +300,22 @@ export default function StudentPlanView() {
                   } else if (hasPlan) {
                     const plansOnDay = getPlansOnDate(day);
                     const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
-                    const hasMatched = plansOnDay.some(p => p.status === 'matched');
-
                     if (hasEmergency) {
-                      cellBg = 'rgba(239, 68, 68, 0.4)';
-                      cellTextColor = '#b91c1c';
+                      cellBg = 'rgba(239,68,68,0.15)';
+                      cellTextColor = '#dc2626';
+                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
                       dotColor = '#dc2626';
-                    } else if (hasMatched) {
-                      cellBg = 'rgba(16, 185, 129, 0.4)';
-                      cellTextColor = '#065f46';
-                      dotColor = '#059669';
                     } else {
-                      cellBg = 'rgba(249, 115, 22, 0.4)';
+                      // Vibrant Orange Accent for confirmed plans
+                      cellBg = 'rgba(249,115,22,0.14)';
                       cellTextColor = '#c2410c';
-                      dotColor = '#ea580c';
+                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
+                      dotColor = '#f97316';
                     }
                   } else if (isToday) {
                     cellBg = '#eff6ff';
                     cellTextColor = '#2563eb';
-                    cellBorder = { borderWidth: 1, borderColor: '#bfdbfe' };
+                    cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
                   }
 
                   return (
@@ -323,10 +330,10 @@ export default function StudentPlanView() {
                       }}
                       style={{
                         width: '14.2%',
-                        height: 36,
+                        height: 38,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        borderRadius: 10,
+                        borderRadius: 19,
                         backgroundColor: cellBg,
                         ...cellBorder
                       }}
@@ -334,16 +341,16 @@ export default function StudentPlanView() {
                       <Text style={{
                         fontFamily: 'Roboto',
                         fontSize: 12,
-                        fontWeight: '800',
+                        fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
                         color: cellTextColor
                       }}>
                         {day.getDate()}
                       </Text>
                       {hasPlan && (
                         <View style={{
-                          width: 4,
-                          height: 4,
-                          borderRadius: 2,
+                          width: 5,
+                          height: 5,
+                          borderRadius: 2.5,
                           backgroundColor: dotColor,
                           marginTop: 2
                         }} />
@@ -359,9 +366,14 @@ export default function StudentPlanView() {
               flexDirection: 'row',
               backgroundColor: '#ffffff',
               padding: 5,
-              borderRadius: 16,
+              borderRadius: 18,
               borderWidth: 1.5,
-              borderColor: '#e2e8f0',
+              borderColor: '#cbd5e1',
+              shadowColor: '#475569',
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: 0.1,
+              shadowRadius: 14,
+              elevation: 4,
               marginBottom: 16,
               gap: 4
             }}>
@@ -374,16 +386,16 @@ export default function StudentPlanView() {
                     onPress={() => setActiveFilter(filter)}
                     style={{
                       flex: 1,
-                      paddingVertical: 8,
-                      borderRadius: 12,
+                      paddingVertical: 9,
+                      borderRadius: 14,
                       alignItems: 'center',
                       justifyContent: 'center',
                       backgroundColor: isActive ? '#2563eb' : 'transparent',
                       shadowColor: isActive ? '#2563eb' : 'transparent',
                       shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: isActive ? 0.15 : 0,
-                      shadowRadius: 8,
-                      elevation: isActive ? 2 : 0
+                      shadowOpacity: isActive ? 0.35 : 0,
+                      shadowRadius: 10,
+                      elevation: isActive ? 4 : 0
                     }}
                   >
                     <Text style={{
@@ -392,7 +404,7 @@ export default function StudentPlanView() {
                       fontWeight: '900',
                       textTransform: 'uppercase',
                       color: isActive ? '#ffffff' : '#64748b',
-                      letterSpacing: 0.3
+                      letterSpacing: 0.5
                     }}>
                       {filterLabel}
                     </Text>
@@ -415,136 +427,257 @@ export default function StudentPlanView() {
         }
         renderItem={({ item }) => {
           const isEmergency = item.is_emergency === 'yes';
+          const isConfirmed = item.status === 'matched' || !!item.scribe_id;
+          const isExpanded = expandedPlanIds.has(item.id);
+
+          const toggleExpand = () => {
+            setExpandedPlanIds(prev => {
+              const next = new Set(prev);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            });
+          };
+
+          // Status-based Border & Shadow colors
+          let borderColor = '#bfdbfe';
+          let shadowColor = '#2563eb';
+          let borderWidth = 1.5;
+          let shadowOpacity = 0.12;
+
+          if (isEmergency) {
+            borderColor = '#fca5a5';
+            shadowColor = '#dc2626';
+            borderWidth = 2;
+            shadowOpacity = 0.15;
+          } else if (isConfirmed) {
+            borderColor = '#a7f3d0';
+            shadowColor = '#059669';
+            borderWidth = 1.5;
+            shadowOpacity = 0.12;
+          } else {
+            // Non-Confirmed / Pending
+            borderColor = '#bfdbfe';
+            shadowColor = '#2563eb';
+            borderWidth = 1.5;
+            shadowOpacity = 0.12;
+          }
+
           return (
             <View style={{
               backgroundColor: '#ffffff',
-              padding: 18,
+              padding: 16,
               borderRadius: 24,
-              borderWidth: isEmergency ? 2 : 1.5,
-              borderColor: isEmergency ? '#fca5a5' : '#e2e8f0',
-              shadowColor: isEmergency ? '#dc2626' : '#64748b',
+              borderWidth,
+              borderColor,
+              shadowColor,
               shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: isEmergency ? 0.15 : 0.1,
+              shadowOpacity,
               shadowRadius: 16,
-              elevation: 3,
+              elevation: 4,
               marginBottom: 14
             }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              {/* Card Header */}
+              <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {item.exam_type} | કન્ફર્મ તારીખ {formatDate(item.created_at)}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                    Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
+                  </Text>
                 </View>
                 
                 <View style={{
-                  paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20,
+                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20,
                   backgroundColor: isEmergency ? '#fef2f2' : 'rgba(5,150,105,0.08)',
                   borderWidth: 1,
                   borderColor: isEmergency ? '#fca5a5' : 'rgba(5,150,105,0.2)'
                 }}>
-                  <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9, fontWeight: '800' }}>
+                  <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9.5, fontWeight: '800' }}>
                     {isEmergency ? '🚨 EMERGENCY SOS' : t('status_matched')}
                   </Text>
                 </View>
-              </View>
+              </TouchableOpacity>
 
-              {isEmergency && (
-                <View style={{ 
-                  backgroundColor: '#fef2f2', 
-                  padding: 12, borderRadius: 14, 
-                  borderWidth: 1, borderColor: '#fca5a5', 
-                  flexDirection: 'row', alignItems: 'center', 
-                  gap: 8, marginBottom: 12 
-                }}>
-                  <Feather name="alert-triangle" size={14} color="#dc2626" />
-                  <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
-                    Scribe cancelled! Re-broadcasting emergency SOS.
-                  </Text>
-                </View>
-              )}
-
-              <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 12, gap: 6 }}>
-                {!isEmergency && (
+              {/* Collapsed Preview Summary Bar */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+                  {!isEmergency && item.scribeProfile?.full_name && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
+                        {item.scribeProfile.full_name}
+                      </Text>
+                    </View>
+                  )}
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="user" size={12} color="#059669" style={{ marginRight: 8 }} />
-                    <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                      {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
+                    <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#475569', fontWeight: '600' }}>
+                      {item.exam_date ? item.exam_date.split(' ')[0] : 'Scheduled'}
                     </Text>
                   </View>
-                )}
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="calendar" size={12} color="#64748b" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_date')}: {item.exam_date || t('date_not_specified')}
-                  </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="map-pin" size={12} color="#64748b" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                    {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
+
+                {/* Details Expand/Collapse Button */}
+                <TouchableOpacity
+                  onPress={toggleExpand}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : '#f8fafc',
+                    borderWidth: 1,
+                    borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : '#e2e8f0',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 10,
+                    gap: 4
+                  }}
+                >
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : '#64748b' }}>
+                    {isExpanded ? 'Collapse' : 'Details'}
                   </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="globe" size={12} color="#64748b" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('exam_language')}: {item.exam_language}
-                  </Text>
-                </View>
+                  <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : "#64748b"} />
+                </TouchableOpacity>
               </View>
 
-              {/* Matched Coordination Controls */}
-              <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-                {isEmergency ? (
-                  <TouchableOpacity
-                    onPress={() => router.push('/console/student/view_applications' as any)}
-                    style={{ 
-                      width: '100%', 
-                      backgroundColor: '#dc2626', 
-                      paddingVertical: 12, borderRadius: 12, 
-                      alignItems: 'center', justifyContent: 'center', 
-                      flexDirection: 'row', gap: 6, 
-                      shadowColor: '#dc2626', shadowOffset: { width: 0, height: 4 }, 
-                      shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 
-                    }}
-                  >
-                    <ActivityIndicator size="small" color="white" style={{ marginRight: 4 }} />
-                    <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>🚨 Tracking SOS Applications...</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      {/* Call Button */}
-                      <TouchableOpacity 
-                        onPress={() => openCallSheet(item)}
-                        style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                      >
-                        <Feather name="phone" size={12} color="#334155" />
-                        <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                      </TouchableOpacity>
-
-                      {/* Chat Button */}
-                      <TouchableOpacity 
-                        onPress={() => router.push(`/console/common/chat?requestId=${item.id}`)}
-                        style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                      >
-                        <Feather name="message-square" size={12} color="#334155" />
-                        <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                      </TouchableOpacity>
+              {/* Expanded Detailed View */}
+              {isExpanded && (
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                  {isEmergency && (
+                    <View style={{ 
+                      backgroundColor: '#fef2f2', 
+                      padding: 12, borderRadius: 14, 
+                      borderWidth: 1, borderColor: '#fca5a5', 
+                      flexDirection: 'row', alignItems: 'center', 
+                      gap: 8, marginBottom: 12 
+                    }}>
+                      <Feather name="alert-triangle" size={14} color="#dc2626" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
+                        Scribe cancelled! Re-broadcasting emergency SOS.
+                      </Text>
                     </View>
+                  )}
 
-                    {/* View Declaration Button */}
-                    <TouchableOpacity 
-                      onPress={() => {
-                        setSelectedExam(item);
-                        setIsDeclarationOpen(true);
-                      }}
-                      style={{ width: '100%', backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 2 }}
-                    >
-                      <Feather name="file-text" size={12} color="white" />
-                      <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
+                  <View style={{ gap: 8, marginBottom: 14 }}>
+                    {!isEmergency && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="user" size={13} color="#059669" style={{ marginRight: 8 }} />
+                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                          {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
+                        </Text>
+                      </View>
+                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 8 }} />
+                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                        {t('exam_date')}: {item.exam_date || t('date_not_specified')}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="map-pin" size={13} color="#2563eb" style={{ marginRight: 8 }} />
+                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
+                        {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Feather name="globe" size={13} color="#64748b" style={{ marginRight: 8 }} />
+                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                        {t('exam_language')}: {item.exam_language}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Controls */}
+                  <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                    {isEmergency ? (
+                      <TouchableOpacity
+                        onPress={() => router.push('/console/student/view_applications' as any)}
+                        style={{ 
+                          width: '100%', 
+                          backgroundColor: '#dc2626', 
+                          paddingVertical: 12, 
+                          borderRadius: 14, 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6
+                        }}
+                      >
+                        <Feather name="users" size={14} color="#ffffff" />
+                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>View SOS Applications</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                          <TouchableOpacity
+                            onPress={() => openCallSheet(item)}
+                            style={{ 
+                              flex: 1, 
+                              backgroundColor: 'rgba(5,150,105,0.08)', 
+                              borderWidth: 1, 
+                              borderColor: 'rgba(5,150,105,0.2)', 
+                              paddingVertical: 10, 
+                              borderRadius: 14, 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              flexDirection: 'row', 
+                              gap: 6 
+                            }}
+                          >
+                            <Feather name="phone" size={14} color="#059669" />
+                            <Text style={{ fontFamily: 'Roboto', color: '#059669', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => {
+                              router.push(`/console/common/chat?id=${item.id}&type=exam` as any);
+                            }}
+                            style={{ 
+                              flex: 1, 
+                              backgroundColor: 'rgba(37,99,235,0.08)', 
+                              borderWidth: 1, 
+                              borderColor: 'rgba(37,99,235,0.2)', 
+                              paddingVertical: 10, 
+                              borderRadius: 14, 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              flexDirection: 'row', 
+                              gap: 6 
+                            }}
+                          >
+                            <Feather name="message-square" size={14} color="#2563eb" />
+                            <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedExam(item);
+                            setIsDeclarationOpen(true);
+                          }}
+                          style={{
+                            width: '100%',
+                            backgroundColor: '#2563eb',
+                            paddingVertical: 12,
+                            borderRadius: 14,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexDirection: 'row',
+                            gap: 6,
+                            shadowColor: '#2563eb',
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.15,
+                            shadowRadius: 8,
+                            elevation: 2
+                          }}
+                        >
+                          <Feather name="file-text" size={14} color="#ffffff" />
+                          <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
+              )}
             </View>
           );
         }}

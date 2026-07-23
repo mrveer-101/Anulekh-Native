@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '../app/core/translation';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function SharedSettingsView() {
   const { lang, changeLanguage, t } = useLanguage();
@@ -12,6 +13,7 @@ export default function SharedSettingsView() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   
   // Expanded Detail fields
   const [isExpanded, setIsExpanded] = useState(false);
@@ -47,6 +49,11 @@ export default function SharedSettingsView() {
       }
       setUser(session.user);
       setEmail(session.user.email || '');
+
+      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      if (localPhoto) {
+        setProfilePhoto(localPhoto);
+      }
 
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -84,6 +91,41 @@ export default function SharedSettingsView() {
       console.error('Error fetching user data in Settings:', error);
     } finally {
       setLoading(false);
+    }
+  };
+  const toDataUri = async (uri: string): Promise<string> => {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const handleSelectPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.6,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const dataUri = await toDataUri(asset.uri);
+      setProfilePhoto(dataUri);
+      if (user) {
+        await AsyncStorage.setItem(`profile_photo_${user.id}`, dataUri);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to select image.');
     }
   };
 
@@ -153,17 +195,75 @@ export default function SharedSettingsView() {
     <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       
       {/* Profile Header Card */}
-      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginTop: 12, marginBottom: 16 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 22, backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 2, borderColor: 'rgba(37,99,235,0.2)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-          <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563eb' }}>
-            {fullName ? fullName.charAt(0).toUpperCase() : 'S'}
+      <View style={{
+        backgroundColor: '#f8fafc',
+        borderRadius: 24,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 3,
+        marginTop: 12,
+        marginBottom: 16,
+      }}>
+        {/* Profile Photo Avatar (Left Corner) */}
+        <TouchableOpacity onPress={handleSelectPhoto} activeOpacity={0.8}>
+          <View style={{
+            width: 58,
+            height: 58,
+            borderRadius: 20,
+            backgroundColor: 'rgba(37,99,235,0.09)',
+            borderWidth: 2,
+            borderColor: 'rgba(37,99,235,0.2)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}>
+            {profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
+            ) : (
+              <Text style={{ fontSize: 24, fontWeight: '900', color: '#2563eb' }}>
+                {fullName ? fullName.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            )}
+          </View>
+        </TouchableOpacity>
+
+        {/* User Info (In Between / Middle) */}
+        <View style={{ flex: 1, marginLeft: 16, marginRight: 12, justifyContent: 'center' }}>
+          <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }} numberOfLines={1}>
+            {fullName || 'User'}
+          </Text>
+          <Text style={{ fontSize: 11.5, fontWeight: '500', color: '#64748b', marginTop: 4 }} numberOfLines={1}>
+            {email}
           </Text>
         </View>
-        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{fullName || 'Student'}</Text>
-        <Text style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{email}</Text>
-        
-        <TouchableOpacity style={{ marginTop: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 }}>
-          <Text style={{ fontSize: 9, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.5 }}>Upload Photo</Text>
+
+        {/* Upload Photo Button (Right Corner) */}
+        <TouchableOpacity 
+          onPress={handleSelectPhoto}
+          activeOpacity={0.8}
+          style={{
+            backgroundColor: 'rgba(37,99,235,0.08)',
+            borderWidth: 1,
+            borderColor: 'rgba(37,99,235,0.2)',
+            paddingHorizontal: 11,
+            paddingVertical: 8,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Feather name="camera" size={14} color="#2563eb" style={{ marginBottom: 2 }} />
+          <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Upload
+          </Text>
         </TouchableOpacity>
       </View>
 
