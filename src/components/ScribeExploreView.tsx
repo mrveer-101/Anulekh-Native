@@ -5,6 +5,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '../app/core/supabase';
 import { useLanguage } from '../app/core/translation';
 import { parseExamDate } from '../app/core/examDate';
+import MiniCalendar from './MiniCalendar';
 
 interface ExamRequest {
   id: number;
@@ -135,6 +136,14 @@ export default function ScribeExploreView() {
   // Date-range filter (DD/MM/YYYY text inputs, inclusive on both ends)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+
+  // Assignment-specific filters
+  const [selectedAssignmentLevel, setSelectedAssignmentLevel] = useState('All');
+  const [deadlineFrom, setDeadlineFrom] = useState('');
+  const [deadlineTo, setDeadlineTo] = useState('');
+
+  // Which date-range field the calendar popover is currently editing (if any)
+  const [activeDateField, setActiveDateField] = useState<null | 'examFrom' | 'examTo' | 'deadlineFrom' | 'deadlineTo'>(null);
 
   const [expandedExamIds, setExpandedExamIds] = useState<Set<number>>(new Set());
   const [expandedAssignmentIds, setExpandedAssignmentIds] = useState<Set<number>>(new Set());
@@ -332,6 +341,7 @@ export default function ScribeExploreView() {
   const TYPE_OPTIONS = ['All', 'School', 'University', 'Competitive', 'Government'];
   const SLOT_OPTIONS = ['All', 'Morning', 'Afternoon', 'Evening'];
   const DAY_OPTIONS = ['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const ASSIGNMENT_LEVEL_OPTIONS = ['All', 'School', 'University', 'Competitive'];
 
   // Parses a DD/MM/YYYY filter input into a Date at local midnight, or null when incomplete/invalid.
   const parseFilterDate = (value: string): Date | null => {
@@ -348,6 +358,9 @@ export default function ScribeExploreView() {
   const activeFilterCount = [selectedLanguage, selectedType, selectedSlot, selectedDay]
     .filter(v => v !== 'All').length + (dateFrom.trim() ? 1 : 0) + (dateTo.trim() ? 1 : 0);
 
+  const activeAssignmentFilterCount = (selectedAssignmentLevel !== 'All' ? 1 : 0)
+    + (deadlineFrom.trim() ? 1 : 0) + (deadlineTo.trim() ? 1 : 0);
+
   const clearFilters = () => {
     setSelectedLanguage('All');
     setSelectedType('All');
@@ -355,6 +368,12 @@ export default function ScribeExploreView() {
     setSelectedDay('All');
     setDateFrom('');
     setDateTo('');
+  };
+
+  const clearAssignmentFilters = () => {
+    setSelectedAssignmentLevel('All');
+    setDeadlineFrom('');
+    setDeadlineTo('');
   };
 
   // Apply search query and filters
@@ -776,7 +795,28 @@ export default function ScribeExploreView() {
       (assign.subject || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (assign.assignment_title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (assign.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesSearch;
+
+    // academic_level is stored like "School" / "University (Semester End Exam)" — match by prefix.
+    const levelPrefix = (assign.academic_level || '').trim().toLowerCase();
+    const matchesLevel = selectedAssignmentLevel === 'All' ||
+      levelPrefix.startsWith(selectedAssignmentLevel.toLowerCase()) ||
+      (selectedAssignmentLevel === 'University' && levelPrefix.startsWith('college'));
+
+    // Deadline range (From/To, inclusive). If the deadline can't be parsed, don't exclude it.
+    const fromDate = parseFilterDate(deadlineFrom);
+    const toDate = parseFilterDate(deadlineTo);
+    const deadlineDay = parseExamDate(assign.deadline);
+    const matchesDeadlineRange = (() => {
+      if (!deadlineDay) return true;
+      if (fromDate && deadlineDay < fromDate) return false;
+      if (toDate) {
+        const toEndOfDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59);
+        if (deadlineDay > toEndOfDay) return false;
+      }
+      return true;
+    })();
+
+    return matchesSearch && matchesLevel && matchesDeadlineRange;
   });
 
   if (loading) {
@@ -796,13 +836,13 @@ export default function ScribeExploreView() {
           onPress={() => setActiveSegment('exams')}
           style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'exams' ? '#fff' : 'transparent', shadowColor: activeSegment === 'exams' ? '#000' : undefined, shadowOpacity: activeSegment === 'exams' ? 0.05 : 0, elevation: activeSegment === 'exams' ? 2 : 0 }}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'exams' ? '#16a34a' : '#64748b' }}>Exam Matching</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'exams' ? '#16a34a' : '#64748b' }}>Exam Request</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveSegment('assignments')}
           style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'assignments' ? '#fff' : 'transparent', shadowColor: activeSegment === 'assignments' ? '#000' : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.05 : 0, elevation: activeSegment === 'assignments' ? 2 : 0 }}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'assignments' ? '#16a34a' : '#64748b' }}>Assignment Writing</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'assignments' ? '#16a34a' : '#64748b' }}>Assignment Request</Text>
         </TouchableOpacity>
       </View>
 
@@ -826,75 +866,105 @@ export default function ScribeExploreView() {
           ) : null}
         </View>
 
-        {/* Collapsible Filter Block (Exams Only) */}
-        {activeSegment === 'exams' && (
-          <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
-            {/* Toggle bar */}
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => setShowFilters(!showFilters)}
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Feather name="sliders" size={15} color="#16a34a" />
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
-                {activeFilterCount > 0 && (
-                  <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeFilterCount}</Text>
-                  </View>
-                )}
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                {activeFilterCount > 0 && (
-                  <TouchableOpacity onPress={clearFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
+        {/* Collapsible Filter Block */}
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+          {/* Toggle bar */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setShowFilters(!showFilters)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Feather name="sliders" size={15} color="#16a34a" />
+              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
+              {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
+                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}</Text>
+                </View>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
+                <TouchableOpacity onPress={activeSegment === 'exams' ? clearFilters : clearAssignmentFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
+                </TouchableOpacity>
+              )}
+              <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Expandable sections */}
+          {showFilters && activeSegment === 'exams' && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+              {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
+              {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
+              {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
+              {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
+
+              {/* Exam Date Range */}
+              <View>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
+                  Exam Date Range
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setActiveDateField('examFrom')}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
+                  >
+                    <Feather name="calendar" size={12} color="#94a3b8" />
+                    <Text style={{ flex: 1, fontSize: 11, color: dateFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
+                      {dateFrom || 'From DD/MM/YYYY'}
+                    </Text>
                   </TouchableOpacity>
-                )}
-                <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
-              </View>
-            </TouchableOpacity>
-
-            {/* Expandable sections */}
-            {showFilters && (
-              <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
-                {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
-                {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
-                {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
-                {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
-
-                {/* Exam Date Range */}
-                <View>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                    Exam Date Range
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
-                      <TextInput
-                        value={dateFrom}
-                        onChangeText={setDateFrom}
-                        placeholder="From DD/MM/YYYY"
-                        placeholderTextColor="#94a3b8"
-                        keyboardType="numbers-and-punctuation"
-                        style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
-                      />
-                    </View>
-                    <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
-                    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38 }}>
-                      <TextInput
-                        value={dateTo}
-                        onChangeText={setDateTo}
-                        placeholder="To DD/MM/YYYY"
-                        placeholderTextColor="#94a3b8"
-                        keyboardType="numbers-and-punctuation"
-                        style={{ flex: 1, fontSize: 11, color: '#0f172a', fontWeight: '600' }}
-                      />
-                    </View>
-                  </View>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
+                  <TouchableOpacity
+                    onPress={() => setActiveDateField('examTo')}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
+                  >
+                    <Feather name="calendar" size={12} color="#94a3b8" />
+                    <Text style={{ flex: 1, fontSize: 11, color: dateTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
+                      {dateTo || 'To DD/MM/YYYY'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-            )}
-          </View>
-        )}
+            </View>
+          )}
+
+          {showFilters && activeSegment === 'assignments' && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+              {renderFilterSection('Academic Level', ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevel, setSelectedAssignmentLevel)}
+
+              {/* Deadline Range */}
+              <View>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
+                  Deadline Range
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setActiveDateField('deadlineFrom')}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
+                  >
+                    <Feather name="calendar" size={12} color="#94a3b8" />
+                    <Text style={{ flex: 1, fontSize: 11, color: deadlineFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
+                      {deadlineFrom || 'From DD/MM/YYYY'}
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
+                  <TouchableOpacity
+                    onPress={() => setActiveDateField('deadlineTo')}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
+                  >
+                    <Feather name="calendar" size={12} color="#94a3b8" />
+                    <Text style={{ flex: 1, fontSize: 11, color: deadlineTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
+                      {deadlineTo || 'To DD/MM/YYYY'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Main Opportunities List */}
@@ -966,7 +1036,7 @@ export default function ScribeExploreView() {
                 <Feather name="search" size={26} color="#94a3b8" />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching assignments</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
-                  Try adjusting your search query.
+                  Try adjusting your search query or filter selections.
                 </Text>
               </View>
             ) : (
@@ -976,6 +1046,29 @@ export default function ScribeExploreView() {
         )}
 
       </ScrollView>
+
+      <MiniCalendar
+        visible={activeDateField !== null}
+        onClose={() => setActiveDateField(null)}
+        title={
+          activeDateField === 'examFrom' ? 'Exam Date — From' :
+          activeDateField === 'examTo' ? 'Exam Date — To' :
+          activeDateField === 'deadlineFrom' ? 'Deadline — From' :
+          activeDateField === 'deadlineTo' ? 'Deadline — To' : undefined
+        }
+        value={
+          activeDateField === 'examFrom' ? dateFrom :
+          activeDateField === 'examTo' ? dateTo :
+          activeDateField === 'deadlineFrom' ? deadlineFrom :
+          activeDateField === 'deadlineTo' ? deadlineTo : ''
+        }
+        onSelect={(val) => {
+          if (activeDateField === 'examFrom') setDateFrom(val);
+          else if (activeDateField === 'examTo') setDateTo(val);
+          else if (activeDateField === 'deadlineFrom') setDeadlineFrom(val);
+          else if (activeDateField === 'deadlineTo') setDeadlineTo(val);
+        }}
+      />
 
     </View>
   );
