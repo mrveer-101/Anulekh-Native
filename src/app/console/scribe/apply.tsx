@@ -348,6 +348,16 @@ export default function ScribeApplyDetailsPage() {
                   </View>
                 </View>
 
+                {exam.page_count ? (
+                  <View className="flex-row items-start">
+                    <Feather name="layers" size={16} color="#059669" className="mr-3.5 mt-0.5" />
+                    <View className="flex-1">
+                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Page Count Estimate</Text>
+                      <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.page_count} {parseInt(exam.page_count) === 1 ? 'Page' : 'Pages'}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
                 {exam.description ? (
                   <View className="flex-row items-start">
                     <Feather name="info" size={16} color="#059669" className="mr-3.5 mt-0.5" />

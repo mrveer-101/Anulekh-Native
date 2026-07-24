@@ -27,6 +27,7 @@ export default function AssignmentRequestForm() {
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [academicLevel, setAcademicLevel] = useState('College');
+  const [pageCount, setPageCount] = useState('2');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -58,6 +59,7 @@ export default function AssignmentRequestForm() {
           setSubject(requestData.subject || '');
           setTitle(requestData.assignment_title || '');
           setAcademicLevel(requestData.academic_level || 'College');
+          setPageCount(requestData.page_count || '2');
           setDescription(requestData.description || '');
           setDeadline(requestData.deadline || '');
           // Restore saved attachments (stored as name::dataUri pairs)
@@ -192,6 +194,7 @@ export default function AssignmentRequestForm() {
         subject: subject.trim(),
         assignment_title: formattedTitle,
         academic_level: academicLevel,
+        page_count: pageCount.trim() || '1',
         description: description.trim(),
         deadline: deadline.trim(),
         status: 'pending',
@@ -313,6 +316,76 @@ export default function AssignmentRequestForm() {
                   <TouchableOpacity key={level} onPress={() => setAcademicLevel(level)}
                     style={[s.levelBtn, active ? s.levelBtnActive : s.levelBtnInactive]}>
                     <Text style={[s.levelBtnText, active ? s.levelBtnTextActive : s.levelBtnTextInactive]}>{level}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={s.field}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={s.label}>Page Count Estimate</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
+                {pageCount || '1'} {parseInt(pageCount || '1') === 1 ? 'Page' : 'Pages'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  const current = Math.max(1, (parseInt(pageCount) || 1) - 1);
+                  setPageCount(current.toString());
+                }}
+                activeOpacity={0.7}
+                style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Feather name="minus" size={18} color="#475569" />
+              </TouchableOpacity>
+
+              <TextInput
+                value={pageCount}
+                onChangeText={(val) => {
+                  const clean = val.replace(/[^0-9]/g, '');
+                  setPageCount(clean);
+                }}
+                keyboardType="numeric"
+                placeholder="1"
+                placeholderTextColor="#94a3b8"
+                style={[s.input, { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: '800' }]}
+              />
+
+              <TouchableOpacity
+                onPress={() => {
+                  const current = (parseInt(pageCount) || 0) + 1;
+                  setPageCount(current.toString());
+                }}
+                activeOpacity={0.7}
+                style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#eff6ff', borderWidth: 1.5, borderColor: '#bfdbfe', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Feather name="plus" size={18} color="#2563eb" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick Presets */}
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+              {['1', '2', '3', '5', '10', '15'].map((num) => {
+                const active = pageCount === num;
+                return (
+                  <TouchableOpacity
+                    key={num}
+                    onPress={() => setPageCount(num)}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 7,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: active ? '#2563eb' : '#e2e8f0',
+                      backgroundColor: active ? '#eff6ff' : '#f8fafc',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: active ? '#2563eb' : '#64748b' }}>
+                      {num} {parseInt(num) === 1 ? 'Pg' : 'Pgs'}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
