@@ -27,7 +27,7 @@ export default function AssignmentRequestForm() {
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [academicLevel, setAcademicLevel] = useState('College');
-  const [pageCount, setPageCount] = useState('2');
+  const [pageCount, setPageCount] = useState('10');
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -59,7 +59,7 @@ export default function AssignmentRequestForm() {
           setSubject(requestData.subject || '');
           setTitle(requestData.assignment_title || '');
           setAcademicLevel(requestData.academic_level || 'College');
-          setPageCount(requestData.page_count || '2');
+          setPageCount(requestData.page_count || '10');
           setDescription(requestData.description || '');
           setDeadline(requestData.deadline || '');
           // Restore saved attachments (stored as name::dataUri pairs)
@@ -365,26 +365,32 @@ export default function AssignmentRequestForm() {
               </TouchableOpacity>
             </View>
 
-            {/* Quick Presets */}
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-              {['1', '2', '3', '5', '10', '15'].map((num) => {
+            {/* Quick Presets (10, 25, 50) */}
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
+              {['10', '25', '50'].map((num) => {
                 const active = pageCount === num;
                 return (
                   <TouchableOpacity
                     key={num}
                     onPress={() => setPageCount(num)}
+                    activeOpacity={0.8}
                     style={{
                       flex: 1,
-                      paddingVertical: 7,
-                      borderRadius: 10,
+                      paddingVertical: 10,
+                      borderRadius: 12,
                       borderWidth: 1.5,
                       borderColor: active ? '#2563eb' : '#e2e8f0',
-                      backgroundColor: active ? '#eff6ff' : '#f8fafc',
+                      backgroundColor: active ? '#2563eb' : '#f8fafc',
                       alignItems: 'center',
+                      shadowColor: active ? '#2563eb' : 'transparent',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: active ? 0.2 : 0,
+                      shadowRadius: 4,
+                      elevation: active ? 2 : 0,
                     }}
                   >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: active ? '#2563eb' : '#64748b' }}>
-                      {num} {parseInt(num) === 1 ? 'Pg' : 'Pgs'}
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: active ? '#fff' : '#475569' }}>
+                      {num} Pages
                     </Text>
                   </TouchableOpacity>
                 );
