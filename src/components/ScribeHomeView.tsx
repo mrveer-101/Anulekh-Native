@@ -28,6 +28,26 @@ export default function ScribeHomeView() {
   const [showRatingDetails, setShowRatingDetails] = useState(false);
   const [isRatingsExpanded, setIsRatingsExpanded] = useState(false);
   const [expandedMatchIds, setExpandedMatchIds] = useState<Set<number>>(new Set());
+  const [isSosRegistered, setIsSosRegistered] = useState(true);
+  const [togglingSos, setTogglingSos] = useState(false);
+  const [showAchievementsModal, setShowAchievementsModal] = useState(false);
+
+  const handleToggleSos = async () => {
+    if (!user) return;
+    const nextVal = !isSosRegistered;
+    setIsSosRegistered(nextVal);
+    setTogglingSos(true);
+    try {
+      await supabase
+        .from('profiles')
+        .update({ is_sos_registered: nextVal ? 1 : 0 })
+        .eq('id', user.id);
+    } catch (e) {
+      console.log('Error toggling SOS status:', e);
+    } finally {
+      setTogglingSos(false);
+    }
+  };
 
   const toggleMatchCard = (id: number) => {
     setExpandedMatchIds(prev => {
@@ -66,22 +86,9 @@ export default function ScribeHomeView() {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   const openCallSheet = (exam: any) => {
-    if (!exam || !exam.exam_date) {
-      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
-      return;
-    }
-    
-    // Check if the exam date is today
-    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    if (dateStr !== todayStr) {
-      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
-      return;
-    }
-
+    if (!exam) return;
     setCallExam(exam);
-    setShowMaskedNumber(false);
+    setShowMaskedNumber(true);
     setIsCallOpen(true);
   };
 
@@ -112,6 +119,9 @@ export default function ScribeHomeView() {
         .single();
 
       setProfile(profileData);
+      if (profileData && profileData.is_sos_registered !== undefined && profileData.is_sos_registered !== null) {
+        setIsSosRegistered(profileData.is_sos_registered !== 0);
+      }
 
       // 2. Fetch Available Exams (where status is pending), excluding exams this
       // scribe was already rejected from — stays public for every other scribe.
@@ -835,7 +845,10 @@ export default function ScribeHomeView() {
         </View>
       </View>
 
-      {/* My Ratings Section */}
+      {/* 
+      ========================================================================
+      MY RATINGS SECTION (Commented out - preserved for future use)
+      ========================================================================
       <View style={{ marginBottom: 24 }}>
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Ratings</Text>
         
@@ -855,10 +868,8 @@ export default function ScribeHomeView() {
             elevation: 2
           }}
         >
-          {/* Collapsed Summary Header Row inside the card */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {/* First: Number of reviews */}
               <View style={{ 
                 backgroundColor: 'rgba(37,99,235,0.06)', 
                 borderWidth: 1, 
@@ -873,7 +884,6 @@ export default function ScribeHomeView() {
               </View>
             </View>
 
-            {/* Mid: Absolute Centered Ratings Stars */}
             <View 
               style={{ 
                 position: 'absolute', 
@@ -893,11 +903,11 @@ export default function ScribeHomeView() {
                   const hasNoReviews = reviews.length === 0;
                   
                   let starName: "star" | "star-outline" = "star-outline";
-                  let starColor = "#cbd5e1"; // silver/gray
+                  let starColor = "#cbd5e1";
                   
                   if (hasNoReviews) {
                     starName = "star";
-                    starColor = "#cbd5e1"; // filled silver
+                    starColor = "#cbd5e1";
                   } else {
                     const isFilled = ratingVal > 0 && star <= Math.round(ratingVal);
                     starName = isFilled ? "star" : "star-outline";
@@ -915,7 +925,6 @@ export default function ScribeHomeView() {
               </View>
             </View>
 
-            {/* Right: Stage Badge & Chevron */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {(() => {
                 const badge = getScribeBadge(reviews.length);
@@ -938,10 +947,8 @@ export default function ScribeHomeView() {
             </View>
           </View>
 
-          {/* Expanded Content */}
           {isRatingsExpanded && (
             <View style={{ marginTop: 16, borderTopWidth: 1, borderColor: '#f1f5f9', paddingTop: 16 }}>
-              {/* Score Dashboard Header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 36, fontWeight: '900', color: TEXT }}>
@@ -956,11 +963,11 @@ export default function ScribeHomeView() {
                       const hasNoReviews = reviews.length === 0;
                       
                       let starName: "star" | "star-outline" = "star-outline";
-                      let starColor = "#cbd5e1"; // silver/gray
+                      let starColor = "#cbd5e1";
                       
                       if (hasNoReviews) {
                         starName = "star";
-                        starColor = "#cbd5e1"; // filled silver
+                        starColor = "#cbd5e1";
                       } else {
                         const isFilled = ratingVal > 0 && star <= Math.round(ratingVal);
                         starName = isFilled ? "star" : "star-outline";
@@ -982,7 +989,6 @@ export default function ScribeHomeView() {
                 </View>
               </View>
 
-              {/* Metric Ratings list */}
               <View style={{ gap: 8 }}>
                 {[
                   { label: 'Punctuality', val: avgPunctuality, icon: 'time-outline' },
@@ -1011,12 +1017,66 @@ export default function ScribeHomeView() {
           )}
         </TouchableOpacity>
       </View>
+      ========================================================================
+      */}
 
-      {/* Upcoming Confirmed Exams (My Plans - Collapsible) */}
-      {scribeCommitments.length > 0 && (
-        <View style={{ marginBottom: 24 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Plans</Text>
-          {scribeCommitments.map((exam) => {
+      {/* 🚨 Separate Thin Line Row Block for SOS Standby Duty Toggle */}
+      <View style={{
+        backgroundColor: '#ffffff',
+        borderRadius: 18,
+        borderWidth: 1.5,
+        borderColor: isSosRegistered ? 'rgba(239,68,68,0.25)' : '#e2e8f0',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        marginBottom: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#64748b',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 2
+      }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <View style={{
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            backgroundColor: isSosRegistered ? 'rgba(239,68,68,0.12)' : '#f1f5f9',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Opt SOS Standby Duty</Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={handleToggleSos}
+          disabled={togglingSos}
+          activeOpacity={0.8}
+          style={{
+            width: 44,
+            height: 24,
+            borderRadius: 12,
+            backgroundColor: isSosRegistered ? '#ef4444' : '#cbd5e1',
+            padding: 3,
+            alignItems: isSosRegistered ? 'flex-end' : 'flex-start',
+            justifyContent: 'center',
+            marginLeft: 10
+          }}
+        >
+          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Upcoming Confirmed Exams (My Plans) */}
+      <View style={{ marginBottom: 24 }}>
+        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Plans</Text>
+
+        {scribeCommitments.length > 0 ? (
+          scribeCommitments.map((exam) => {
             const isEmergency = exam.is_emergency === 'yes';
             const isExpanded = expandedMatchIds.has(exam.id);
 
@@ -1152,9 +1212,62 @@ export default function ScribeHomeView() {
                 )}
               </View>
             );
-          })}
+          })
+        ) : (
+          <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '600', color: '#94a3b8' }}>
+              No confirmed upcoming exam commitments.
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* 🏆 My Achievements Block */}
+      <View style={{ marginBottom: 24 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14 }}>My Achievements</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/console/scribe/achievements' as any)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>View All 📜</Text>
+          </TouchableOpacity>
         </View>
-      )}
+
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          {/* Card 1: Badges Earned */}
+          <TouchableOpacity 
+            onPress={() => setShowAchievementsModal(true)}
+            activeOpacity={0.85}
+            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Ionicons name="trophy-outline" size={16} color="#d97706" />
+              <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>BADGES</Text>
+              </View>
+            </View>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>4 Badges</Text>
+          </TouchableOpacity>
+
+          {/* Card 2: Verified Certificates */}
+          <TouchableOpacity 
+            onPress={() => setShowAchievementsModal(true)}
+            activeOpacity={0.85}
+            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Ionicons name="ribbon-outline" size={16} color="#2563eb" />
+              <View style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#2563eb' }}>VERIFIED</Text>
+              </View>
+            </View>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>
+              {completedExamsCount > 0 ? completedExamsCount : 1} Certify
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Available Opportunities List */}
       <View>
@@ -1396,7 +1509,7 @@ export default function ScribeHomeView() {
                 <Feather name="phone-call" size={20} color="#059669" />
               </View>
               <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{t('call_detail')}</Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>પ્રાઈવસી પ્રોટેક્શન સક્રિય કરેલ છે.</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>Direct Contact Verification Active</Text>
             </View>
 
             <View style={{ gap: 14, marginBottom: 20 }}>
@@ -1432,7 +1545,7 @@ export default function ScribeHomeView() {
               )}
 
               <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-                વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના વિદ્યાર્થી
+                Subject: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> Candidate Student
               </Text>
             </View>
 
@@ -1444,10 +1557,10 @@ export default function ScribeHomeView() {
                   if (supported) {
                     await Linking.openURL(url);
                   } else {
-                    Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+                    Alert.alert(t('error'), 'Calling is not supported on this device.');
                   }
                 } catch (_) {
-                  Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+                  Alert.alert(t('error'), 'Error starting call.');
                 }
               }}
               style={{ backgroundColor: '#059669', borderRadius: 18, paddingVertical: 16, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#059669', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}
@@ -1487,6 +1600,124 @@ export default function ScribeHomeView() {
           }
         }}
       />
+
+      {/* 🏆 My Achievements & Verified Certificates Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showAchievementsModal}
+        onRequestClose={() => setShowAchievementsModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#ffffff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: '85%', shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 15 }}>
+            {/* Header */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', paddingBottom: 14 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(234,179,8,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="trophy" size={20} color="#eab308" />
+                </View>
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>My Achievements</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 1 }}>Badges & Verified Certificates</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowAchievementsModal(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Section 1: Unlocked Milestone Badges */}
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                  🏆 Earned Volunteer Badges
+                </Text>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {[
+                    { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: true, desc: '5 Scribe Jobs Completed' },
+                    { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Scribe Jobs Required' },
+                    { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: false, desc: '30 Scribe Jobs Required' },
+                    { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: true, desc: '3 SOS Emergency Dispatches' },
+                    { title: 'Speed Master', icon: 'flame', color: '#06b6d4', unlocked: true, desc: '5.0 Writing Speed Rating' },
+                    { title: '5-Star Champion', icon: 'ribbon', color: '#8b5cf6', unlocked: true, desc: '4.9+ Overall Rating' },
+                  ].map((b, idx) => (
+                    <View key={idx} style={{
+                      width: '48%',
+                      backgroundColor: b.unlocked ? '#f8fafc' : '#f1f5f9',
+                      borderWidth: 1.5,
+                      borderColor: b.unlocked ? b.color : '#e2e8f0',
+                      borderRadius: 16,
+                      padding: 12,
+                      opacity: b.unlocked ? 1 : 0.6,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: `${b.color}20`, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name={b.icon as any} size={16} color={b.color} />
+                        </View>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '900', color: b.unlocked ? '#0f172a' : '#64748b', flex: 1 }} numberOfLines={1}>
+                          {b.title}
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, color: '#64748b', fontWeight: '500' }}>
+                        {b.unlocked ? 'Unlocked ✓' : b.desc}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Section 2: Verified Certificates */}
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                  📜 Verified Digital Certificates
+                </Text>
+
+                <View style={{ backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)', padding: 16 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="ribbon" size={20} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a' }}>Official Scribing Certificate</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>VERIFIED QR</Text>
+                    </View>
+                  </View>
+
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                    Certificate ID: <Text style={{ fontWeight: '800', color: '#0f172a' }}>ANULEKH-CERT-2026</Text> • Authorized by Anulekh Disability Accessibility Network.
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (user) {
+                        const certUrl = `http://localhost:3000/api/certificates/view/${user.id}`;
+                        Linking.openURL(certUrl).catch(() => {
+                          Alert.alert("Certificate URL", certUrl);
+                        });
+                      }
+                    }}
+                    style={{ backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ffffff' }}>Open Official Certificate 📜</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* View Full Achievements & Detailed List Page Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  setShowAchievementsModal(false);
+                  router.push('/console/scribe/achievements' as any);
+                }}
+                style={{ backgroundColor: '#0f172a', paddingVertical: 14, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 12, marginBottom: 8 }}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#ffffff' }}>View Full Achievements Page →</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }

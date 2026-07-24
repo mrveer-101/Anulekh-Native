@@ -139,6 +139,19 @@ export default function StudentHomeView() {
   };
 
   const openCallSheet = (exam: any) => {
+    if (!exam || !exam.exam_date) {
+      Alert.alert("Contact Info Locked 🔒", "Contact details are only unlocked on the day of the exam for privacy protection.");
+      return;
+    }
+    
+    const dateStr = exam.exam_date.split('|')[0].trim();
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    if (dateStr !== todayStr) {
+      Alert.alert("Contact Info Locked 🔒", `Scribe contact details are protected and will unlock on the exam day (${dateStr}).`);
+      return;
+    }
+
     setCallExam(exam);
     setShowMaskedNumber(false);
     setIsCallOpen(true);
@@ -796,8 +809,8 @@ export default function StudentHomeView() {
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: MUTED, textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: TEXT, fontWeight: '800' }}>{profile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>ધોરણ: {selectedExam?.education_grade}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED }}>આધાર ID: ચકાસાયેલ</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>Grade: {selectedExam?.education_grade}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED }}>Aadhaar ID: Verified</Text>
                 </View>
 
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />

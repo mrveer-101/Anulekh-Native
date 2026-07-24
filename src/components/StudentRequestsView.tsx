@@ -290,7 +290,7 @@ export default function StudentRequestsView() {
     const todayStr = new Date().toISOString().split('T')[0];
     
     if (dateStr !== todayStr) {
-      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
+      Alert.alert("Contact Info Locked 🔒", `Scribe contact details are protected and will unlock on the exam day (${dateStr}).`);
       return;
     }
 

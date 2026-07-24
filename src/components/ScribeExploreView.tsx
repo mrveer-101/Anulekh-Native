@@ -846,6 +846,31 @@ export default function ScribeExploreView() {
         </TouchableOpacity>
       </View>
 
+      {/* 🚨 SOS Emergency Reserve Duty Banner */}
+      <View style={{ marginHorizontal: 24, marginTop: 12 }}>
+        <View style={{
+          backgroundColor: 'rgba(239,68,68,0.06)',
+          borderWidth: 1.5,
+          borderColor: 'rgba(239,68,68,0.2)',
+          borderRadius: 16,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+        }}>
+          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="flash" size={16} color="#ef4444" />
+          </View>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: '#991b1b' }}>🚨 SOS Standby Duty Active</Text>
+            <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>RESERVE 10</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
       {/* Search Header Bar */}
       <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
         

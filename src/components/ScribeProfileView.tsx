@@ -477,6 +477,70 @@ export default function ScribeProfileView() {
         </View>
       </View>
 
+      {/* 🏆 Coursera-Style Achievements & Badges Card */}
+      <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="trophy" size={16} color="#eab308" />
+            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Achievements & Badges</Text>
+          </View>
+          <TouchableOpacity 
+            onPress={() => {
+              if (user) {
+                Alert.alert("Verified Certificate", `Certificate ID: ANULEKH-CERT-${user.id.substring(0,8).toUpperCase()}-2026\n\nAccess online at:\nhttp://localhost:3000/api/certificates/view/${user.id}`);
+              }
+            }}
+            style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563eb' }}>📜 View Certificate</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>
+          Earn verified volunteer milestone badges and official certificates as you complete scribing assignments.
+        </Text>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {[
+            { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: true, desc: '5 Jobs' },
+            { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Jobs' },
+            { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: false, desc: '30 Jobs' },
+            { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: true, desc: 'SOS Hero' },
+            { title: 'Speed Master', icon: 'flame', color: '#06b6d4', unlocked: true, desc: '5.0 Speed' },
+            { title: '5-Star Champion', icon: 'ribbon', color: '#8b5cf6', unlocked: true, desc: '4.9+ Rating' },
+          ].map((b, idx) => (
+            <View key={idx} style={{
+              width: '48%',
+              backgroundColor: b.unlocked ? 'rgba(248,250,252,1)' : 'rgba(241,245,249,0.5)',
+              borderWidth: 1.5,
+              borderColor: b.unlocked ? b.color : '#e2e8f0',
+              borderRadius: 16,
+              padding: 10,
+              opacity: b.unlocked ? 1 : 0.6,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <View style={{
+                width: 30, height: 30, borderRadius: 10,
+                backgroundColor: b.unlocked ? `${b.color}20` : '#e2e8f0',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Ionicons name={b.icon as any} size={15} color={b.unlocked ? b.color : '#94a3b8'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '800', color: b.unlocked ? '#0f172a' : '#94a3b8' }} numberOfLines={1}>
+                  {b.title}
+                </Text>
+                <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748b' }}>
+                  {b.unlocked ? 'Unlocked ✓' : b.desc}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+
       {/* App Settings Card (Language Toggle Display) */}
       <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 20 }}>
         <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>{t('language_display')}</Text>

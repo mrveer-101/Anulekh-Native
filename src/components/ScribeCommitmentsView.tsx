@@ -49,6 +49,44 @@ export default function ScribeCommitmentsView() {
   // Status filter for the flat applications list
   const [selectedFilter, setSelectedFilter] = useState<'All' | 'Pending' | 'Completed' | 'Rejected'>('All');
 
+  // Calendar States
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days = [];
+    const startingDayOfWeek = firstDay.getDay();
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  };
+
+  const changeMonth = (increment: number) => {
+    const newMonth = new Date(currentMonth);
+    newMonth.setMonth(newMonth.getMonth() + increment);
+    setCurrentMonth(newMonth);
+  };
+
+  const hasPlanOnDate = (date: Date) => {
+    if (!date) return false;
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return applications.some(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(dateString));
+  };
+
+  const getPlansOnDate = (date: Date) => {
+    if (!date) return [];
+    const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return applications.filter(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(dateString));
+  };
+
   // Track which cards are expanded (by application id) for the collapsed list / detailed view toggle
   const [expandedIds, setExpandedIds] = useState<number[]>([]);
 
@@ -199,23 +237,9 @@ export default function ScribeCommitmentsView() {
   };
 
   const openCallSheet = (exam: any) => {
-    if (!exam || !exam.exam_date) {
-      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
-      return;
-    }
-    
-    // Check if the exam date is today
-    // Date format is "YYYY-MM-DD | 10:00 AM" or "YYYY-MM-DD"
-    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    if (dateStr !== todayStr) {
-      Alert.alert("Calling Unavailable", `Calling is only permitted on the day of the exam (${dateStr}).`);
-      return;
-    }
-
+    if (!exam) return;
     setCallExam(exam);
-    setShowMaskedNumber(false);
+    setShowMaskedNumber(true);
     setIsCallOpen(true);
   };
 
@@ -262,13 +286,17 @@ export default function ScribeCommitmentsView() {
 
   // Apply the active filter to the (already newest-first) applications list.
   // "Pending" covers both pending applications and confirmed commitments (accepted but not yet completed).
-  const visibleApps = applications.filter(app => {
+  let visibleApps = applications.filter(app => {
     const type = getAppType(app);
     if (!type) return false;
     if (selectedFilter === 'All') return true;
     if (selectedFilter === 'Pending') return type === 'pending' || type === 'confirmed';
     return type === selectedFilter.toLowerCase();
   });
+
+  if (selectedDate) {
+    visibleApps = visibleApps.filter(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(selectedDate));
+  }
 
   const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed') => {
     const exam = app.examDetails;
@@ -522,39 +550,178 @@ export default function ScribeCommitmentsView() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
 
-      {/* Filter Selection Tabs (equal width) */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 6 }}>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {FILTERS.map(f => (
-            <TouchableOpacity
-              key={f.key}
-              onPress={() => setSelectedFilter(f.key)}
-              style={{
-                flex: 1,
-                paddingVertical: 8,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: selectedFilter === f.key ? '#059669' : '#fff',
-                borderWidth: 1,
-                borderColor: selectedFilter === f.key ? '#059669' : 'rgba(0,0,0,0.05)',
-              }}
-            >
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: selectedFilter === f.key ? '#fff' : '#64748b' }}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
       >
+        {/* Interactive Calendar Card (First) */}
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
+          padding: 16,
+          borderWidth: 1.5,
+          borderColor: '#e2e8f0',
+          shadowColor: '#2563eb',
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+          elevation: 4,
+          marginBottom: 16
+        }}>
+          {/* Header: Month Selector */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <TouchableOpacity 
+              onPress={() => changeMonth(-1)} 
+              style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+            >
+              <Feather name="chevron-left" size={18} color="#2563eb" />
+            </TouchableOpacity>
+            
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
+                {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </Text>
+            </View>
+
+            <TouchableOpacity 
+              onPress={() => changeMonth(1)} 
+              style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+            >
+              <Feather name="chevron-right" size={18} color="#2563eb" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Weekdays Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+            {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, idx) => (
+              <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Days Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+            {getDaysInMonth(currentMonth).map((day, idx) => {
+              if (!day) {
+                return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+              }
+              const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+              const isSelected = selectedDate === dateString;
+              const hasPlan = hasPlanOnDate(day);
+              const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+
+              let cellBg = 'transparent';
+              let cellTextColor = '#334155';
+              let cellBorder = {};
+              let dotColor = '#94a3b8';
+
+              if (isSelected) {
+                cellBg = '#2563eb';
+                cellTextColor = '#ffffff';
+                dotColor = '#ffffff';
+              } else if (hasPlan) {
+                const plansOnDay = getPlansOnDate(day);
+                const hasEmergency = plansOnDay.some(p => p.examDetails?.is_emergency === 'yes');
+                if (hasEmergency) {
+                  cellBg = 'rgba(239,68,68,0.15)';
+                  cellTextColor = '#dc2626';
+                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
+                  dotColor = '#dc2626';
+                } else {
+                  cellBg = 'rgba(249,115,22,0.14)';
+                  cellTextColor = '#c2410c';
+                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
+                  dotColor = '#f97316';
+                }
+              } else if (isToday) {
+                cellBg = '#eff6ff';
+                cellTextColor = '#2563eb';
+                cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
+              }
+
+              return (
+                <TouchableOpacity
+                  key={dateString}
+                  onPress={() => {
+                    if (isSelected) {
+                      setSelectedDate(null);
+                    } else {
+                      setSelectedDate(dateString);
+                    }
+                  }}
+                  style={{
+                    width: '14.2%',
+                    height: 38,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <View style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: cellBg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    ...cellBorder
+                  }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: isSelected || hasPlan || isToday ? '900' : '600', color: cellTextColor }}>
+                      {day.getDate()}
+                    </Text>
+                    {hasPlan && !isSelected && (
+                      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: dotColor, marginTop: 1 }} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Selected Date Filter Badge / Reset */}
+          {selectedDate && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="calendar" size={13} color="#2563eb" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#2563eb' }}>
+                  Filtered by date: {selectedDate}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b' }}>Clear Date</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Filter Selection Tabs (Second) */}
+        <View style={{ marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {FILTERS.map(f => (
+              <TouchableOpacity
+                key={f.key}
+                onPress={() => setSelectedFilter(f.key)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: selectedFilter === f.key ? '#059669' : '#fff',
+                  borderWidth: 1,
+                  borderColor: selectedFilter === f.key ? '#059669' : 'rgba(0,0,0,0.05)',
+                }}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: selectedFilter === f.key ? '#fff' : '#64748b' }}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
         {visibleApps.length === 0 ? (
           <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
             <Feather name="inbox" size={28} color="#94a3b8" />
@@ -599,10 +766,10 @@ export default function ScribeCommitmentsView() {
               {/* 1. Exam Details */}
               <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('exam_details')}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>વિષય: {selectedExam?.subject}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_level')}: {selectedExam?.exam_type}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>તારીખ: {selectedExam?.exam_date}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>સ્થળ: {selectedExam?.exam_venue}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>Subject: {selectedExam?.subject}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Level: {selectedExam?.exam_type}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Date: {selectedExam?.exam_date}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Venue: {selectedExam?.exam_venue}</Text>
               </View>
 
               {/* 2. Candidate & Scribe Details */}
@@ -610,8 +777,8 @@ export default function ScribeCommitmentsView() {
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{selectedExam?.student_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>ધોરણ: {selectedExam?.education_grade}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>આધાર ID: ચકાસાયેલ</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Grade: {selectedExam?.education_grade}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>Aadhaar ID: Verified</Text>
                 </View>
 
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
@@ -619,8 +786,8 @@ export default function ScribeCommitmentsView() {
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{scribeProfile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>વ્યવસાય: {scribeProfile?.occupation || 'વિદ્યાર્થી લખિયો'}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>શિક્ષણ: {scribeProfile?.education_level || 'અંડરગ્રેજ્યુએટ'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Occupation: {scribeProfile?.occupation || 'Student Volunteer Scribe'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>Education: {scribeProfile?.education_level || 'Undergraduate'}</Text>
                 </View>
               </View>
 
@@ -635,7 +802,7 @@ export default function ScribeCommitmentsView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, paddingVertical: 4 }}>
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('status')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>✓ ચકાસાયેલ લખિયો</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>✓ Verified Scribe</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('official_stamp')}</Text>
