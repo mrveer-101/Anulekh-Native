@@ -364,38 +364,6 @@ export default function AssignmentRequestForm() {
                 <Feather name="plus" size={18} color="#2563eb" />
               </TouchableOpacity>
             </View>
-
-            {/* Quick Presets (10, 25, 50) */}
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-              {['10', '25', '50'].map((num) => {
-                const active = pageCount === num;
-                return (
-                  <TouchableOpacity
-                    key={num}
-                    onPress={() => setPageCount(num)}
-                    activeOpacity={0.8}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 10,
-                      borderRadius: 12,
-                      borderWidth: 1.5,
-                      borderColor: active ? '#2563eb' : '#e2e8f0',
-                      backgroundColor: active ? '#2563eb' : '#f8fafc',
-                      alignItems: 'center',
-                      shadowColor: active ? '#2563eb' : 'transparent',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: active ? 0.2 : 0,
-                      shadowRadius: 4,
-                      elevation: active ? 2 : 0,
-                    }}
-                  >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: active ? '#fff' : '#475569' }}>
-                      {num} Pages
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
           </View>
 
           <View style={s.field}>
@@ -422,7 +390,6 @@ export default function AssignmentRequestForm() {
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <View>
               <Text style={s.label}>Reference Attachments</Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#94a3b8', marginTop: 2 }}>PDFs, images — multiple allowed</Text>
             </View>
             {attachments.length > 0 && (
               <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: '#bfdbfe' }}>
@@ -472,10 +439,6 @@ export default function AssignmentRequestForm() {
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#475569' }}>Image</Text>
             </TouchableOpacity>
           </View>
-
-          <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#cbd5e1', textAlign: 'center', marginTop: 10 }}>
-            Files are stored as inline attachments in the request
-          </Text>
         </View>
 
         {/* ── Save Button ── */}
