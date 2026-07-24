@@ -16,7 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../core/supabase';
 import { Feather } from '@expo/vector-icons';
-import PolicyModal from '@/components/PolicyModal';
+import PolicyModal from '@/components/modals/PolicyModal';
 
 const { height } = Dimensions.get('window');
 

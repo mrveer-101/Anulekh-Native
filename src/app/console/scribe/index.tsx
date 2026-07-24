@@ -19,13 +19,13 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/app/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import ScribeHomeView from '../../../components/ScribeHomeView';
-import ScribeExploreView from '../../../components/ScribeExploreView';
-import ScribeCommitmentsView from '../../../components/ScribeCommitmentsView';
-import ScribeProfileView from '../../../components/ScribeProfileView';
-import SharedSettingsView from '../../../components/SharedSettingsView';
-import SharedNotificationsView from '../../../components/SharedNotificationsView';
-import ScribePlanView from '../../../components/ScribePlanView';
+import ScribeHomeView from '@/components/scribe/ScribeHomeView';
+import ScribeExploreView from '@/components/scribe/ScribeExploreView';
+import ScribeCommitmentsView from '@/components/scribe/ScribeCommitmentsView';
+import ScribeProfileView from '@/components/scribe/ScribeProfileView';
+import SharedSettingsView from '@/components/shared/SharedSettingsView';
+import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
+import ScribePlanView from '@/components/scribe/ScribePlanView';
 
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 

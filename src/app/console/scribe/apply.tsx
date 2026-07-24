@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
-import PolicyModal from '@/components/PolicyModal';
+import PolicyModal from '@/components/modals/PolicyModal';
 
 export default function ScribeApplyDetailsPage() {
   const params = useLocalSearchParams<{ id: string; type?: string }>();

@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { supabase } from '../app/core/supabase';
+import { supabase } from '@/app/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLanguage, LanguageType } from '../app/core/translation';
+import { useLanguage, LanguageType } from '@/app/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];

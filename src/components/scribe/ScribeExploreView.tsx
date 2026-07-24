@@ -2,10 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '../app/core/supabase';
-import { useLanguage } from '../app/core/translation';
-import { parseExamDate } from '../app/core/examDate';
-import MiniCalendar from './MiniCalendar';
+import { supabase } from '@/app/core/supabase';
+import { useLanguage } from '@/app/core/translation';
+import { parseExamDate } from '@/app/core/examDate';
+import MiniCalendar from '@/components/modals/MiniCalendar';
 
 interface ExamRequest {
   id: number;

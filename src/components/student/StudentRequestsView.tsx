@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '../app/core/supabase';
-import { useLanguage } from '../app/core/translation';
+import { supabase } from '@/app/core/supabase';
+import { useLanguage } from '@/app/core/translation';
 import ScribesDirectoryModal from './ScribesDirectoryModal';
 
 interface ExamRequest {

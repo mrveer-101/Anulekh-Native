@@ -19,12 +19,12 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/app/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import StudentHomeView from '../../../components/StudentHomeView';
-import StudentRequestsView from '../../../components/StudentRequestsView';
-import StudentProfileView from '../../../components/StudentProfileView';
-import SharedSettingsView from '../../../components/SharedSettingsView';
-import SharedNotificationsView from '../../../components/SharedNotificationsView';
-import StudentPlanView from '../../../components/StudentPlanView';
+import StudentHomeView from '@/components/student/StudentHomeView';
+import StudentRequestsView from '@/components/student/StudentRequestsView';
+import StudentProfileView from '@/components/student/StudentProfileView';
+import SharedSettingsView from '@/components/shared/SharedSettingsView';
+import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
+import StudentPlanView from '@/components/student/StudentPlanView';
 
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
 

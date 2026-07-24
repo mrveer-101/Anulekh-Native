@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '../app/core/supabase';
-import { useLanguage } from '../app/core/translation';
+import { supabase } from '@/app/core/supabase';
+import { useLanguage } from '@/app/core/translation';
 
 interface Notification {
   id: number;

@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
 import { useColorScheme, Alert, Platform } from 'react-native';
 
 import '@/global.css';
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { AnimatedSplashOverlay } from '@/components/ui/animated-icon';
 
 // Global Alert Polyfill for React Native Web
 if (Platform.OS === 'web') {
