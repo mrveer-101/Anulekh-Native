@@ -79,3 +79,8 @@ export function hoursUntilExam(examDate?: string | null): number | null {
   if (!d) return null;
   return (d.getTime() - Date.now()) / (1000 * 60 * 60);
 }
+
+export default function ExamDateNonRoute() {
+  return null;
+}
+

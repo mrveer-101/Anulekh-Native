@@ -406,3 +406,8 @@ export function useLanguage() {
 
   return { lang, changeLanguage, t };
 }
+
+export default function TranslationNonRoute() {
+  return null;
+}
+

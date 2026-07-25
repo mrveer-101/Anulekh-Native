@@ -191,3 +191,8 @@ export const supabase = {
   auth: mockAuth,
   from: (table: string) => new MockQueryBuilder(table)
 };
+
+export default function SupabaseNonRoute() {
+  return null;
+}
+

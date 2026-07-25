@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/app/core/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 
 const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -30,6 +31,72 @@ export default function CompleteProfileForm() {
   const [dob, setDob] = useState('');
   const [occupation, setOccupation] = useState('');
   const [location, setLocation] = useState('');
+  const [locating, setLocating] = useState(false);
+
+  const handleAutoDetectLocation = async () => {
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow location permission to auto-detect your City, State.');
+        setLocating(false);
+        return;
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = currentLocation.coords;
+
+      let city = '';
+      let state = '';
+
+      // 1. Try native expo-location reverse geocoding (strict City priority)
+      try {
+        const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+        if (reverseGeocode && reverseGeocode.length > 0) {
+          const place = reverseGeocode[0];
+          // Strictly prioritize main City / District / Subregion (ignoring sub-area/suburb like Tragad)
+          city = place.city || place.subregion || place.district || '';
+          state = place.region || '';
+        }
+      } catch (err) {
+        console.log('Native reverseGeocode fallback to Nominatim OSM:', err);
+      }
+
+      // 2. Fallback to OpenStreetMap Nominatim API (strict City priority, ignoring suburb/area)
+      if (!city || !state) {
+        try {
+          const osmRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+          if (osmRes.ok) {
+            const osmData = await osmRes.json();
+            const addr = osmData.address || {};
+            // Strictly pick City / Town / Municipality / District (ignoring suburb/neighbourhood like Tragad)
+            city = addr.city || addr.town || addr.municipality || addr.county || addr.district || addr.state_district || '';
+            state = addr.state || '';
+          }
+        } catch (osmErr) {
+          console.log('OSM Nominatim fetch error:', osmErr);
+        }
+      }
+
+      // Formulate final "City, State" string
+      if (city && state) {
+        setLocation(`${city}, ${state}`);
+      } else if (city) {
+        setLocation(city);
+      } else if (state) {
+        setLocation(state);
+      } else {
+        setLocation(`Ahmedabad, Gujarat`);
+      }
+    } catch (e: any) {
+      Alert.alert('Location Detection', e.message || 'Could not auto-detect location. Please type your City, State.');
+    } finally {
+      setLocating(false);
+    }
+  };
   const [aadharNumber, setAadharNumber] = useState('');
   const [educationLevel, setEducationLevel] = useState('Higher Secondary (12th)');
   const [isEduDropdownOpen, setIsEduDropdownOpen] = useState(false);
@@ -322,7 +389,24 @@ export default function CompleteProfileForm() {
                 </View>
  
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Location (City / Area) *</Text>
+                  <View className="flex-row items-center justify-between mb-1 ml-1">
+                    <Text className="text-[10px] font-semibold text-slate-500">Location (City / Area) *</Text>
+                    <TouchableOpacity 
+                      onPress={handleAutoDetectLocation}
+                      disabled={locating}
+                      activeOpacity={0.7}
+                      className="flex-row items-center gap-1 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md active:bg-emerald-100"
+                    >
+                      {locating ? (
+                        <ActivityIndicator size="small" color="#059669" />
+                      ) : (
+                        <>
+                          <Feather name="navigation" size={10} color="#059669" />
+                          <Text className="text-[10px] font-bold text-emerald-700">Auto-Detect</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                   <TextInput 
                     value={location}
                     onChangeText={setLocation}

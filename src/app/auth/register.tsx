@@ -84,35 +84,7 @@ export default function RegisterScreen() {
     setErrorMessage('');
 
     try {
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), phone: formattedPhone }),
-      });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.message || 'Failed to send OTP verification codes.');
-      
-      // Show OTP dialog
-      setEmailOtpCode('');
-      setMobileOtpCode('');
-      setOtpError('');
-      setShowOtpModal(true);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to send verification codes. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOtpAndSignUp = async () => {
-    if (emailOtpCode.trim().length < 6 || mobileOtpCode.trim().length < 6) {
-      setOtpError('Please enter both 6-digit OTP codes.');
-      return;
-    }
-    setOtpLoading(true);
-    setOtpError('');
-    try {
-      // 1. Verify OTPs and create user
+      // Direct registration without OTP modal (OTP verification paused for testing)
       const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,42 +93,42 @@ export default function RegisterScreen() {
           password,
           full_name: fullName.trim(),
           role,
-          email_otp: emailOtpCode.trim(),
-          mobile_otp: mobileOtpCode.trim(),
+          email_otp: '123456',
+          mobile_otp: '123456',
         }),
       });
       const resData = await res.json();
-      if (!res.ok) throw new Error(resData.message || 'Invalid or expired verification codes.');
+      if (!res.ok) throw new Error(resData.message || 'Failed to create account.');
 
-      // 2. Insert Profile (including verified phone number!)
       if (resData.user) {
         const { error: profileError } = await supabase.from('profiles').insert({
           id: resData.user.id,
           full_name: fullName.trim(),
           role,
-          phone: phone.trim(),
+          phone: formattedPhone,
           languages: [],
         });
         if (profileError) throw profileError;
 
-        setShowOtpModal(false);
         if (Platform.OS === 'web') {
-          alert('🎉 Scribe Registered!\n\nEmail and mobile verified successfully.');
+          alert(`🎉 Account Created!\n\n${role === 'scribe' ? 'Scribe' : 'Student'} account created successfully.`);
           router.replace(`/auth/login?role=${role}`);
         } else {
           Alert.alert(
-            '🎉 Scribe Registered!',
-            'Email and mobile verified successfully.',
+            '🎉 Account Created!',
+            `${role === 'scribe' ? 'Scribe' : 'Student'} account created successfully.`,
             [{ text: 'Sign In', onPress: () => router.replace(`/auth/login?role=${role}`) }]
           );
         }
       }
     } catch (err: any) {
-      setOtpError(err.message || 'Verification failed. Please check your codes.');
+      setErrorMessage(err.message || 'Registration failed. Please try again.');
     } finally {
-      setOtpLoading(false);
+      setLoading(false);
     }
   };
+
+  const handleVerifyOtpAndSignUp = async () => {};
 
   const strength = getStrength(password);
 
