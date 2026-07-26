@@ -3,27 +3,27 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
-    "@expo/ui": "~56.0.18",
+    "@expo/ui": "~56.0.23",
     "@expo/vector-icons": "^15.1.1",
-    "@react-native-async-storage/async-storage": "^3.1.1",
-    "expo": "~56.0.12",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~56.0.17",
     "expo-av": "^16.0.8",
-    "expo-constants": "~56.0.18",
+    "expo-constants": "~56.0.22",
     "expo-device": "~56.0.4",
     "expo-document-picker": "~56.0.4",
-    "expo-file-system": "^57.0.0",
+    "expo-file-system": "~56.0.8",
     "expo-font": "~56.0.7",
     "expo-glass-effect": "~56.0.4",
     "expo-image": "~56.0.11",
-    "expo-image-picker": "~56.0.21",
-    "expo-linking": "~56.0.14",
-    "expo-location": "~56.0.21",
-    "expo-router": "~56.2.11",
-    "expo-splash-screen": "~56.0.10",
+    "expo-image-picker": "~56.0.22",
+    "expo-linking": "~56.0.16",
+    "expo-location": "~56.0.22",
+    "expo-router": "~56.2.16",
+    "expo-splash-screen": "~56.0.14",
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
     "expo-system-ui": "~56.0.5",
-    "expo-web-browser": "~56.0.5",
+    "expo-web-browser": "~56.0.6",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -31,7 +31,7 @@
     "react-native-gesture-handler": "~2.31.1",
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "4.25.2",
+    "react-native-screens": "~4.26.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.8.3"
   },
@@ -40,6 +40,7 @@
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~56.0.4",
+    "expo-doctor": "^1.20.1",
     "postcss": "^8.5.15",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.3"
@@ -51,6 +52,15 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-av"
+        ]
+      }
+    }
   },
   "private": true
 }
