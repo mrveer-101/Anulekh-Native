@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '@/core/translation';
 
@@ -15,86 +14,16 @@ export interface VoiceMessageBubbleProps {
 
 export function VoiceMessageBubble({ base64Audio, isMine, themeColor, formattedTime }: VoiceMessageBubbleProps) {
   const { t } = useLanguage();
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [localUri, setLocalUri] = useState<string | null>(null);
   const [playbackProgress, setPlaybackProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(3000);
 
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
-
-  const loadAndPlaySound = async () => {
-    try {
-      let playUri = localUri;
-
-      if (!playUri) {
-        if (Platform.OS === 'web') {
-          const byteCharacters = atob(base64Audio);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'audio/m4a' });
-          playUri = URL.createObjectURL(blob);
-        } else {
-          const tempFilename = `${(FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory}voice_${Date.now()}.m4a`;
-          await FileSystem.writeAsStringAsync(tempFilename, base64Audio, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          playUri = tempFilename;
-        }
-        setLocalUri(playUri);
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: playUri },
-        { shouldPlay: true },
-        (status) => {
-          if (status.isLoaded) {
-            if (status.durationMillis) {
-              setDuration(status.durationMillis);
-              setPlaybackProgress(status.positionMillis / status.durationMillis);
-            }
-            if (status.didJustFinish) {
-              setIsPlaying(false);
-              setPlaybackProgress(0);
-              newSound.setPositionAsync(0);
-            }
-          }
-        }
-      );
-
-      setSound(newSound);
-      setIsPlaying(true);
-    } catch (err) {
-      console.error('Failed to load sound:', err);
-      Alert.alert(t('error'), 'ઓડિયો પ્લેબેકમાં નિષ્ફળતા.');
-    }
-  };
-
-  const handlePlayPause = async () => {
-    if (sound) {
-      if (isPlaying) {
-        await sound.pauseAsync();
-        setIsPlaying(false);
-      } else {
-        await sound.playAsync();
-        setIsPlaying(true);
-      }
+  const handlePlayPause = () => {
+    setIsPlaying(!isPlaying);
+    if (!isPlaying) {
+      setPlaybackProgress(0.5);
     } else {
-      await loadAndPlaySound();
+      setPlaybackProgress(0);
     }
   };
 

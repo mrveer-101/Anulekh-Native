@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
-import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '@/core/translation';
 import { isExamToday, isExamPast } from '@/core/examDate';
@@ -36,7 +35,7 @@ export default function ChatRoomScreen() {
   const [newMessage, setNewMessage] = useState('');
 
   // Voice recording state
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [recording, setRecording] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const recordInterval = useRef<any>(null);
@@ -193,85 +192,17 @@ export default function ChatRoomScreen() {
   };
 
   const startRecording = async () => {
-    try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert(t('error'), 'કૃપા કરીને અવાજ રેકોર્ડ કરવા માટે માઇક્રોફોનની પરવાનગી આપો.');
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const newRecording = new Audio.Recording();
-      await newRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await newRecording.startAsync();
-      
-      setRecording(newRecording);
-      setIsRecording(true);
-      setRecordDuration(0);
-
-      recordInterval.current = setInterval(() => {
-        setRecordDuration(prev => prev + 1);
-      }, 1000);
-    } catch (err) {
-      console.error('Failed to start recording:', err);
-      Alert.alert(t('error'), 'રેકોર્ડિંગ શરૂ કરવામાં સમસ્યા આવી.');
-    }
+    setIsRecording(true);
+    setRecordDuration(0);
+    recordInterval.current = setInterval(() => {
+      setRecordDuration(prev => prev + 1);
+    }, 1000);
   };
 
   const stopAndSendRecording = async () => {
-    if (!recording) return;
-
     clearInterval(recordInterval.current);
     setIsRecording(false);
-    
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
-
-      if (!uri) return;
-
-      let base64Data = '';
-      if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        base64Data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            const base64 = result.split(',')[1];
-            resolve(base64);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } else {
-        base64Data = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-      }
-
-      const audioMessage = `[audio/m4a;base64]${base64Data}`;
-
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          request_id: exam.id,
-          sender_id: currentUser.id,
-          message: audioMessage,
-          created_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-      loadMessages();
-    } catch (err) {
-      console.error('Failed to stop and send recording:', err);
-      Alert.alert(t('error'), 'રેકોર્ડિંગ મોકલવામાં સમસ્યા આવી.');
-    }
+    setRecordDuration(0);
   };
 
   const cancelRecording = async () => {
