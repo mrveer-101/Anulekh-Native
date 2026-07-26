@@ -3,9 +3,9 @@ import { View, Text, Switch, TouchableOpacity, ScrollView, Alert, ActivityIndica
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { supabase } from '@/app/core/supabase';
+import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLanguage, LanguageType } from '@/app/core/translation';
+import { useLanguage, LanguageType } from '@/core/translation';
 
 export default function SettingsScreen() {
   const { lang, changeLanguage, t } = useLanguage();

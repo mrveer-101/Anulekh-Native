@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { supabase } from '@/app/core/supabase';
-import { useLanguage } from '@/app/core/translation';
+import { supabase } from '@/core/supabase';
+import { useLanguage } from '@/core/translation';
 
 interface ExamRequest {
   id: number;

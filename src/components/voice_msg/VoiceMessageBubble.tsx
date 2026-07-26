@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Platform, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { useLanguage } from '../../app/core/translation';
+import { useLanguage } from '@/core/translation';
 
 export interface VoiceMessageBubbleProps {
   messageId: number;

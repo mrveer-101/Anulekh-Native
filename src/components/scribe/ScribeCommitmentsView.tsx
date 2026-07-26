@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '@/app/core/supabase';
-import { useLanguage } from '@/app/core/translation';
+import { supabase } from '@/core/supabase';
+import { useLanguage } from '@/core/translation';
 
 interface Application {
   id: number;

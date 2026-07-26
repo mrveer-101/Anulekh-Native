@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '@/app/core/supabase';
-import { useLanguage } from '@/app/core/translation';
+import { supabase } from '@/core/supabase';
+import { useLanguage } from '@/core/translation';
 import PolicyModal from '@/components/modals/PolicyModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

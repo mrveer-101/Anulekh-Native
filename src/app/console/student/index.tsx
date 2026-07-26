@@ -14,9 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { supabase } from '@/app/core/supabase';
+import { supabase } from '@/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useLanguage } from '@/app/core/translation';
+import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import StudentHomeView from '@/components/student/StudentHomeView';

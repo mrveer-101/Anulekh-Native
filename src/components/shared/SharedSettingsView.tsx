@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { supabase } from '@/app/core/supabase';
+import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLanguage, LanguageType } from '@/app/core/translation';
+import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function SharedSettingsView() {

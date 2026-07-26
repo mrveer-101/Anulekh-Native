@@ -4,11 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { supabase } from '@/app/core/supabase';
+import { supabase } from '@/core/supabase';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { useLanguage } from '@/app/core/translation';
-import { isExamToday, isExamPast } from '@/app/core/examDate';
+import { useLanguage } from '@/core/translation';
+import { isExamToday, isExamPast } from '@/core/examDate';
 
 interface Message {
   id: number;

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '../core/supabase';
+import { supabase } from '@/core/supabase';
 import { Feather } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
 

@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
-import { supabase } from '../core/supabase';
+import { supabase } from '@/core/supabase';
 import { Feather } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');

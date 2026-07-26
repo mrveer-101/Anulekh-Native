@@ -49,7 +49,7 @@ This document outlines the upcoming features and technical improvements planned 
 * **Specification:** Students can record a brief audio message detailing special instructions or special assistance needs. Includes updated terms, conditions, and scribe conduct guidelines.
 * **Benefits:** Assists students with visual or physical impairments.
 
-### 📄 AI PDF Hall Ticket Analysis
+### 📄 AI PDF Hall Ticket Analysis - Done
 * **Feature:** Auto-Fill request creation.
 * **Specification:** Students upload their official hall ticket PDF. The app auto-extracts exam details (subject, date, time, venue) using document parser API to instantly generate requests.
 * **Benefits:** Simplifies request creation and eliminates typos.
