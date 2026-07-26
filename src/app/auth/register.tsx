@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/core/supabase';
+import { supabase, friendlyAuthError } from '@/core/supabase';
 import { Feather } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
 
@@ -122,7 +122,7 @@ export default function RegisterScreen() {
         }
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Registration failed. Please try again.');
+      setErrorMessage(friendlyAuthError(err, 'Registration failed. Please try again.'));
     } finally {
       setLoading(false);
     }

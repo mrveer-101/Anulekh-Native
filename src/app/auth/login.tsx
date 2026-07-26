@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase } from '@/core/supabase';
+import { supabase, friendlyAuthError } from '@/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -75,7 +75,7 @@ export default function LoginScreen() {
       
       setForgotStep(2);
     } catch (err: any) {
-      setForgotError(err.message || 'Failed to send OTP. Please try again.');
+      setForgotError(friendlyAuthError(err, 'Failed to send OTP. Please try again.'));
     } finally {
       setForgotLoading(false);
     }
@@ -122,7 +122,7 @@ export default function LoginScreen() {
       Alert.alert('Success', 'Your password has been reset successfully! Please log in.');
       setForgotModalVisible(false);
     } catch (err: any) {
-      setForgotError(err.message || 'Failed to reset password. Please try again.');
+      setForgotError(friendlyAuthError(err, 'Failed to reset password. Please try again.'));
     } finally {
       setForgotLoading(false);
     }
@@ -163,7 +163,7 @@ export default function LoginScreen() {
         router.replace(profile?.role === 'scribe' ? '/console/scribe' : '/console/student');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed Google authentication.');
+      setErrorMessage(friendlyAuthError(err, 'Failed Google authentication.'));
     } finally {
       setLoading(false);
     }
@@ -194,7 +194,7 @@ export default function LoginScreen() {
         router.replace(profile?.role === 'scribe' ? '/console/scribe' : '/console/student');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Invalid credentials. Please try again.');
+      setErrorMessage(friendlyAuthError(err, 'Invalid credentials. Please try again.'));
     } finally {
       setLoading(false);
     }

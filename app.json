@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Native-Mobile",
+    "name": "Anulekh",
     "slug": "anulekh",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,6 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "jsEngine": "hermes",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -41,6 +40,17 @@
         "expo-image-picker",
         {
           "photosPermission": "Anulekh needs access to your photos so you can upload your hall ticket / admit card."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableBundleCompression": true,
+            "buildArchs": ["arm64-v8a"]
+          }
         }
       ]
     ],

@@ -5,6 +5,17 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 console.log(`🌐 Running in SERVER Mode (connecting to local SQLite hosted backend at ${API_URL})`);
 
+// fetch() rejects with a generic "Network request failed" (or "Failed to fetch" on web)
+// when the backend host is unreachable — surface that as a clear connectivity message
+// instead of a confusing raw error.
+export function friendlyAuthError(err: any, fallback: string): string {
+  const msg = err?.message ? String(err.message) : (typeof err === 'string' ? err : '');
+  if (/network request failed/i.test(msg) || /failed to fetch/i.test(msg) || /load failed/i.test(msg)) {
+    return 'Not connected to server. Please check your internet connection or try again later.';
+  }
+  return msg || fallback;
+}
+
 class MockQueryBuilder {
   private table: string;
   private action: 'select' | 'insert' | 'update' | 'delete' = 'select';
@@ -108,7 +119,7 @@ class MockQueryBuilder {
       }
       return result;
     } catch (err: any) {
-      return { data: null, error: err.message || err };
+      return { data: null, error: friendlyAuthError(err, 'Query failed') };
     }
   }
 
@@ -139,7 +150,7 @@ const mockAuth = {
       await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
       return { data: { user: data.user }, error: null };
     } catch (err: any) {
-      return { data: { user: null }, error: err.message || err };
+      return { data: { user: null }, error: friendlyAuthError(err, 'Signup failed') };
     }
   },
 
@@ -163,7 +174,7 @@ const mockAuth = {
       await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
       return { data: session, error: null };
     } catch (err: any) {
-      return { data: { user: null }, error: err.message || err };
+      return { data: { user: null }, error: friendlyAuthError(err, 'Signin failed') };
     }
   },
 
