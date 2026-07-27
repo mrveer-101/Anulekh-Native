@@ -4,6 +4,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
+import { hoursUntilExam } from '@/core/examDate';
 import ScribesDirectoryModal from './ScribesDirectoryModal';
 
 interface ExamRequest {
@@ -109,6 +110,22 @@ export default function StudentRequestsView() {
         .order('created_at', { ascending: false });
 
       if (error) throw new Error(error.message || error.details || error.hint || 'Failed to load exam requests.');
+
+      // Auto-SOS Conversion: If pending request is within 24h of exam, automatically elevate to emergency SOS
+      if (data && data.length > 0) {
+        for (const req of data) {
+          if (req.status === 'pending' && req.is_emergency !== 'yes' && req.exam_date) {
+            const h = hoursUntilExam(req.exam_date);
+            if (h !== null && h <= 24 && h > 0) {
+              req.is_emergency = 'yes';
+              await supabase
+                .from('exam_requests')
+                .update({ is_emergency: 'yes' })
+                .eq('id', req.id);
+            }
+          }
+        }
+      }
 
       // Fetch all assignment requests
       const { data: assignmentData, error: assignmentError } = await supabase

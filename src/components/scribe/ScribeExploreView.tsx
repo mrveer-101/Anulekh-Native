@@ -488,9 +488,9 @@ export default function ScribeExploreView() {
         style={{ 
           backgroundColor: '#ffffff', 
           borderRadius: 20, 
-          borderWidth: isEmergency ? 2 : 1.5, 
-          borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
-          shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+          borderWidth: isEmergency ? 2 : (exam.private_scribe_id ? 2 : 1.5), 
+          borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : '#e2e8f0'), 
+          shadowColor: isEmergency ? '#dc2626' : (exam.private_scribe_id ? '#db2777' : '#64748b'), 
           shadowOffset: { width: 0, height: 6 }, 
           shadowOpacity: isEmergency ? 0.12 : 0.07, 
           shadowRadius: 16, 
@@ -499,6 +499,15 @@ export default function ScribeExploreView() {
           overflow: 'hidden'
         }}
       >
+        {/* Top Banner for Private Invitations */}
+        {!!exam.private_scribe_id && (
+          <View style={{ backgroundColor: '#fdf2f8', paddingVertical: 6, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#fbcfe8', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Feather name="lock" size={12} color="#db2777" />
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '900', color: '#db2777', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              🔒 PRIVATE INVITATION FOR YOU
+            </Text>
+          </View>
+        )}
         {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
           onPress={() => toggleExamCard(exam.id)}
@@ -830,19 +839,36 @@ export default function ScribeExploreView() {
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       
-      {/* Segment Switcher */}
-      <View style={{ flexDirection: 'row', backgroundColor: '#e2e8f0', marginHorizontal: 24, marginTop: 16, padding: 3, borderRadius: 12 }}>
+      {/* Segment Switcher: Available Exams vs Available Assignments */}
+      <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', marginHorizontal: 20, marginTop: 16, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0' }}>
         <TouchableOpacity
           onPress={() => setActiveSegment('exams')}
-          style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'exams' ? '#fff' : 'transparent', shadowColor: activeSegment === 'exams' ? '#000' : undefined, shadowOpacity: activeSegment === 'exams' ? 0.05 : 0, elevation: activeSegment === 'exams' ? 2 : 0 }}
+          style={{
+            flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6,
+            backgroundColor: activeSegment === 'exams' ? '#2563eb' : 'transparent',
+            shadowColor: activeSegment === 'exams' ? '#2563eb' : undefined, shadowOpacity: activeSegment === 'exams' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'exams' ? 3 : 0
+          }}
+          activeOpacity={0.85}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'exams' ? '#16a34a' : '#64748b' }}>Exam Request</Text>
+          <Feather name="book-open" size={14} color={activeSegment === 'exams' ? '#ffffff' : '#64748b'} />
+          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: activeSegment === 'exams' ? '#ffffff' : '#64748b' }}>
+            Available Exams ({filteredExams.length})
+          </Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => setActiveSegment('assignments')}
-          style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: activeSegment === 'assignments' ? '#fff' : 'transparent', shadowColor: activeSegment === 'assignments' ? '#000' : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.05 : 0, elevation: activeSegment === 'assignments' ? 2 : 0 }}
+          style={{
+            flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6,
+            backgroundColor: activeSegment === 'assignments' ? '#059669' : 'transparent',
+            shadowColor: activeSegment === 'assignments' ? '#059669' : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'assignments' ? 3 : 0
+          }}
+          activeOpacity={0.85}
         >
-          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: activeSegment === 'assignments' ? '#16a34a' : '#64748b' }}>Assignment Request</Text>
+          <Feather name="file-text" size={14} color={activeSegment === 'assignments' ? '#ffffff' : '#64748b'} />
+          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: activeSegment === 'assignments' ? '#ffffff' : '#64748b' }}>
+            Assignments ({filteredAssignments.length})
+          </Text>
         </TouchableOpacity>
       </View>
 

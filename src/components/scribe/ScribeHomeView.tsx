@@ -1639,8 +1639,8 @@ export default function ScribeHomeView() {
                     { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Scribe Jobs Required' },
                     { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: false, desc: '30 Scribe Jobs Required' },
                     { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: true, desc: '3 SOS Emergency Dispatches' },
-                    { title: 'Speed Master', icon: 'flame', color: '#06b6d4', unlocked: true, desc: '5.0 Writing Speed Rating' },
-                    { title: '5-Star Champion', icon: 'ribbon', color: '#8b5cf6', unlocked: true, desc: '4.9+ Overall Rating' },
+                    { title: 'Assignment Ally', icon: 'document-text', color: '#6366f1', unlocked: true, desc: '1 Assignment Completed' },
+                    { title: 'Submission Hero', icon: 'checkmark-done-circle', color: '#10b981', unlocked: true, desc: '5 Assignments Completed' },
                   ].map((b, idx) => (
                     <View key={idx} style={{
                       width: '48%',

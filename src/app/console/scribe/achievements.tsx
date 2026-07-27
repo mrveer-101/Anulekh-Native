@@ -48,8 +48,8 @@ export default function ScribeAchievementsPage() {
     { key: 'silver', title: 'Silver Volunteer', desc: 'Completed 15 successful scribing assignments', icon: 'shield-checkmark', color: '#94a3b8', current: Math.min(completedExamsCount, 15), max: 15, unlocked: completedExamsCount >= 15 },
     { key: 'gold', title: 'Gold Elite Scribe', desc: 'Completed 30+ successful scribing assignments', icon: 'star', color: '#eab308', current: Math.min(completedExamsCount, 30), max: 30, unlocked: completedExamsCount >= 30 },
     { key: 'emergency', title: 'Emergency Hero', desc: 'Responded to 3+ Urgent SOS Emergency dispatches', icon: 'flash', color: '#ef4444', current: 1, max: 3, unlocked: true },
-    { key: 'speed', title: 'Speed Master', desc: 'Maintains a 5.0 rating in Speed & Efficiency', icon: 'flame', color: '#06b6d4', current: 5, max: 5, unlocked: true },
-    { key: 'star', title: '5-Star Champion', desc: 'Maintains an overall 4.9+ rating distinction', icon: 'ribbon', color: '#8b5cf6', current: 5, max: 5, unlocked: true },
+    { key: 'asg_ally', title: 'Assignment Ally', desc: 'Completed 1+ Academic Assignment assistance request', icon: 'document-text', color: '#6366f1', current: 1, max: 1, unlocked: true },
+    { key: 'asg_master', title: 'Submission Hero', desc: 'Completed 5+ Homework & Assignment assistances', icon: 'checkmark-done-circle', color: '#10b981', current: 1, max: 5, unlocked: true },
   ];
 
   if (loading) {

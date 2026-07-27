@@ -506,8 +506,8 @@ export default function ScribeProfileView() {
             { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Jobs' },
             { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: false, desc: '30 Jobs' },
             { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: true, desc: 'SOS Hero' },
-            { title: 'Speed Master', icon: 'flame', color: '#06b6d4', unlocked: true, desc: '5.0 Speed' },
-            { title: '5-Star Champion', icon: 'ribbon', color: '#8b5cf6', unlocked: true, desc: '4.9+ Rating' },
+            { title: 'Assignment Ally', icon: 'document-text', color: '#6366f1', unlocked: true, desc: '1 Assignment' },
+            { title: 'Submission Hero', icon: 'checkmark-done-circle', color: '#10b981', unlocked: true, desc: '5 Assignments' },
           ].map((b, idx) => (
             <View key={idx} style={{
               width: '48%',

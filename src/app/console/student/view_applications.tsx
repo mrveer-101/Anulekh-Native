@@ -14,6 +14,7 @@ interface Application {
   status: string;
   created_at: string;
   rating?: number;
+  achievements?: string[];
   profile?: {
     full_name: string;
     phone: string;
@@ -27,7 +28,7 @@ interface Application {
 }
 
 export default function ViewApplicationsPage() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; type?: string }>();
   
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<number | null>(null);
@@ -77,26 +78,28 @@ export default function ViewApplicationsPage() {
 
   const fetchApplications = async () => {
     try {
-      // 1. Fetch Exam details
-      const { data: examData } = await supabase
-        .from('exam_requests')
+      const type = (params.type as string) === 'assignment' ? 'assignment' : 'exam';
+      const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+      
+      const { data: requestData } = await supabase
+        .from(table)
         .select('*')
         .eq('id', params.id)
         .single();
       
-      setExam(examData);
+      setExam(requestData);
 
-      if (examData) {
-        // 2. Fetch Scribe Applications for this exam
+      if (requestData) {
+        // Fetch Scribe Applications for this request
         const { data: apps, error } = await supabase
           .from('scribe_applications')
           .select('*')
-          .eq('request_id', examData.id)
+          .eq('request_id', requestData.id)
           .eq('status', 'pending');
 
         if (error) throw error;
 
-        // 3. For each application, fetch the Scribe's full profile and calculate review rating
+        // Enrich each application with Scribe profile, achievements, and ratings
         const enrichedApps = await Promise.all(
           (apps || []).map(async (app: any) => {
             const { data: profile } = await supabase
@@ -104,6 +107,28 @@ export default function ViewApplicationsPage() {
               .select('*')
               .eq('id', app.scribe_id)
               .single();
+
+            const { data: completedExams } = await supabase
+              .from('exam_requests')
+              .select('id')
+              .eq('scribe_id', app.scribe_id)
+              .eq('status', 'completed');
+
+            const { data: completedAsgs } = await supabase
+              .from('assignment_requests')
+              .select('id')
+              .eq('scribe_id', app.scribe_id)
+              .eq('status', 'completed');
+
+            const examCount = completedExams ? completedExams.length : 0;
+            const asgCount = completedAsgs ? completedAsgs.length : 0;
+
+            const achievements: string[] = [];
+            if (examCount >= 5) achievements.push('Bronze Volunteer');
+            if (examCount >= 15) achievements.push('Silver Volunteer');
+            if (examCount >= 30) achievements.push('Gold Elite Scribe');
+            if (asgCount >= 1) achievements.push('Assignment Ally');
+            if (asgCount >= 5) achievements.push('Submission Hero');
             
             const { data: reviews } = await supabase
               .from('scribe_reviews')
@@ -127,7 +152,8 @@ export default function ViewApplicationsPage() {
             return {
               ...app,
               profile: profile || undefined,
-              rating: finalRating
+              rating: finalRating,
+              achievements
             };
           })
         );
@@ -450,6 +476,18 @@ export default function ViewApplicationsPage() {
                       })()}
                     </Text>
                   </View>
+
+                  {/* Scribe Earned Achievements Row */}
+                  {app.achievements && app.achievements.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                      {app.achievements.map((ach: string, idx: number) => (
+                        <View key={idx} style={{ backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="trophy" size={10} color="#2563eb" />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>{ach}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
 
                   <View className="flex-row items-center">
                     <Feather name="map-pin" size={12} color="#64748b" className="mr-2" />
