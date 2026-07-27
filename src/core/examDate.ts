@@ -80,6 +80,24 @@ export function hoursUntilExam(examDate?: string | null): number | null {
   return (d.getTime() - Date.now()) / (1000 * 60 * 60);
 }
 
+// Evaluate whether a scribe is permitted to withdraw from an application / commitment.
+// Rule: Scribe can withdraw ONLY IF there are MORE than 24 hours remaining before the exam date/time.
+// Under 24 hours, withdrawal is locked to protect the student.
+export function canScribeWithdraw(examDate?: string | null): { allowed: boolean; hoursRemaining: number | null; reason?: string } {
+  const hours = hoursUntilExam(examDate);
+  if (hours === null) {
+    return { allowed: true, hoursRemaining: null };
+  }
+  if (hours <= 24) {
+    return {
+      allowed: false,
+      hoursRemaining: Math.max(0, Math.round(hours)),
+      reason: 'Withdrawal is locked within 24 hours of the scheduled exam date to protect the student.',
+    };
+  }
+  return { allowed: true, hoursRemaining: Math.round(hours) };
+}
+
 export default function ExamDateNonRoute() {
   return null;
 }

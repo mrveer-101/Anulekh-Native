@@ -898,15 +898,63 @@ export default function StudentRequestsView() {
 
           const handleDelete = () => {
             Alert.alert(
-              'Delete Exam Request',
-              'Are you sure you want to delete this exam request? This action cannot be undone.',
+              'Cancel & Delete Exam Request',
+              'Are you sure you want to cancel and delete this exam request? This action cannot be undone.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Delete', style: 'destructive',
+                  text: 'Delete Request', style: 'destructive',
                   onPress: async () => {
+                    if (item.scribe_id) {
+                      await supabase.from('notifications').insert({
+                        user_id: item.scribe_id,
+                        title: 'Request Cancelled',
+                        message: `The student has cancelled their exam request for "${item.subject || item.exam_type}".`,
+                        is_read: 0,
+                        created_at: new Date().toISOString()
+                      });
+                    }
                     await supabase.from('exam_requests').delete().eq('id', item.id);
                     await supabase.from('scribe_applications').delete().eq('request_id', item.id);
+                    fetchRequests();
+                  }
+                }
+              ]
+            );
+          };
+
+          const handleUnmatchScribe = () => {
+            Alert.alert(
+              'Un-match Scribe',
+              `Are you sure you want to un-match ${item.scribeProfile?.full_name || 'this scribe'}? The request will return to pending status so other scribes can apply.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Un-match Scribe',
+                  style: 'destructive',
+                  onPress: async () => {
+                    const oldScribeId = item.scribe_id;
+                    await supabase
+                      .from('exam_requests')
+                      .update({ status: 'pending', scribe_id: null })
+                      .eq('id', item.id);
+
+                    if (oldScribeId) {
+                      await supabase
+                        .from('scribe_applications')
+                        .update({ status: 'rejected' })
+                        .eq('request_id', item.id)
+                        .eq('scribe_id', oldScribeId);
+
+                      await supabase.from('notifications').insert({
+                        user_id: oldScribeId,
+                        title: 'Match Cancelled',
+                        message: `The student has un-matched you for "${item.subject || item.exam_type}". The request is now open for new applications.`,
+                        is_read: 0,
+                        created_at: new Date().toISOString()
+                      });
+                    }
+                    Alert.alert('Scribe Un-matched', 'The request has been reset to pending.');
                     fetchRequests();
                   }
                 }
@@ -1205,6 +1253,39 @@ export default function StudentRequestsView() {
                       >
                         <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
                           View Details
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Row 3: Un-match Scribe + Cancel Request */}
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                      <TouchableOpacity
+                        onPress={handleUnmatchScribe}
+                        style={{
+                          flex: 1, paddingVertical: 10,
+                          borderRadius: 12, borderWidth: 1.5,
+                          borderColor: '#f97316', backgroundColor: '#fff7ed',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ea580c' }}>
+                          Un-match Scribe
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={handleDelete}
+                        style={{
+                          flex: 1, paddingVertical: 10,
+                          borderRadius: 12, borderWidth: 1.5,
+                          borderColor: '#fca5a5', backgroundColor: '#fff7f7',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ef4444' }}>
+                          Cancel Request
                         </Text>
                       </TouchableOpacity>
                     </View>

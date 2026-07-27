@@ -4,6 +4,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
+import { canScribeWithdraw } from '@/core/examDate';
 
 interface Application {
   id: number;
@@ -27,6 +28,7 @@ interface EnrichedApplication extends Application {
     phone?: string;
     status?: string;
     is_emergency?: string;
+    student_id?: string;
   };
 }
 
@@ -244,6 +246,63 @@ export default function ScribeCommitmentsView() {
   };
 
   const closeCallSheet = () => setIsCallOpen(false);
+
+  const handleWithdrawApplication = (app: EnrichedApplication) => {
+    const exam = app.examDetails;
+    const isConfirmed = app.status === 'accepted' && exam?.status === 'matched';
+    const withdrawalCheck = canScribeWithdraw(exam?.exam_date);
+
+    if (!withdrawalCheck.allowed) {
+      Alert.alert(
+        'Withdrawal Locked',
+        'Withdrawal is locked within 24 hours of the scheduled exam date to protect the student. If you have an unavoidable emergency, please contact support.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      isConfirmed ? 'Withdraw Commitment' : 'Withdraw Application',
+      `Are you sure you want to withdraw your ${isConfirmed ? 'commitment' : 'application'} for "${exam?.subject || 'this exam'}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (isConfirmed && exam) {
+                const table = app.type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+                await supabase
+                  .from(table)
+                  .update({ status: 'pending', scribe_id: null })
+                  .eq('id', exam.id);
+
+                if (exam.student_id) {
+                  await supabase.from('notifications').insert({
+                    user_id: exam.student_id,
+                    title: 'Scribe Withdrawn',
+                    message: `Scribe ${scribeProfile?.full_name || ''} has withdrawn from your request for "${exam.subject}". Your request is back to pending.`,
+                    is_read: 0,
+                    created_at: new Date().toISOString()
+                  });
+                }
+              }
+
+              await supabase
+                .from('scribe_applications')
+                .update({ status: 'rejected' })
+                .eq('id', app.id);
+
+              Alert.alert('Withdrawn', 'Your withdrawal was processed successfully.');
+              fetchApplications();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to process withdrawal.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   if (loading) {
     return (
@@ -473,6 +532,68 @@ export default function ScribeCommitmentsView() {
                     <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* Withdrawal Action (Pending Applications or Confirmed Commitments) */}
+            {(type === 'pending' || type === 'confirmed') && (
+              <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                {(() => {
+                  const withdrawalCheck = canScribeWithdraw(exam.exam_date);
+                  if (!withdrawalCheck.allowed) {
+                    return (
+                      <TouchableOpacity
+                        onPress={() => {
+                          Alert.alert(
+                            'Withdrawal Locked',
+                            'Withdrawal is locked within 24 hours of the scheduled exam date to protect the student. If you have an unavoidable emergency, please contact support.'
+                          );
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#f8fafc',
+                          borderWidth: 1,
+                          borderColor: '#cbd5e1',
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6,
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="lock" size={13} color="#64748b" />
+                        <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontWeight: '800', fontSize: 12 }}>
+                          Withdrawal Locked (&lt;24h to Exam)
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity
+                      onPress={() => handleWithdrawApplication(app)}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#fff7f7',
+                        borderWidth: 1.5,
+                        borderColor: '#fca5a5',
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="x-circle" size={13} color="#ef4444" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#ef4444', fontWeight: '800', fontSize: 12 }}>
+                        {type === 'confirmed' ? 'Withdraw Commitment' : 'Withdraw Application'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })()}
               </View>
             )}
 
