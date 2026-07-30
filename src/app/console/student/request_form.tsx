@@ -439,15 +439,13 @@ export default function ScribeRequestForm() {
     const finalExamDate = overrides?.examDate ?? examDate;
     const finalAdmitCard = overrides?.admitCardImage ?? admitCardImage;
 
-    // Admit card is not required for pre-bookings (they happen before hall tickets are published).
-    const admitCardMissing = !finalAdmitCard && !isPreBooking;
+    // Admit card upload is optional
+    const admitCardMissing = false;
 
-    if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || admitCardMissing || examLanguages.length === 0) {
+    if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || examLanguages.length === 0) {
       Alert.alert(
         'Missing Fields',
-        isPreBooking
-          ? 'Please fill in all exam fields and select at least one language.'
-          : 'Please fill in all fields (including the Admit Card) and select at least one language.'
+        'Please fill in all exam fields and select at least one language.'
       );
       return;
     }
@@ -926,7 +924,7 @@ export default function ScribeRequestForm() {
               {/* Admit Card Upload + AI Auto-Fill */}
               <View className="pt-1">
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
-                  Upload Admit Card / Hall Ticket {isPreBooking ? '(Optional for pre-booking)' : '*'}
+                  Upload Admit Card / Hall Ticket (Optional)
                 </Text>
                 <TouchableOpacity
                   onPress={handlePickAdmitCard}

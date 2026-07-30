@@ -233,8 +233,8 @@ export default function CompleteProfileForm() {
         return;
       }
     } else if (currentStep === 2) {
-      if (!aadharNumber.trim() || !aadharImage || !educationLevel || !uploadedFile) {
-        Alert.alert('Missing Fields', 'Please enter your Aadhar number, upload Aadhar image, select your education, and upload qualification proof.');
+      if (!aadharNumber.trim() || !aadharImage) {
+        Alert.alert('Missing Fields', 'Please enter your Aadhar number and upload Aadhar image.');
         return;
       }
       if (aadharNumber.trim().length !== 12 || isNaN(Number(aadharNumber.trim()))) {
@@ -464,7 +464,7 @@ export default function CompleteProfileForm() {
 
                 {/* Education Dropdown */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Highest Education Level *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Highest Education Level (Optional)</Text>
                   <View className="w-full">
                     <TouchableOpacity 
                       onPress={() => setIsEduDropdownOpen(!isEduDropdownOpen)}
@@ -504,7 +504,7 @@ export default function CompleteProfileForm() {
 
                 {/* Certificate Upload */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Certificate Proof *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Certificate Proof (Optional)</Text>
                   <TouchableOpacity 
                     onPress={handleSimulateUpload}
                     className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
