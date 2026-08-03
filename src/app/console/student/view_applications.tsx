@@ -200,9 +200,11 @@ export default function ViewApplicationsPage() {
           .eq('request_id', exam.id)
           .neq('id', selectedApp.id);
 
-        // 3. Update exam request to 'matched' and assign the scribe_id
+        // 3. Update request to 'matched' and assign the scribe_id
+        const reqType = (params as any).type === 'assignment' ? 'assignment' : 'exam';
+        const targetTable = reqType === 'assignment' ? 'assignment_requests' : 'exam_requests';
         const { error } = await supabase
-          .from('exam_requests')
+          .from(targetTable)
           .update({ 
             status: 'matched',
             scribe_id: selectedApp.scribe_id

@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
+import { parseExamDate, isExamPast } from '@/core/examDate';
 
 interface ExamRequest {
   id: number;
@@ -19,6 +20,7 @@ interface ExamRequest {
   status?: string;
   is_emergency?: string;
   private_scribe_id?: string;
+  requestType?: 'exam' | 'assignment';
   scribeProfile?: {
     full_name: string;
     phone: string;
@@ -38,6 +40,7 @@ export default function StudentPlanView() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
+  const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<number>>(new Set());
 
   // Declaration Modal State
@@ -62,17 +65,28 @@ export default function StudentPlanView() {
         .single();
       setStudentProfile(profile);
 
-      // Fetch student's requests (all)
-      const { data, error } = await supabase
+      // Fetch student's exam requests
+      const { data: examData } = await supabase
         .from('exam_requests')
         .select('*')
         .eq('student_id', session.user.id)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      // Fetch student's assignment requests
+      const { data: asgData } = await supabase
+        .from('assignment_requests')
+        .select('*')
+        .eq('student_id', session.user.id)
+        .order('created_at', { ascending: false });
 
-      const activePlans = (data || []).filter((exam: any) => {
-        return exam.status === 'matched' || (exam.status === 'pending' && exam.is_emergency === 'yes');
+      const taggedExams = (examData || []).map((e: any) => ({ ...e, requestType: 'exam' }));
+      const taggedAsgs = (asgData || []).map((a: any) => ({ ...a, requestType: 'assignment' }));
+
+      const combined = [...taggedExams, ...taggedAsgs];
+
+      // Include matched, completed, and pending SOS requests
+      const activePlans = combined.filter((item: any) => {
+        return item.status === 'matched' || item.status === 'completed' || (item.status === 'pending' && item.is_emergency === 'yes');
       });
 
       // Enrich plans with Scribe profiles
@@ -178,48 +192,51 @@ export default function StudentPlanView() {
 
   const hasPlanOnDate = (day: Date) => {
     if (!day) return false;
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const date = String(day.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${date}`;
-    return plans.some(p => p.exam_date && p.exam_date.startsWith(dateStr));
+    return plans.some(p => {
+      const d = parseExamDate(p.exam_date);
+      if (!d) return false;
+      return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+    });
   };
 
   const getPlansOnDate = (day: Date) => {
     if (!day) return [];
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const date = String(day.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${date}`;
-    return plans.filter(p => p.exam_date && p.exam_date.startsWith(dateStr));
+    return plans.filter(p => {
+      const d = parseExamDate(p.exam_date);
+      if (!d) return false;
+      return d.getFullYear() === day.getFullYear() && d.getMonth() === day.getMonth() && d.getDate() === day.getDate();
+    });
   };
 
   // Sort and filter logic
   const sortedPlans = [...plans].sort((a, b) => {
-    const dateA = a.exam_date ? a.exam_date.split(' ')[0] : '9999-12-31';
-    const dateB = b.exam_date ? b.exam_date.split(' ')[0] : '9999-12-31';
-    return dateA.localeCompare(dateB);
+    const dA = parseExamDate(a.exam_date)?.getTime() || 9999999999999;
+    const dB = parseExamDate(b.exam_date)?.getTime() || 9999999999999;
+    return dA - dB;
   });
 
   let filteredPlans = sortedPlans;
   if (selectedDate) {
-    filteredPlans = filteredPlans.filter(p => p.exam_date && p.exam_date.startsWith(selectedDate));
+    filteredPlans = filteredPlans.filter(p => {
+      const d = parseExamDate(p.exam_date);
+      if (!d) return false;
+      const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return dateString === selectedDate;
+    });
   }
 
-  const checkUpcoming = (dateStr: string) => {
-    if (!dateStr) return true;
-    const cleanDate = dateStr.split(' ')[0];
-    const examTime = new Date(cleanDate).getTime();
-    const todayTime = new Date(new Date().toISOString().split('T')[0]).getTime();
-    return examTime >= todayTime;
+  const checkIsCompleted = (item: ExamRequest) => {
+    if (item.status === 'completed') return true;
+    return isExamPast(item.exam_date);
   };
 
   filteredPlans = filteredPlans.filter(p => {
+    const isCompleted = checkIsCompleted(p);
     if (activeFilter === 'upcoming') {
-      return checkUpcoming(p.exam_date);
+      return !isCompleted;
     }
     if (activeFilter === 'completed') {
-      return !checkUpcoming(p.exam_date);
+      return isCompleted;
     }
     return true;
   });
@@ -258,8 +275,8 @@ export default function StudentPlanView() {
               elevation: 4,
               marginBottom: 16
             }}>
-              {/* Header: Month Selector with Both Blue Buttons & Orange Month Title */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              {/* Header: Month Selector with Interactive Expand/Collapse Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
                 <TouchableOpacity 
                   onPress={() => changeMonth(-1)} 
                   style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
@@ -267,11 +284,27 @@ export default function StudentPlanView() {
                   <Feather name="chevron-left" size={18} color="#2563eb" />
                 </TouchableOpacity>
                 
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
+                <TouchableOpacity 
+                  onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 6,
+                    backgroundColor: 'rgba(37,99,235,0.06)',
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: 'rgba(37,99,235,0.15)'
+                  }}
+                >
+                  <Feather name="calendar" size={14} color="#2563eb" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
                     {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </Text>
-                </View>
+                  <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#2563eb" />
+                </TouchableOpacity>
 
                 <TouchableOpacity 
                   onPress={() => changeMonth(1)} 
@@ -281,97 +314,101 @@ export default function StudentPlanView() {
                 </TouchableOpacity>
               </View>
 
-              {/* Weekdays Row with All Orange Accents */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, idx) => (
-                  <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+              {!isCalendarCollapsed && (
+                <>
+                  {/* Weekdays Row with All Orange Accents */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                    {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, idx) => (
+                      <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+                      </View>
+                    ))}
                   </View>
-                ))}
-              </View>
 
-              {/* Days Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-                {getDaysInMonth(currentMonth).map((day, idx) => {
-                  if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
-                  }
-                  const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-                  const isSelected = selectedDate === dateString;
-                  const hasPlan = hasPlanOnDate(day);
-                  const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                  {/* Days Grid */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+                    {getDaysInMonth(currentMonth).map((day, idx) => {
+                      if (!day) {
+                        return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+                      }
+                      const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+                      const isSelected = selectedDate === dateString;
+                      const hasPlan = hasPlanOnDate(day);
+                      const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
-                  let cellBg = 'transparent';
-                  let cellTextColor = '#334155';
-                  let cellBorder = {};
-                  let dotColor = '#94a3b8';
+                      let cellBg = 'transparent';
+                      let cellTextColor = '#334155';
+                      let cellBorder = {};
+                      let dotColor = '#94a3b8';
 
-                  if (isSelected) {
-                    cellBg = '#2563eb';
-                    cellTextColor = '#ffffff';
-                    dotColor = '#ffffff';
-                  } else if (hasPlan) {
-                    const plansOnDay = getPlansOnDate(day);
-                    const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
-                    if (hasEmergency) {
-                      cellBg = 'rgba(239,68,68,0.15)';
-                      cellTextColor = '#dc2626';
-                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
-                      dotColor = '#dc2626';
-                    } else {
-                      // Vibrant Orange Accent for confirmed plans
-                      cellBg = 'rgba(249,115,22,0.14)';
-                      cellTextColor = '#c2410c';
-                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                      dotColor = '#f97316';
-                    }
-                  } else if (isToday) {
-                    cellBg = '#eff6ff';
-                    cellTextColor = '#2563eb';
-                    cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
-                  }
-
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedDate(null);
+                      if (isSelected) {
+                        cellBg = '#2563eb';
+                        cellTextColor = '#ffffff';
+                        dotColor = '#ffffff';
+                      } else if (hasPlan) {
+                        const plansOnDay = getPlansOnDate(day);
+                        const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
+                        if (hasEmergency) {
+                          cellBg = 'rgba(239,68,68,0.15)';
+                          cellTextColor = '#dc2626';
+                          cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
+                          dotColor = '#dc2626';
                         } else {
-                          setSelectedDate(dateString);
+                          // Vibrant Orange Accent for confirmed plans
+                          cellBg = 'rgba(249,115,22,0.14)';
+                          cellTextColor = '#c2410c';
+                          cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
+                          dotColor = '#f97316';
                         }
-                      }}
-                      style={{
-                        width: '14.2%',
-                        height: 38,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 19,
-                        backgroundColor: cellBg,
-                        ...cellBorder
-                      }}
-                    >
-                      <Text style={{
-                        fontFamily: 'Roboto',
-                        fontSize: 12,
-                        fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
-                        color: cellTextColor
-                      }}>
-                        {day.getDate()}
-                      </Text>
-                      {hasPlan && (
-                        <View style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: 2.5,
-                          backgroundColor: dotColor,
-                          marginTop: 2
-                        }} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                      } else if (isToday) {
+                        cellBg = '#eff6ff';
+                        cellTextColor = '#2563eb';
+                        cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
+                      }
+
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          onPress={() => {
+                            if (isSelected) {
+                              setSelectedDate(null);
+                            } else {
+                              setSelectedDate(dateString);
+                            }
+                          }}
+                          style={{
+                            width: '14.2%',
+                            height: 38,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: 19,
+                            backgroundColor: cellBg,
+                            ...cellBorder
+                          }}
+                        >
+                          <Text style={{
+                            fontFamily: 'Roboto',
+                            fontSize: 13,
+                            fontWeight: '700',
+                            color: cellTextColor
+                          }}>
+                            {day.getDate()}
+                          </Text>
+                          {hasPlan && (
+                            <View style={{
+                              width: 5,
+                              height: 5,
+                              borderRadius: 2.5,
+                              backgroundColor: dotColor,
+                              marginTop: 2
+                            }} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
             </View>
 
             {/* ── FILTER SELECTION BLOCK (one liner 3 filters) ── */}
