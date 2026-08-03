@@ -762,9 +762,9 @@ export default function StudentRequestsView() {
         {/* Tab Switcher Slider */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
-            { key: 'requests', label: 'Exams' },
-            { key: 'assignments', label: 'Assignments' },
-            { key: 'past_scribes', label: 'Past Scribes' },
+            { key: 'requests', label: 'Exams', activeColor: '#2563eb' },
+            { key: 'assignments', label: 'Assignments', activeColor: '#f97316' },
+            { key: 'past_scribes', label: 'Past Scribes', activeColor: '#16a34a' },
           ].map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -777,10 +777,10 @@ export default function StudentRequestsView() {
                   borderRadius: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isActive ? '#2563eb' : '#f8fafc',
+                  backgroundColor: isActive ? tab.activeColor : '#f8fafc',
                   borderWidth: 1.5,
-                  borderColor: isActive ? '#2563eb' : '#e2e8f0',
-                  shadowColor: isActive ? '#2563eb' : 'transparent',
+                  borderColor: isActive ? tab.activeColor : '#e2e8f0',
+                  shadowColor: isActive ? tab.activeColor : 'transparent',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: isActive ? 0.35 : 0,
                   shadowRadius: 8,
