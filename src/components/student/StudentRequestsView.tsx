@@ -762,9 +762,33 @@ export default function StudentRequestsView() {
         {/* Tab Switcher Slider */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {[
-            { key: 'requests', label: 'Exams', activeColor: '#2563eb' },
-            { key: 'assignments', label: 'Assignments', activeColor: '#f97316' },
-            { key: 'past_scribes', label: 'Past Scribes', activeColor: '#16a34a' },
+            { 
+              key: 'requests', 
+              label: 'Exams', 
+              activeBg: '#2563eb', 
+              activeBorder: '#2563eb', 
+              inactiveBg: '#eff6ff', 
+              inactiveBorder: '#bfdbfe', 
+              inactiveText: '#2563eb' 
+            },
+            { 
+              key: 'assignments', 
+              label: 'Assignments', 
+              activeBg: '#f97316', 
+              activeBorder: '#f97316', 
+              inactiveBg: '#fff7ed', 
+              inactiveBorder: '#fed7aa', 
+              inactiveText: '#ea580c' 
+            },
+            { 
+              key: 'past_scribes', 
+              label: 'Past Scribes', 
+              activeBg: '#16a34a', 
+              activeBorder: '#16a34a', 
+              inactiveBg: '#f0fdf4', 
+              inactiveBorder: '#bbf7d0', 
+              inactiveText: '#16a34a' 
+            },
           ].map((tab) => {
             const isActive = activeTab === tab.key;
             return (
@@ -777,10 +801,10 @@ export default function StudentRequestsView() {
                   borderRadius: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isActive ? tab.activeColor : '#f8fafc',
+                  backgroundColor: isActive ? tab.activeBg : tab.inactiveBg,
                   borderWidth: 1.5,
-                  borderColor: isActive ? tab.activeColor : '#e2e8f0',
-                  shadowColor: isActive ? tab.activeColor : 'transparent',
+                  borderColor: isActive ? tab.activeBorder : tab.inactiveBorder,
+                  shadowColor: isActive ? tab.activeBg : 'transparent',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: isActive ? 0.35 : 0,
                   shadowRadius: 8,
@@ -791,7 +815,7 @@ export default function StudentRequestsView() {
                   fontFamily: 'Roboto',
                   fontSize: 11.5,
                   fontWeight: '900',
-                  color: isActive ? '#ffffff' : '#64748b'
+                  color: isActive ? '#ffffff' : tab.inactiveText
                 }}>
                   {tab.label}
                 </Text>
