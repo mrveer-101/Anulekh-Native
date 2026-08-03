@@ -41,7 +41,7 @@ export default function StudentPlanView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
   const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
-  const [expandedPlanIds, setExpandedPlanIds] = useState<Set<number>>(new Set());
+  const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -254,7 +254,7 @@ export default function StudentPlanView() {
       <FlatList
         style={{ flex: 1 }}
         data={filteredPlans}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => `${item.requestType || 'exam'}-${item.id}`}
         contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
@@ -476,15 +476,16 @@ export default function StudentPlanView() {
           </View>
         }
         renderItem={({ item }) => {
+          const itemKey = `${item.requestType || 'exam'}-${item.id}`;
           const isEmergency = item.is_emergency === 'yes';
           const isConfirmed = item.status === 'matched' || !!item.scribe_id;
-          const isExpanded = expandedPlanIds.has(item.id);
+          const isExpanded = expandedPlanIds.has(itemKey);
 
           const toggleExpand = () => {
             setExpandedPlanIds(prev => {
               const next = new Set(prev);
-              if (next.has(item.id)) next.delete(item.id);
-              else next.add(item.id);
+              if (next.has(itemKey)) next.delete(itemKey);
+              else next.add(itemKey);
               return next;
             });
           };
