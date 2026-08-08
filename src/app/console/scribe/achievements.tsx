@@ -62,7 +62,8 @@ export default function ScribeAchievementsPage() {
 
   const scribeName = profile?.full_name || 'Volunteer Scribe';
   const certId = `ANULEKH-CERT-${user?.id?.substring(0, 8).toUpperCase()}-2026`;
-  const certUrl = `http://localhost:3000/api/certificates/view/${user?.id}`;
+  const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+  const certUrl = `${apiHost}/api/certificates/view/${user?.id}`;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
@@ -205,7 +206,7 @@ export default function ScribeAchievementsPage() {
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '600' }}>Verification URL:</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#2563eb', fontWeight: '800' }}>http://localhost:3000</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#2563eb', fontWeight: '800' }}>{apiHost}</Text>
               </View>
             </View>
 

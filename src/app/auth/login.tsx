@@ -56,7 +56,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotError('');
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotError('');
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,7 +132,7 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

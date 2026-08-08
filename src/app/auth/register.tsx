@@ -85,7 +85,7 @@ export default function RegisterScreen() {
 
     try {
       // Direct registration without OTP modal (OTP verification paused for testing)
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/auth/verify-otp-signup`, {
+      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com'}/api/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

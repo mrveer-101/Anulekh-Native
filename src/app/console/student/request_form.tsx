@@ -10,7 +10,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/core/supabase';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
 const EXAM_TYPES = ['School', 'University', 'Competitive', 'Government'];
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];

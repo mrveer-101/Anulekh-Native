@@ -487,7 +487,8 @@ export default function ScribeProfileView() {
           <TouchableOpacity 
             onPress={() => {
               if (user) {
-                Alert.alert("Verified Certificate", `Certificate ID: ANULEKH-CERT-${user.id.substring(0,8).toUpperCase()}-2026\n\nAccess online at:\nhttp://localhost:3000/api/certificates/view/${user.id}`);
+                const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+                Alert.alert("Verified Certificate", `Certificate ID: ANULEKH-CERT-${user.id.substring(0,8).toUpperCase()}-2026\n\nAccess online at:\n${apiHost}/api/certificates/view/${user.id}`);
               }
             }}
             style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}

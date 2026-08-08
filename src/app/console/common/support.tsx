@@ -84,7 +84,7 @@ export default function SupportScreen() {
     setSending(true);
 
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${API_URL}/api/support/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

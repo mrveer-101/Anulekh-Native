@@ -1691,7 +1691,8 @@ export default function ScribeHomeView() {
                   <TouchableOpacity
                     onPress={() => {
                       if (user) {
-                        const certUrl = `http://localhost:3000/api/certificates/view/${user.id}`;
+                        const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+                        const certUrl = `${apiHost}/api/certificates/view/${user.id}`;
                         Linking.openURL(certUrl).catch(() => {
                           Alert.alert("Certificate URL", certUrl);
                         });
