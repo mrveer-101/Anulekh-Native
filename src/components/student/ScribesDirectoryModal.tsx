@@ -104,7 +104,8 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
 
       // 3. Query Axum Rust Recommendation Engine for location & smart match scores
       try {
-        const recRes = await fetch('http://localhost:3000/api/recommendations', {
+        const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+        const recRes = await fetch(`${apiHost}/api/recommendations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
