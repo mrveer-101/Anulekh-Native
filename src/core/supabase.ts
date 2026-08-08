@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Points to the local hosted Axum Rust SQLite server (e.g. http://localhost:3000)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+// Points to the hosted Axum Rust server (https://anulekh-axum.onrender.com)
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
-console.log(`🌐 Running in SERVER Mode (connecting to local SQLite hosted backend at ${API_URL})`);
+console.log(`🌐 Running in SERVER Mode (connecting to hosted Axum backend at ${API_URL})`);
 
 // fetch() rejects with a generic "Network request failed" (or "Failed to fetch" on web)
 // when the backend host is unreachable — surface that as a clear connectivity message
