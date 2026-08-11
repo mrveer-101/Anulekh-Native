@@ -1,6 +1,42 @@
+@import './vector-fonts-b64.css';
+
+/* ── Local Static Vector Icon Fonts ── */
+@font-face {
+  font-family: 'Feather';
+  src: url('/assets/fonts/Feather.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Ionicons';
+  src: url('/assets/fonts/Ionicons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'MaterialIcons';
+  src: url('/assets/fonts/MaterialIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'Material Icons';
+  src: url('/assets/fonts/MaterialIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+@font-face {
+  font-family: 'MaterialCommunityIcons';
+  src: url('/assets/fonts/MaterialCommunityIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
 
 /* ── Web: prevent overscroll / body-level scroll ── */
 html,

@@ -464,7 +464,11 @@ export default function LoginScreen() {
                   shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
                 }}
               >
-                <Ionicons name="logo-apple" size={24} color="#000000" />
+                <Image 
+                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Apple_logo_black.svg/120px-Apple_logo_black.svg.png' }} 
+                  style={{ width: 22, height: 22 }}
+                  resizeMode="contain"
+                />
               </TouchableOpacity>
             </View>
           </ScrollView>

@@ -360,13 +360,16 @@ export function subscribeLanguageChange(cb: LanguageCallback) {
 }
 
 export function useLanguage() {
-  const [lang, setLangState] = useState<LanguageType>('Gujarati');
+  const [lang, setLangState] = useState<LanguageType>('English');
 
   const loadLang = async () => {
     try {
       const saved = await AsyncStorage.getItem('app_language');
-      if (saved === 'English' || saved === 'Hindi' || saved === 'Gujarati') {
+      if (saved === 'English' || saved === 'Hindi') {
         setLangState(saved);
+      } else {
+        setLangState('English');
+        await AsyncStorage.setItem('app_language', 'English');
       }
     } catch (e) {
       console.log('Error reading language from storage:', e);
@@ -395,7 +398,7 @@ export function useLanguage() {
   };
 
   const t = (key: keyof typeof dictionary.English, variables?: Record<string, string>) => {
-    let text = dictionary[lang]?.[key] || dictionary.Gujarati[key] || '';
+    let text = dictionary[lang]?.[key] || dictionary.English[key] || '';
     if (variables) {
       Object.keys(variables).forEach(varKey => {
         text = text.replace(`{${varKey}}`, variables[varKey]);

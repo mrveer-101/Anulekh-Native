@@ -25,15 +25,17 @@ import ScribeCommitmentsView from '@/components/scribe/ScribeCommitmentsView';
 import ScribeProfileView from '@/components/scribe/ScribeProfileView';
 import SharedSettingsView from '@/components/shared/SharedSettingsView';
 import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
+import { useWindowDimensions } from 'react-native';
 import ScribePlanView from '@/components/scribe/ScribePlanView';
+import ConsoleScribePC from '@/components/pc_view/ConsoleScribePC';
 
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 
-const TABS: { id: Tab; iconActive: string; iconInactive: string; label: string }[] = [
-  { id: 'home',        iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
-  { id: 'explore',     iconActive: 'search',        iconInactive: 'search',        label: 'Search' },
-  { id: 'commitments', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
-  { id: 'settings',    iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
+const TABS: { id: Tab; iconActive: keyof typeof Feather.glyphMap; iconInactive: keyof typeof Feather.glyphMap; label: string }[] = [
+  { id: 'home',        iconActive: 'home',      iconInactive: 'home',      label: 'Home' },
+  { id: 'explore',     iconActive: 'search',    iconInactive: 'search',    label: 'Search' },
+  { id: 'commitments', iconActive: 'file-text', iconInactive: 'file-text', label: 'Requests' },
+  { id: 'settings',    iconActive: 'user',      iconInactive: 'user',      label: 'Account' },
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
@@ -47,6 +49,8 @@ const TEXT       = '#0f172a';
 const MUTED      = '#64748b';
 
 export default function ScribeDashboard() {
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
   const { t } = useLanguage();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
@@ -140,6 +144,8 @@ export default function ScribeDashboard() {
         <Text style={{ color: MUTED, marginTop: 12, fontSize: 14 }}>Loading your dashboard…</Text>
       </View>
     );
+  if (isDesktop) {
+    return <ConsoleScribePC userProfile={profile} onRefresh={fetchSession} />;
   }
 
   return (
@@ -194,12 +200,19 @@ export default function ScribeDashboard() {
               activeOpacity={0.75}
               style={{
                 width: 44, height: 44, borderRadius: 15,
-                backgroundColor: activeTab === 'notifications' ? ACCENT_BG : 'rgba(248,250,252,0.9)',
-                borderWidth: 1, borderColor: activeTab === 'notifications' ? ACCENT_BD : 'rgba(226,232,240,0.8)',
+                backgroundColor: activeTab === 'notifications' ? ACCENT_BG : '#f1f5f9',
+                borderWidth: 1.5, borderColor: activeTab === 'notifications' ? ACCENT_BD : '#cbd5e1',
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Ionicons name="notifications" size={21} color={activeTab === 'notifications' ? ACCENT : '#64748b'} />
+              <Image 
+                source={{ uri: activeTab === 'notifications' 
+                  ? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxNmEzNGEiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA4YTYgNiAwIDAgMSAxMiAwYzAgNyAzIDkgMyA5SDNzMy0yIDMtOSIvPjxwYXRoIGQ9Ik0xMC4zIDIxYTEuOTQgMS45NCAwIDAgMCAzLjQgMCIvPjwvc3ZnPg=='
+                  : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA4YTYgNiAwIDAgMSAxMiAwYzAgNyAzIDkgMyA5SDNzMy0yIDMtOSIvPjxwYXRoIGQ9Ik0xMC4zIDIxYTEuOTQgMS45NCAwIDAgMCAzLjQgMCIvPjwvc3ZnPg=='
+                }} 
+                style={{ width: 20, height: 20 }}
+                resizeMode="contain"
+              />
               {unreadNotifs > 0 && (
                 <View style={{
                   position: 'absolute', top: 6, right: 6,
@@ -285,7 +298,7 @@ export default function ScribeDashboard() {
                   borderColor: active ? ACCENT_BD : 'transparent',
                 }}
               >
-                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? ACCENT : '#94a3b8'} />
+                <Feather name={(active ? tab.iconActive : tab.iconInactive) as any} size={20} color={active ? ACCENT : '#94a3b8'} />
                 <Text style={{
                   fontFamily: 'Roboto',
                   fontSize: 11.5,

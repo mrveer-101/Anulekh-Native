@@ -18,6 +18,65 @@ if (Platform.OS === 'web') {
       }
     }
   };
+
+  // Inject Vector Icon Fonts with CDN fallbacks for Web PWA automatically
+  if (typeof document !== 'undefined' && !document.getElementById('expo-vector-icons-web')) {
+    const iconFontStyles = `
+      @font-face {
+        font-family: 'Feather';
+        src: url('/assets/fonts/Feather.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Ionicons';
+        src: url('/assets/fonts/Ionicons.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'MaterialIcons';
+        src: url('/assets/fonts/MaterialIcons.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'Material Icons';
+        src: url('/assets/fonts/MaterialIcons.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'MaterialCommunityIcons';
+        src: url('/assets/fonts/MaterialCommunityIcons.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'FontAwesome';
+        src: url('/assets/fonts/FontAwesome.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      @font-face {
+        font-family: 'FontAwesome5';
+        src: url('/assets/fonts/FontAwesome5_Solid.ttf') format('truetype'),
+             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+    `;
+    const styleElement = document.createElement('style');
+    styleElement.id = 'expo-vector-icons-web';
+    styleElement.appendChild(document.createTextNode(iconFontStyles));
+    document.head.appendChild(styleElement);
+  }
 }
 
 class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {

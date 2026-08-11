@@ -12,11 +12,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
+import { useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-
-const { width, height } = Dimensions.get('window');
+import LandingPC from '@/components/pc_view/LandingPC';
 
 export default function LandingScreen() {
+  const { width: windowWidth, height } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
+
+  if (isDesktop) {
+    return <LandingPC />;
+  }
+
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
   const scaleLogo = useRef(new Animated.Value(0.85)).current;
