@@ -21,6 +21,8 @@ interface ConsoleScribePCProps {
   onRefresh?: () => void;
   activeTab?: string;
   onSelectTab?: (tab: string) => void;
+  layoutMode?: 'auto' | 'pc' | 'mobile';
+  onChangeLayoutMode?: (mode: 'auto' | 'pc' | 'mobile') => void;
 }
 
 export default function ConsoleScribePC({
@@ -31,6 +33,8 @@ export default function ConsoleScribePC({
   onRefresh,
   activeTab: externalActiveTab,
   onSelectTab: externalOnSelectTab,
+  layoutMode: _layoutMode,
+  onChangeLayoutMode: _onChangeLayoutMode,
 }: ConsoleScribePCProps) {
   const { isDark, toggleTheme } = useThemeMode();
   const [internalActiveTab, setInternalActiveTab] = useState('home');
