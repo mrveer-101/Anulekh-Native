@@ -20,10 +20,6 @@ export default function LandingScreen() {
   const { width: windowWidth, height } = useWindowDimensions();
   const isDesktop = windowWidth >= 768;
 
-  if (isDesktop) {
-    return <LandingPC />;
-  }
-
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
   const scaleLogo = useRef(new Animated.Value(0.85)).current;
@@ -33,8 +29,14 @@ export default function LandingScreen() {
 
   useEffect(() => {
     checkExistingSession();
-    runEntryAnimations();
-  }, []);
+    if (!isDesktop) {
+      runEntryAnimations();
+    }
+  }, [isDesktop]);
+
+  if (isDesktop) {
+    return <LandingPC />;
+  }
 
   const checkExistingSession = async () => {
     try {
