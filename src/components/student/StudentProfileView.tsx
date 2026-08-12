@@ -44,8 +44,7 @@ export default function StudentProfileView() {
         setPhone(profile.phone || '');
       }
     } catch (error: any) {
-      console.error('Error fetching profile:', error.message);
-      Alert.alert('Error', 'Failed to load profile details.');
+      console.warn('Error fetching profile:', error?.message);
     } finally {
       setLoading(false);
     }

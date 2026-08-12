@@ -88,7 +88,7 @@ export default function SharedSettingsView() {
         setAvailabilitySlots(slotsStr.split(',').map((s: string) => s.trim()).filter(Boolean));
       }
     } catch (error) {
-      console.error('Error fetching user data in Settings:', error);
+      console.warn('Error fetching user data in Settings:', error);
     } finally {
       setLoading(false);
     }
@@ -586,6 +586,58 @@ export default function SharedSettingsView() {
             ))}
           </View>
         )}
+
+        {/* Secret Display Layout Preferences */}
+        <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
+          <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>
+            Display Layout Preference
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              onPress={async () => {
+                await AsyncStorage.setItem('@anulekh_layout_mode', 'pc');
+                if (typeof window !== 'undefined') window.location.reload();
+              }}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                borderWidth: 1,
+                borderColor: 'rgba(37, 99, 235, 0.25)',
+              }}
+            >
+              <Feather name="monitor" size={14} color="#2563eb" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>Desktop PC View</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={async () => {
+                await AsyncStorage.setItem('@anulekh_layout_mode', 'mobile');
+                if (typeof window !== 'undefined') window.location.reload();
+              }}
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 10,
+                borderRadius: 12,
+                backgroundColor: '#f1f5f9',
+                borderWidth: 1,
+                borderColor: '#cbd5e1',
+              }}
+            >
+              <Feather name="smartphone" size={14} color="#475569" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Mobile View</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       {/* Primary Action Button (Save changes) */}

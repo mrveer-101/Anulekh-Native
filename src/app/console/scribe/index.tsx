@@ -19,6 +19,8 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { useThemeMode } from '@/core/themeContext';
+
 import ScribeHomeView from '@/components/scribe/ScribeHomeView';
 import ScribeExploreView from '@/components/scribe/ScribeExploreView';
 import ScribeCommitmentsView from '@/components/scribe/ScribeCommitmentsView';
@@ -50,8 +52,42 @@ const MUTED      = '#64748b';
 
 export default function ScribeDashboard() {
   const { width: windowWidth } = useWindowDimensions();
-  const isDesktop = windowWidth >= 768;
+  const [screenWidth, setScreenWidth] = useState(() => 
+    typeof window !== 'undefined' ? window.innerWidth : windowWidth
+  );
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleResize = () => {
+        setScreenWidth(window.innerWidth);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
+  const [layoutMode, setLayoutModeState] = useState<'auto' | 'pc' | 'mobile'>('auto');
+
+  useEffect(() => {
+    AsyncStorage.getItem('@anulekh_layout_mode').then((val) => {
+      if (val === 'pc' || val === 'mobile' || val === 'auto') {
+        setLayoutModeState(val as any);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const changeLayoutMode = (mode: 'auto' | 'pc' | 'mobile') => {
+    setLayoutModeState(mode);
+    AsyncStorage.setItem('@anulekh_layout_mode', mode).catch(console.error);
+  };
+
+  const currentWidth = Platform.OS === 'web' && typeof window !== 'undefined' ? screenWidth : windowWidth;
+  // Responsive layout rule:
+  // - If screen width is mobile size (< 768px), ALWAYS render clean Mobile View.
+  // - If screen width is desktop size (>= 768px), render PC View (unless user explicitly selected 'mobile').
+  const isDesktop = currentWidth >= 768 && layoutMode !== 'mobile';
   const { t } = useLanguage();
+  const { isDark, toggleTheme } = useThemeMode();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
@@ -144,8 +180,17 @@ export default function ScribeDashboard() {
         <Text style={{ color: MUTED, marginTop: 12, fontSize: 14 }}>Loading your dashboard…</Text>
       </View>
     );
+  }
+
   if (isDesktop) {
-    return <ConsoleScribePC userProfile={profile} onRefresh={fetchSession} />;
+    return (
+      <ConsoleScribePC
+        userProfile={profile}
+        onRefresh={fetchSession}
+        layoutMode={layoutMode}
+        onChangeLayoutMode={changeLayoutMode}
+      />
+    );
   }
 
   return (
@@ -193,8 +238,9 @@ export default function ScribeDashboard() {
             </View>
           </View>
 
-          {/* Right Action Icons */}
+          {/* Right Action Icons: Notifications + Profile */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               activeOpacity={0.75}

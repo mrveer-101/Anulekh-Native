@@ -1,6 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
-import { useColorScheme, Alert, Platform, View, Text, ScrollView } from 'react-native';
+import { useColorScheme, Alert, Platform, View, Text, ScrollView, LogBox } from 'react-native';
+
+LogBox.ignoreAllLogs(true);
 
 import '@/global.css';
 import { AnimatedSplashOverlay } from '@/components/ui/animated-icon';
@@ -19,9 +21,22 @@ if (Platform.OS === 'web') {
     }
   };
 
-  // Inject Vector Icon Fonts with CDN fallbacks for Web PWA automatically
+  // Inject Vector Icon Fonts & Google Roboto Font for Web automatically
   if (typeof document !== 'undefined' && !document.getElementById('expo-vector-icons-web')) {
+    if (!document.getElementById('google-font-roboto')) {
+      const link = document.createElement('link');
+      link.id = 'google-font-roboto';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;0,900;1,400&display=swap';
+      document.head.appendChild(link);
+    }
+
     const iconFontStyles = `
+      @import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;0,900;1,400&display=swap');
+
+      body, #root, [dir="auto"]:not([style*="font-family"]), input, textarea {
+        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
       @font-face {
         font-family: 'Feather';
         src: url('/assets/fonts/Feather.ttf') format('truetype'),
@@ -115,14 +130,18 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
   }
 }
 
+import { ThemeProvider as AppThemeProvider } from '@/core/themeContext';
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <GlobalErrorBoundary>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AnimatedSplashOverlay />
-        <Stack screenOptions={{ headerShown: false }} />
-      </ThemeProvider>
+      <AppThemeProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <AnimatedSplashOverlay />
+          <Stack screenOptions={{ headerShown: false }} />
+        </ThemeProvider>
+      </AppThemeProvider>
     </GlobalErrorBoundary>
   );
 }

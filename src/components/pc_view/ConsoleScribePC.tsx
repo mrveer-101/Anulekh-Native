@@ -1,8 +1,17 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
+import { useThemeMode } from '@/core/themeContext';
+
+import ScribeHomeView from '../scribe/ScribeHomeView';
+import ScribeExploreView from '../scribe/ScribeExploreView';
+import ScribeCommitmentsView from '../scribe/ScribeCommitmentsView';
+import ScribeProfileView from '../scribe/ScribeProfileView';
+import SharedSettingsView from '../shared/SharedSettingsView';
+import SharedNotificationsPCView from './SharedNotificationsPCView';
+import ScribePlanView from '../scribe/ScribePlanView';
 
 interface ConsoleScribePCProps {
   userProfile?: any;
@@ -10,6 +19,8 @@ interface ConsoleScribePCProps {
   myAssignedRequests?: any[];
   onAcceptRequest?: (requestId: string) => void;
   onRefresh?: () => void;
+  activeTab?: string;
+  onSelectTab?: (tab: string) => void;
 }
 
 export default function ConsoleScribePC({
@@ -18,7 +29,21 @@ export default function ConsoleScribePC({
   myAssignedRequests = [],
   onAcceptRequest,
   onRefresh,
+  activeTab: externalActiveTab,
+  onSelectTab: externalOnSelectTab,
 }: ConsoleScribePCProps) {
+  const { isDark, toggleTheme } = useThemeMode();
+  const [internalActiveTab, setInternalActiveTab] = useState('home');
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+
+  const activeTab = externalActiveTab || internalActiveTab;
+  const setActiveTab = (tab: string) => {
+    if (externalOnSelectTab) externalOnSelectTab(tab);
+    else setInternalActiveTab(tab);
+    setShowProfileDropdown(false);
+  };
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -26,29 +51,75 @@ export default function ConsoleScribePC({
     router.replace('/auth/login');
   };
 
+  const navItems = [
+    { id: 'home', label: 'Exam Matches', icon: 'grid' as const },
+    { id: 'explore', label: 'Explore Requests', icon: 'search' as const },
+    { id: 'commitments', label: 'My Commitments', icon: 'file-text' as const },
+    { id: 'plan', label: 'Plan & Calendar', icon: 'calendar' as const },
+    { id: 'profile', label: 'My Account', icon: 'user' as const },
+    { id: 'notifications', label: 'Notifications', icon: 'bell' as const },
+  ];
+
+  // Dynamic Theme Colors (Ultra-Glassmorphic System)
+  const headerBg = isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.65)';
+  const headerBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.85)';
+  const sidebarBg = isDark ? 'rgba(15, 23, 42, 0.72)' : 'rgba(255, 255, 255, 0.62)';
+  const sidebarBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.85)';
+  const mainBg = isDark ? '#090d16' : '#f0fdf4';
+  const textPrimary = isDark ? '#ffffff' : '#0f172a';
+  const textSecondary = isDark ? '#94a3b8' : '#64748b';
+  const pillBg = isDark ? 'rgba(30, 41, 59, 0.72)' : 'rgba(255, 255, 255, 0.82)';
+  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.95)';
+
   return (
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#f8fafc' }}>
-      {/* ── Left Desktop Navigation Sidebar ── */}
+    <View style={{
+      flex: 1,
+      backgroundColor: mainBg,
+      backgroundImage: isDark
+        ? 'radial-gradient(at 15% 15%, rgba(22, 163, 74, 0.18) 0px, transparent 50%), radial-gradient(at 85% 85%, rgba(37, 99, 235, 0.15) 0px, transparent 50%)'
+        : 'radial-gradient(at 10% 10%, rgba(22, 163, 74, 0.12) 0px, transparent 50%), radial-gradient(at 90% 90%, rgba(37, 99, 235, 0.09) 0px, transparent 50%), radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%)',
+    } as any}>
+      {/* ═══════════════════════════════════════════
+           TOP FULL-WIDTH ULTRA-GLASSMOPHIC HEADER BAR
+      ═══════════════════════════════════════════ */}
       <View style={{
-        width: 260,
-        backgroundColor: '#0f172a',
-        borderRightWidth: 1,
-        borderRightColor: 'rgba(51, 65, 85, 0.6)',
-        paddingVertical: 32,
-        paddingHorizontal: 20,
-        justifyContent: 'space-between',
-      }}>
-        <View>
-          {/* Brand Logo */}
-          <TouchableOpacity
+        height: 72,
+        backgroundColor: headerBg,
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderBottomWidth: 1,
+        borderBottomColor: headerBorder,
+        flexDirection: 'row',
+        alignItems: 'center',
+        zIndex: 100,
+        boxShadow: isDark
+          ? '0 4px 20px 0 rgba(0, 0, 0, 0.4), inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)'
+          : '0 4px 24px -2px rgba(22, 163, 74, 0.07), inset 0 -1px 0 0 rgba(255, 255, 255, 0.85)',
+      } as any}>
+        {/* Top Left Branding Box: Aligned with Sidebar (260px / 84px) */}
+        <View style={{
+          width: isCollapsed ? 84 : 260,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingHorizontal: 12,
+        }}>
+          <Pressable
             onPress={() => router.push('/')}
-            activeOpacity={0.8}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 36, paddingHorizontal: 8 }}
+            style={({ hovered }: any) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 12,
+              cursor: 'pointer' as any,
+              transform: [{ scale: hovered ? 1.02 : 1 }],
+            })}
           >
             <View style={{
-              width: 40, height: 40, borderRadius: 12,
+              width: 38, height: 38, borderRadius: 12,
               backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
               overflow: 'hidden',
+              shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0',
             }}>
               <Image
                 source={require('../../../assets/images/custom/Pen_Logo.jpg')}
@@ -56,181 +127,395 @@ export default function ConsoleScribePC({
                 resizeMode="cover"
               />
             </View>
-            <View>
-              <Text style={{ fontSize: 20, fontWeight: '900', color: '#ffffff' }}>Anulekh</Text>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#10b981' }}>Scribe Portal</Text>
-            </View>
-          </TouchableOpacity>
+            {!isCollapsed && (
+              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: textPrimary, letterSpacing: -0.5 }}>
+                Anulekh
+              </Text>
+            )}
+          </Pressable>
+        </View>
 
-          {/* User Profile Card */}
-          <View style={{
-            backgroundColor: 'rgba(30, 41, 59, 0.7)',
-            borderWidth: 1, borderColor: 'rgba(51, 65, 85, 0.8)',
-            borderRadius: 16, padding: 14, marginBottom: 28,
-            flexDirection: 'row', alignItems: 'center', gap: 12,
-          }}>
+        {/* Floating Vertical Separator (Inset 26px line, does not touch top/bottom edges) */}
+        <View style={{ width: 1, height: 26, backgroundColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#cbd5e1' }} />
+
+        {/* Top Right Main Header Area (Shifted slightly left with paddingLeft: 16) */}
+        <View style={{
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingLeft: 16,
+          paddingRight: 24,
+        }}>
+          {/* Header Breadcrumb Trail with > Chevron Icon */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              VOLUNTEER SCRIBE PORTAL
+            </Text>
+            <Feather name="chevron-right" size={14} color={textSecondary} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary }}>
+              {activeTab === 'home' && 'Dashboard Overview'}
+              {activeTab === 'explore' && 'Explore Exam Requests'}
+              {activeTab === 'commitments' && 'My Scribe Commitments'}
+              {activeTab === 'plan' && 'Availability & Schedule'}
+              {activeTab === 'profile' && 'Volunteer Profile'}
+              {activeTab === 'settings' && 'Account Settings'}
+              {activeTab === 'notifications' && 'Your Notifications'}
+            </Text>
+          </View>
+        
+        {/* Top Right: Layout Switcher + Theme Toggle + Notifications + User Profile Pill */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, position: 'relative' }}>
+          
+          {/* 1. Layout View 1-Click Toggle Button */}
+          {onChangeLayoutMode && (
+            <Pressable
+              onPress={() => {
+                const nextMode = layoutMode === 'mobile' ? 'pc' : 'mobile';
+                onChangeLayoutMode(nextMode);
+              }}
+              style={({ hovered }: any) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
+                borderWidth: 1, borderColor: pillBorder,
+                borderRadius: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                cursor: 'pointer' as any,
+                backdropFilter: 'blur(10px)',
+              })}
+            >
+              <Feather
+                name={layoutMode === 'mobile' ? 'monitor' : 'smartphone'}
+                size={16}
+                color="#16a34a"
+              />
+              <Text style={{ fontSize: 12, fontWeight: '800', color: textPrimary }}>
+                {layoutMode === 'mobile' ? 'PC View' : 'Phone View'}
+              </Text>
+            </Pressable>
+          )}
+
+          {/* 2. Theme Toggle Button */}
+          <Pressable
+            onPress={toggleTheme}
+            style={({ hovered }: any) => ({
+              width: 42, height: 42, borderRadius: 12,
+              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
+              borderWidth: 1, borderColor: pillBorder,
+              alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer' as any,
+              backdropFilter: 'blur(10px)',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4,
+            })}
+          >
+            <Feather name={isDark ? "sun" : "moon"} size={19} color={isDark ? "#fbbf24" : "#475569"} />
+          </Pressable>
+
+          {/* 2. Notification Bell Icon */}
+          <Pressable
+            onPress={() => setActiveTab('notifications')}
+            style={({ hovered }: any) => ({
+              width: 42, height: 42, borderRadius: 12,
+              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
+              borderWidth: 1, borderColor: pillBorder,
+              alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer' as any,
+              backdropFilter: 'blur(10px)',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4,
+            })}
+          >
+            <Feather name="bell" size={19} color={isDark ? "#94a3b8" : "#475569"} />
             <View style={{
-              width: 42, height: 42, borderRadius: 14,
-              backgroundColor: '#10b981', alignItems: 'center', justifyContent: 'center',
+              position: 'absolute', top: 8, right: 8,
+              width: 8, height: 8, borderRadius: 4,
+              backgroundColor: '#16a34a',
+            }} />
+          </Pressable>
+
+          {/* 3. User Profile Pill Button (Compact Pill Shape with First Name Only + Arrow) */}
+          <Pressable
+            onPress={() => setShowProfileDropdown(!showProfileDropdown)}
+            style={({ hovered }: any) => ({
+              backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)') : pillBg,
+              borderWidth: 1,
+              borderColor: hovered ? '#16a34a' : pillBorder,
+              borderRadius: 24,
+              paddingLeft: 6,
+              paddingRight: 14,
+              paddingVertical: 5,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer' as any,
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 4px 16px 0 rgba(31, 38, 135, 0.06)',
+            } as any)}
+          >
+            <View style={{
+              width: 30, height: 30, borderRadius: 15,
+              backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center',
             }}>
-              <Text style={{ fontSize: 18, fontWeight: '900', color: '#ffffff' }}>
+              <Text style={{ fontSize: 13, fontWeight: '900', color: '#ffffff' }}>
                 {userProfile?.full_name ? userProfile.full_name.charAt(0).toUpperCase() : 'V'}
               </Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#ffffff' }} numberOfLines={1}>
-                {userProfile?.full_name || 'Volunteer Scribe'}
-              </Text>
-              <View style={{
-                backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6,
-                alignSelf: 'flex-start', marginTop: 4,
-              }}>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#34d399' }}>VERIFIED SCRIBE</Text>
-              </View>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: textPrimary }}>
+              {userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Volunteer'}
+            </Text>
+            <Feather name={showProfileDropdown ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
+          </Pressable>
+
+          {/* Profile Dropdown Option Box */}
+          {showProfileDropdown && (
+            <View style={{
+              position: 'absolute',
+              top: 54,
+              right: 0,
+              width: 220,
+              backgroundColor: isDark ? '#0f172a' : 'rgba(255, 255, 255, 0.95)',
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(51, 65, 85, 0.9)' : '#e2e8f0',
+              borderRadius: 16,
+              padding: 8,
+              backdropFilter: 'blur(20px)',
+              shadowColor: '#000000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 24,
+              elevation: 12, zIndex: 200,
+            }}>
+              <Pressable
+                onPress={() => setActiveTab('profile')}
+                style={({ hovered }: any) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+                  backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9') : 'transparent',
+                  cursor: 'pointer' as any,
+                })}
+              >
+                <Feather name="user" size={16} color="#16a34a" />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: textPrimary }}>My Profile</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => setActiveTab('settings')}
+                style={({ hovered }: any) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+                  backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9') : 'transparent',
+                  cursor: 'pointer' as any,
+                })}
+              >
+                <Feather name="settings" size={16} color={textSecondary} />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: textPrimary }}>Account Settings</Text>
+              </Pressable>
+
+              <View style={{ height: 1, backgroundColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#e2e8f0', marginVertical: 6 }} />
+
+              <Pressable
+                onPress={handleLogout}
+                style={({ hovered }: any) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
+                  backgroundColor: hovered ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
+                  cursor: 'pointer' as any,
+                })}
+              >
+                <Feather name="log-out" size={16} color="#f87171" />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#f87171' }}>Log Out</Text>
+              </Pressable>
             </View>
-          </View>
-
-          {/* Sidebar Menu Items */}
-          <View style={{ gap: 8 }}>
-            <TouchableOpacity style={{
-              flexDirection: 'row', alignItems: 'center', gap: 12,
-              backgroundColor: 'rgba(16, 185, 129, 0.15)', borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)',
-              paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14,
-            }}>
-              <Feather name="grid" size={18} color="#34d399" />
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#ffffff' }}>Exam Matches</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={{
-              flexDirection: 'row', alignItems: 'center', gap: 12,
-              paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14,
-            }}>
-              <Feather name="award" size={18} color="#94a3b8" />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#94a3b8' }}>My Commitments</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={{
-            flexDirection: 'row', alignItems: 'center', gap: 12,
-            backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.25)',
-            paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14,
-          }}
-        >
-          <Feather name="log-out" size={18} color="#f87171" />
-          <Text style={{ fontSize: 14, fontWeight: '800', color: '#f87171' }}>Log Out</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* ── Main Content Area ── */}
-      <View style={{ flex: 1 }}>
-        {/* Top Header Bar */}
-        <View style={{
-          height: 72, backgroundColor: '#ffffff',
-          borderBottomWidth: 1, borderBottomColor: 'rgba(226, 232, 240, 0.8)',
-          paddingHorizontal: 36, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <View>
-            <Text style={{ fontSize: 22, fontWeight: '900', color: '#0f172a' }}>Volunteer Scribe Console</Text>
-            <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>Review & accept exam requests in your area</Text>
-          </View>
-
-          {onRefresh && (
-            <TouchableOpacity
-              onPress={onRefresh}
-              style={{
-                backgroundColor: 'rgba(241, 245, 249, 0.9)', borderWidth: 1, borderColor: 'rgba(203, 213, 225, 0.8)',
-                paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12,
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-              }}
-            >
-              <Feather name="refresh-cw" size={14} color="#0f172a" />
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Refresh Matches</Text>
-            </TouchableOpacity>
           )}
         </View>
+      </View>
+    </View>
 
-        {/* Dashboard Grid Content */}
-        <ScrollView contentContainerStyle={{ padding: 36 }} showsVerticalScrollIndicator={false}>
-          <View style={{ flexDirection: 'row', gap: 28 }}>
-            {/* Main Column: Available Requests to Assist */}
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 20 }}>
-                Available Student Requests ({availableRequests.length})
-              </Text>
-
-              {availableRequests.length === 0 ? (
-                <View style={{
-                  backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.8)',
-                  borderRadius: 20, padding: 48, alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <Feather name="check-circle" size={40} color="#10b981" style={{ marginBottom: 16 }} />
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 8 }}>All Nearby Requests Covered</Text>
-                  <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 360 }}>
-                    Thank you for being on standby! New student requests in your location will appear here automatically.
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 16 }}>
-                  {availableRequests.map((req) => (
-                    <View key={req.id} style={{
-                      backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.9)',
-                      borderRadius: 20, padding: 24, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.03, shadowRadius: 12, elevation: 2,
+      {/* ═══════════════════════════════════════════
+           BELOW HEADER LAYOUT: SIDEBAR UNDER HEADER
+      ═══════════════════════════════════════════ */}
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: mainBg }}>
+        {/* Left Sidebar (Ultra-Glassmorphic Panel) */}
+        <View style={{
+          width: isCollapsed ? 84 : 260,
+          backgroundColor: sidebarBg,
+          backdropFilter: 'blur(24px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          borderRightWidth: 1,
+          borderRightColor: sidebarBorder,
+          paddingVertical: 28,
+          paddingHorizontal: isCollapsed ? 12 : 18,
+          justifyContent: 'space-between',
+          boxShadow: isDark
+            ? '4px 0 24px 0 rgba(0, 0, 0, 0.35)'
+            : '4px 0 24px 0 rgba(22, 163, 74, 0.05)',
+        } as any}>
+          {/* Sidebar Navigation Options */}
+          <View style={{ gap: 8 }}>
+            {navItems.map((item) => {
+              const active = activeTab === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setActiveTab(item.id)}
+                  style={({ hovered }: any) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: isCollapsed ? 'center' : 'flex-start',
+                    gap: 12,
+                    backgroundColor: active
+                      ? (isDark ? 'rgba(22, 163, 74, 0.22)' : 'rgba(22, 163, 74, 0.12)')
+                      : (hovered ? (isDark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.85)') : 'transparent'),
+                    borderWidth: 1,
+                    borderColor: active
+                      ? 'rgba(22, 163, 74, 0.35)'
+                      : (hovered ? 'rgba(255, 255, 255, 0.9)' : 'transparent'),
+                    paddingHorizontal: isCollapsed ? 12 : 16,
+                    paddingVertical: 12,
+                    borderRadius: 16,
+                    cursor: 'pointer' as any,
+                    boxShadow: active
+                      ? '0 4px 16px 0 rgba(22, 163, 74, 0.15), inset 0 1px 1px 0 rgba(255, 255, 255, 0.8)'
+                      : (hovered ? '0 4px 12px 0 rgba(31, 38, 135, 0.05)' : 'none'),
+                    transform: [{ translateX: hovered && !isCollapsed ? 3 : 0 }],
+                  })}
+                >
+                  <Feather name={item.icon} size={20} color={active ? '#16a34a' : textSecondary} />
+                  {!isCollapsed && (
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: active ? '800' : '600',
+                      color: active ? '#16a34a' : textPrimary,
                     }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a' }}>{req.subject || 'Exam Request'}</Text>
-                        <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563eb' }}>MATCH AVAILABLE</Text>
-                        </View>
-                      </View>
+                      {item.label}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
-                      <View style={{ gap: 8, marginBottom: 18 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Feather name="calendar" size={14} color="#64748b" />
-                          <Text style={{ fontSize: 14, color: '#475569', fontWeight: '600' }}>Date: {req.exam_date || 'Upcoming'}</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Feather name="map-pin" size={14} color="#64748b" />
-                          <Text style={{ fontSize: 14, color: '#475569', fontWeight: '600' }}>Center: {req.exam_center_address || 'Address provided'}</Text>
-                        </View>
-                      </View>
+          {/* Bottom Sidebar Action Buttons: Log Out + Collapse */}
+          <View style={{ gap: 8 }}>
+            {/* Log Out Button */}
+            <Pressable
+              onPress={handleLogout}
+              style={({ hovered }: any) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                gap: 10,
+                backgroundColor: hovered ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.08)',
+                borderWidth: 1,
+                borderColor: 'rgba(239, 68, 68, 0.22)',
+                paddingHorizontal: isCollapsed ? 12 : 16,
+                paddingVertical: 10,
+                borderRadius: 12,
+                cursor: 'pointer' as any,
+              })}
+            >
+              <Feather name="log-out" size={18} color="#ef4444" />
+              {!isCollapsed && (
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                  Log Out
+                </Text>
+              )}
+            </Pressable>
 
-                      {onAcceptRequest && (
-                        <TouchableOpacity
-                          onPress={() => onAcceptRequest(req.id)}
-                          activeOpacity={0.85}
-                          style={{
-                            backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 14,
-                            alignItems: 'center', justifyContent: 'center',
-                          }}
-                        >
-                          <Text style={{ fontSize: 15, fontWeight: '800', color: '#ffffff' }}>Accept Scribe Request</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))}
+            {/* Bottom Sidebar Collapse/Expand Toggle */}
+            <Pressable
+              onPress={() => setIsCollapsed(!isCollapsed)}
+            style={({ hovered }: any) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              gap: 10,
+              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : (isDark ? 'rgba(30, 41, 59, 0.6)' : 'rgba(241, 245, 249, 0.8)'),
+              borderWidth: 1,
+              borderColor: pillBorder,
+              paddingHorizontal: isCollapsed ? 12 : 16,
+              paddingVertical: 10,
+              borderRadius: 12,
+              cursor: 'pointer' as any,
+            })}
+          >
+            <Feather name={isCollapsed ? 'chevrons-right' : 'chevrons-left'} size={18} color={textSecondary} />
+            {!isCollapsed && (
+              <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary }}>
+                Collapse Sidebar
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+
+        {/* Right Main Content Area */}
+        <View style={{ flex: 1, backgroundColor: mainBg }}>
+          <ScrollView contentContainerStyle={{ padding: 32, flexGrow: 1, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+            <View style={{ width: '100%', maxWidth: 1240 }}>
+
+              {/* Content Body Title Header (Hidden for Profile Tab) */}
+              {activeTab !== 'profile' && (
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+                  marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#cbd5e1'
+                }}>
+                  <Text style={{ fontSize: 26, fontWeight: '900', color: textPrimary, letterSpacing: -0.5 }}>
+                    {activeTab === 'home' && 'Scribe Dashboard'}
+                    {activeTab === 'explore' && 'Explore Available Requests'}
+                    {activeTab === 'commitments' && 'My Active Commitments'}
+                    {activeTab === 'plan' && 'Availability Schedule'}
+                    {activeTab === 'settings' && 'Account Settings'}
+                    {activeTab === 'notifications' && 'Your Notifications'}
+                  </Text>
+
+                  {/* Top Right Quick Action */}
+                  <Pressable
+                    onPress={() => setActiveTab('explore')}
+                    style={({ hovered }: any) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 8,
+                      backgroundColor: hovered ? '#15803d' : '#16a34a',
+                      paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12,
+                      shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
+                      cursor: 'pointer' as any,
+                    })}
+                  >
+                    <Feather name="search" size={18} color="#ffffff" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>Explore Requests</Text>
+                  </Pressable>
                 </View>
               )}
-            </View>
 
-            {/* Right Side Panel: My Commitments */}
-            <View style={{ width: 320, gap: 20 }}>
-              <View style={{
-                backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.9)',
-                borderRadius: 20, padding: 24,
-              }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 16 }}>My Commitments</Text>
-                <Text style={{ fontSize: 28, fontWeight: '900', color: '#10b981' }}>{myAssignedRequests.length}</Text>
-                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Exams you have committed to assist</Text>
-              </View>
+              {/* Tab View Content */}
+              {activeTab === 'home' && (
+                <ScribeHomeView
+                  userProfile={userProfile}
+                  availableRequests={availableRequests}
+                  myAssignedRequests={myAssignedRequests}
+                  onAcceptRequest={onAcceptRequest}
+                  onRefresh={onRefresh}
+                />
+              )}
+              {activeTab === 'explore' && (
+                <ScribeExploreView
+                  availableRequests={availableRequests}
+                  onAcceptRequest={onAcceptRequest}
+                />
+              )}
+              {activeTab === 'commitments' && (
+                <ScribeCommitmentsView
+                  myAssignedRequests={myAssignedRequests}
+                  onRefresh={onRefresh}
+                />
+              )}
+              {activeTab === 'plan' && <ScribePlanView userProfile={userProfile} myAssignedRequests={myAssignedRequests} />}
+              {activeTab === 'profile' && <ScribeProfileView userProfile={userProfile} onRefresh={onRefresh} />}
+              {activeTab === 'settings' && <SharedSettingsView userProfile={userProfile} />}
+              {activeTab === 'notifications' && <SharedNotificationsPCView userRole="scribe" />}
+
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
+        </View>
       </View>
     </View>
   );

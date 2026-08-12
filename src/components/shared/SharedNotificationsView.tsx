@@ -50,7 +50,7 @@ export default function SharedNotificationsView() {
       if (error) throw error;
       setNotifications(notifs || []);
     } catch (err) {
-      console.error('Error loading notifications:', err);
+      console.warn('Error loading notifications:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);

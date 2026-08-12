@@ -205,7 +205,7 @@ export default function StudentRequestsView() {
       setRequests(enriched);
     } catch (error: any) {
       const msg = error?.message ?? error?.details ?? error?.hint ?? (typeof error === 'string' ? error : JSON.stringify(error));
-      console.error('Error fetching requests:', msg, error);
+      console.warn('Error fetching requests:', msg);
     } finally {
       setLoading(false);
       setRefreshing(false);

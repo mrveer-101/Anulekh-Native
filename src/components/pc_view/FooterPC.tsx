@@ -1,9 +1,13 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image } from 'react-native';
+import { View, Text, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
-export default function FooterPC() {
+interface FooterPCProps {
+  onNavigateSection?: (sectionId: string) => void;
+}
+
+export default function FooterPC({ onNavigateSection }: FooterPCProps) {
   return (
     <View style={{
       backgroundColor: '#0f172a',
@@ -62,24 +66,38 @@ export default function FooterPC() {
             </View>
           </View>
 
-          {/* Column 2: Platform Links */}
+          {/* Column 2: Platform Links (with Hover States) */}
           <View style={{ width: 180 }}>
             <Text style={{ fontSize: 14, fontWeight: '800', color: '#ffffff', letterSpacing: 0.5, marginBottom: 18 }}>
               PLATFORM
             </Text>
             <View style={{ gap: 12 }}>
-              <TouchableOpacity onPress={() => router.push('/landing')} activeOpacity={0.7}>
-                <Text style={{ fontSize: 14, color: '#cbd5e1', fontWeight: '500' }}>Home</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/landing/induction')} activeOpacity={0.7}>
-                <Text style={{ fontSize: 14, color: '#cbd5e1', fontWeight: '500' }}>Student Portal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/landing/induction')} activeOpacity={0.7}>
-                <Text style={{ fontSize: 14, color: '#cbd5e1', fontWeight: '500' }}>Volunteer Scribe</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push('/auth/login')} activeOpacity={0.7}>
-                <Text style={{ fontSize: 14, color: '#cbd5e1', fontWeight: '500' }}>Login Account</Text>
-              </TouchableOpacity>
+              {[
+                { label: 'Home', action: () => router.push('/') },
+                { label: 'How It Works', action: () => onNavigateSection?.('how-it-works') },
+                { label: 'Student Portal', action: () => router.push('/landing/induction') },
+                { label: 'Volunteer Scribe', action: () => router.push('/landing/induction') },
+                { label: 'Login Account', action: () => router.push('/auth/login') },
+              ].map((link) => (
+                <Pressable
+                  key={link.label}
+                  onPress={link.action}
+                  style={({ hovered }: any) => ({
+                    cursor: 'pointer' as any,
+                    transform: [{ translateX: hovered ? 4 : 0 }],
+                  })}
+                >
+                  {({ hovered }: any) => (
+                    <Text style={{
+                      fontSize: 14,
+                      color: hovered ? '#60a5fa' : '#cbd5e1',
+                      fontWeight: hovered ? '700' : '500',
+                    }}>
+                      {link.label}
+                    </Text>
+                  )}
+                </Pressable>
+              ))}
             </View>
           </View>
 
@@ -98,16 +116,20 @@ export default function FooterPC() {
               <Text style={{ fontSize: 13, color: '#94a3b8', lineHeight: 19 }}>
                 Emergency scribe dispatch within 3 minutes for last-minute exam cancellations.
               </Text>
-              <View style={{
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.25)',
-                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-                marginTop: 4,
-              }}>
+              <Pressable
+                style={({ hovered }: any) => ({
+                  backgroundColor: hovered ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)',
+                  borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)',
+                  paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+                  marginTop: 4,
+                  cursor: 'pointer' as any,
+                  transform: [{ scale: hovered ? 1.02 : 1 }],
+                })}
+              >
                 <Text style={{ fontSize: 12, fontWeight: '800', color: '#f87171' }}>
                   Helpline: +91 (800) ANULEKH
                 </Text>
-              </View>
+              </Pressable>
             </View>
           </View>
 
@@ -119,7 +141,7 @@ export default function FooterPC() {
             <Text style={{ fontSize: 13, color: '#94a3b8', lineHeight: 20, marginBottom: 14 }}>
               Empowering schools, colleges, and NGOs across India with digital scribe verification.
             </Text>
-            <View style={{ flexDirection: 'row', items: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Feather name="check-circle" size={14} color="#60a5fa" />
               <Text style={{ fontSize: 12, color: '#60a5fa', fontWeight: '700' }}>
                 WCAG 2.1 Screen Reader Ready

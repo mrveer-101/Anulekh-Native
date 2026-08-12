@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated, Image, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/core/supabase';
+import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
@@ -40,6 +41,9 @@ const MOCK_LOCATIONS = [
 ];
 
 export default function ScribeRequestForm() {
+  const { width: windowWidth } = useWindowDimensions();
+  const isDesktop = windowWidth >= 768;
+
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
 
@@ -538,6 +542,81 @@ export default function ScribeRequestForm() {
 
   // Entry-choice screen: ask whether to fill the request manually or auto-fill from an admit card.
   if (entryMode === 'choice') {
+    if (isDesktop) {
+      return (
+        <ConsoleStudentPC activeTab="requests">
+          <View style={{ maxWidth: 880, width: '100%', alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 24, padding: 36, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+              <View>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#0f172a' }}>Select Request Type</Text>
+                <Text style={{ fontSize: 14, fontWeight: '500', color: '#64748b', marginTop: 4 }}>Choose whether you need help for an assignment or an upcoming exam.</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.replace('/console/student' as any)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f1f5f9', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, cursor: 'pointer' as any }}
+              >
+                <Feather name="x" size={18} color="#64748b" />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Request Assignment Block */}
+            <View style={{ marginBottom: 24 }}>
+              <TouchableOpacity
+                onPress={() => router.push('/console/student/assignment_form' as any)}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#6366f1', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', cursor: 'pointer' as any }}
+              >
+                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
+                  <Feather name="file-text" size={26} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 18 }}>Request Assignment</Text>
+                  <Text style={{ color: '#e0e7ff', fontSize: 13, marginTop: 4 }}>Get assistance for academic assignment completion</Text>
+                </View>
+                <Feather name="chevron-right" size={24} color="#ffffff" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Exam Request Section */}
+            <View>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 16 }}>Exam Scribe Request</Text>
+
+              <TouchableOpacity
+                onPress={startAutoFillEntry}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#2563eb', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', marginBottom: 16, cursor: 'pointer' as any }}
+              >
+                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
+                  <Feather name="upload-cloud" size={26} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 18 }}>Auto-Fill (ADMIT Card)</Text>
+                  <Text style={{ color: '#dbeafe', fontSize: 13, marginTop: 4 }}>Upload a photo or PDF admit card — details filled automatically via AI</Text>
+                </View>
+                <Feather name="chevron-right" size={24} color="#ffffff" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => setEntryMode('form')}
+                activeOpacity={0.85}
+                style={{ backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#cbd5e1', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', cursor: 'pointer' as any }}
+              >
+                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
+                  <Feather name="edit-3" size={26} color="#334155" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 18 }}>Manual Fill Form</Text>
+                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Enter exam details, date, time, and venue step by step</Text>
+                </View>
+                <Feather name="chevron-right" size={24} color="#334155" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ConsoleStudentPC>
+      );
+    }
+
     return (
       <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
         <StatusBar style="dark" />

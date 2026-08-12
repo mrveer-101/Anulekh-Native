@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, ScrollView } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, ScrollView, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
+import { useThemeMode } from '@/core/themeContext';
 import { parseExamDate, isExamPast } from '@/core/examDate';
 
 interface ExamRequest {
@@ -241,498 +242,524 @@ export default function StudentPlanView() {
     return true;
   });
 
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const { isDark } = useThemeMode();
+
+  const renderCalendarBlock = () => (
+    <View style={{
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      padding: 18,
+      borderRadius: 24,
+      borderWidth: 1.5,
+      borderColor: isDark ? '#334155' : '#e2e8f0',
+      shadowColor: '#2563eb',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.08,
+      shadowRadius: 16,
+      elevation: 4,
+      marginBottom: 16
+    }}>
+      {/* Header: Month Selector with Interactive Expand/Collapse Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
+        <TouchableOpacity 
+          onPress={() => changeMonth(-1)} 
+          style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+        >
+          <Feather name="chevron-left" size={18} color="#2563eb" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
+          activeOpacity={0.7}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            backgroundColor: 'rgba(37,99,235,0.06)',
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: 'rgba(37,99,235,0.15)'
+          }}
+        >
+          <Feather name="calendar" size={14} color="#2563eb" />
+          <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
+            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </Text>
+          <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#2563eb" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          onPress={() => changeMonth(1)} 
+          style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+        >
+          <Feather name="chevron-right" size={18} color="#2563eb" />
+        </TouchableOpacity>
+      </View>
+
+      {!isCalendarCollapsed && (
+        <>
+          {/* Weekdays Row */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+              <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Days Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+            {getDaysInMonth(currentMonth).map((day, idx) => {
+              if (!day) {
+                return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+              }
+              const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+              const isSelected = selectedDate === dateString;
+              const hasPlan = hasPlanOnDate(day);
+              const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+
+              let cellBg = 'transparent';
+              let cellTextColor = isDark ? '#cbd5e1' : '#334155';
+              let cellBorder = {};
+              let dotColor = '#94a3b8';
+
+              if (isSelected) {
+                cellBg = '#2563eb';
+                cellTextColor = '#ffffff';
+                dotColor = '#ffffff';
+              } else if (hasPlan) {
+                const plansOnDay = getPlansOnDate(day);
+                const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
+                if (hasEmergency) {
+                  cellBg = 'rgba(239,68,68,0.15)';
+                  cellTextColor = '#dc2626';
+                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
+                  dotColor = '#dc2626';
+                } else {
+                  cellBg = 'rgba(249,115,22,0.14)';
+                  cellTextColor = '#c2410c';
+                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
+                  dotColor = '#f97316';
+                }
+              } else if (isToday) {
+                cellBg = isDark ? 'rgba(37,99,235,0.2)' : '#eff6ff';
+                cellTextColor = '#2563eb';
+                cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
+              }
+
+              return (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => {
+                    if (isSelected) {
+                      setSelectedDate(null);
+                    } else {
+                      setSelectedDate(dateString);
+                    }
+                  }}
+                  style={{
+                    width: '14.2%',
+                    height: 38,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 19,
+                    backgroundColor: cellBg,
+                    ...cellBorder
+                  }}
+                >
+                  <Text style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 13,
+                    fontWeight: '700',
+                    color: cellTextColor
+                  }}>
+                    {day.getDate()}
+                  </Text>
+                  {hasPlan && (
+                    <View style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 2.5,
+                      backgroundColor: dotColor,
+                      marginTop: 2
+                    }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </>
+      )}
+    </View>
+  );
+
+  const renderFilterBlock = () => (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      padding: 5,
+      borderRadius: 18,
+      borderWidth: 1.5,
+      borderColor: isDark ? '#334155' : '#cbd5e1',
+      shadowColor: '#475569',
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.1,
+      shadowRadius: 14,
+      elevation: 4,
+      marginBottom: 16,
+      gap: 4
+    }}>
+      {(['all', 'upcoming', 'completed'] as const).map((filter) => {
+        const isActive = activeFilter === filter;
+        const filterLabel = filter === 'all' ? 'All' : filter === 'upcoming' ? 'Upcoming' : 'Completed';
+        return (
+          <TouchableOpacity
+            key={filter}
+            onPress={() => setActiveFilter(filter)}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: isActive ? '#2563eb' : 'transparent',
+              shadowColor: isActive ? '#2563eb' : 'transparent',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: isActive ? 0.35 : 0,
+              shadowRadius: 10,
+              elevation: isActive ? 4 : 0
+            }}
+          >
+            <Text style={{
+              fontFamily: 'Roboto',
+              fontSize: 11,
+              fontWeight: '900',
+              textTransform: 'uppercase',
+              color: isActive ? '#ffffff' : (isDark ? '#94a3b8' : '#64748b'),
+              letterSpacing: 0.5
+            }}>
+              {filterLabel}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+
+  const renderEmptyState = () => (
+    <View style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: isDark ? '#334155' : '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+      <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)' }}>
+        <Feather name="calendar" size={26} color="#2563eb" />
+      </View>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: isDark ? '#f8fafc' : '#0f172a' }}>{t('no_confirmed_plans')}</Text>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginTop: 6, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 }}>
+        {t('scribe_confirmed_plans_desc')}
+      </Text>
+    </View>
+  );
+
+  const renderPlanCard = (item: ExamRequest) => {
+    const itemKey = `${item.requestType || 'exam'}-${item.id}`;
+    const isEmergency = item.is_emergency === 'yes';
+    const isConfirmed = item.status === 'matched' || !!item.scribe_id;
+    const isExpanded = expandedPlanIds.has(itemKey);
+
+    const toggleExpand = () => {
+      setExpandedPlanIds(prev => {
+        const next = new Set(prev);
+        if (next.has(itemKey)) next.delete(itemKey);
+        else next.add(itemKey);
+        return next;
+      });
+    };
+
+    let borderColor = isDark ? '#1e3a8a' : '#bfdbfe';
+    let shadowColor = '#2563eb';
+    let borderWidth = 1.5;
+    let shadowOpacity = 0.12;
+
+    if (isEmergency) {
+      borderColor = isDark ? '#991b1b' : '#fca5a5';
+      shadowColor = '#dc2626';
+      borderWidth = 2;
+      shadowOpacity = 0.15;
+    } else if (isConfirmed) {
+      borderColor = isDark ? '#065f46' : '#a7f3d0';
+      shadowColor = '#059669';
+      borderWidth = 1.5;
+      shadowOpacity = 0.12;
+    }
+
+    return (
+      <View key={itemKey} style={{
+        backgroundColor: isDark ? '#1e293b' : '#ffffff',
+        padding: 16,
+        borderRadius: 24,
+        borderWidth,
+        borderColor,
+        shadowColor,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity,
+        shadowRadius: 16,
+        elevation: 4,
+        marginBottom: 14
+      }}>
+        {/* Card Header */}
+        <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginTop: 2 }}>
+              Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
+            </Text>
+          </View>
+          
+          <View style={{
+            paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20,
+            backgroundColor: isEmergency ? '#fef2f2' : 'rgba(5,150,105,0.08)',
+            borderWidth: 1,
+            borderColor: isEmergency ? '#fca5a5' : 'rgba(5,150,105,0.2)'
+          }}>
+            <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9.5, fontWeight: '800' }}>
+              {isEmergency ? '🚨 EMERGENCY SOS' : t('status_matched')}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Collapsed Preview Summary Bar */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+            {!isEmergency && item.scribeProfile?.full_name && (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>
+                  {item.scribeProfile.full_name}
+                </Text>
+              </View>
+            )}
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: isDark ? '#cbd5e1' : '#475569', fontWeight: '600' }}>
+                {item.exam_date ? item.exam_date.split(' ')[0] : 'Scheduled'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Details Expand/Collapse Button */}
+          <TouchableOpacity
+            onPress={toggleExpand}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : (isDark ? '#334155' : '#f8fafc'),
+              borderWidth: 1,
+              borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : (isDark ? '#475569' : '#e2e8f0'),
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 10,
+              gap: 4
+            }}
+          >
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : (isDark ? '#cbd5e1' : '#64748b') }}>
+              {isExpanded ? 'Collapse' : 'Details'}
+            </Text>
+            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : (isDark ? "#cbd5e1" : "#64748b")} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Expanded Detailed View */}
+        {isExpanded && (
+          <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+            {isEmergency && (
+              <View style={{ 
+                backgroundColor: '#fef2f2', 
+                padding: 12, borderRadius: 14, 
+                borderWidth: 1, borderColor: '#fca5a5', 
+                flexDirection: 'row', alignItems: 'center', 
+                gap: 8, marginBottom: 12 
+              }}>
+                <Feather name="alert-triangle" size={14} color="#dc2626" />
+                <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
+                  Scribe cancelled! Re-broadcasting emergency SOS.
+                </Text>
+              </View>
+            )}
+
+            <View style={{ gap: 8, marginBottom: 14 }}>
+              {!isEmergency && (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="user" size={13} color="#059669" style={{ marginRight: 8 }} />
+                  <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
+                    {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
+                  </Text>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
+                  {t('exam_date')}: {item.exam_date || t('date_not_specified')}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="map-pin" size={13} color="#2563eb" style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }} numberOfLines={1}>
+                  {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="globe" size={13} color="#64748b" style={{ marginRight: 8 }} />
+                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
+                  {t('exam_language')}: {item.exam_language}
+                </Text>
+              </View>
+            </View>
+
+            {/* Controls */}
+            <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+              {isEmergency ? (
+                <TouchableOpacity
+                  onPress={() => router.push('/console/student/view_applications' as any)}
+                  style={{ 
+                    width: '100%', 
+                    backgroundColor: '#dc2626', 
+                    paddingVertical: 12, 
+                    borderRadius: 14, 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6
+                  }}
+                >
+                  <Feather name="users" size={14} color="#ffffff" />
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>View SOS Applications</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={() => openCallSheet(item)}
+                      style={{ 
+                        flex: 1, 
+                        backgroundColor: 'rgba(5,150,105,0.08)', 
+                        borderWidth: 1, 
+                        borderColor: 'rgba(5,150,105,0.2)', 
+                        paddingVertical: 10, 
+                        borderRadius: 14, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        flexDirection: 'row', 
+                        gap: 6 
+                      }}
+                    >
+                      <Feather name="phone" size={14} color="#059669" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#059669', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        router.push(`/console/common/chat?id=${item.id}&type=exam` as any);
+                      }}
+                      style={{ 
+                        flex: 1, 
+                        backgroundColor: 'rgba(37,99,235,0.08)', 
+                        borderWidth: 1, 
+                        borderColor: 'rgba(37,99,235,0.2)', 
+                        paddingVertical: 10, 
+                        borderRadius: 14, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        flexDirection: 'row', 
+                        gap: 6 
+                      }}
+                    >
+                      <Feather name="message-square" size={14} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedExam(item);
+                      setIsDeclarationOpen(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#2563eb',
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.15,
+                      shadowRadius: 8,
+                      elevation: 2
+                    }}
+                  >
+                    <Feather name="file-text" size={14} color="#ffffff" />
+                    <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: isDark ? '#0f172a' : '#f9fafb' }}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      <FlatList
-        style={{ flex: 1 }}
-        data={filteredPlans}
-        keyExtractor={(item) => `${item.requestType || 'exam'}-${item.id}`}
-        contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
-        }
-        ListHeaderComponent={
-          <View style={{ marginBottom: 12 }}>
-            {/* ── CALENDAR BLOCK ── */}
-            <View style={{
-              backgroundColor: '#ffffff',
-              padding: 18,
-              borderRadius: 24,
-              borderWidth: 1.5,
-              borderColor: '#e2e8f0',
-              shadowColor: '#2563eb',
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.08,
-              shadowRadius: 16,
-              elevation: 4,
-              marginBottom: 16
-            }}>
-              {/* Header: Month Selector with Interactive Expand/Collapse Header */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
-                <TouchableOpacity 
-                  onPress={() => changeMonth(-1)} 
-                  style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
-                >
-                  <Feather name="chevron-left" size={18} color="#2563eb" />
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
-                  activeOpacity={0.7}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    backgroundColor: 'rgba(37,99,235,0.06)',
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: 'rgba(37,99,235,0.15)'
-                  }}
-                >
-                  <Feather name="calendar" size={14} color="#2563eb" />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
-                    {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </Text>
-                  <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#2563eb" />
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  onPress={() => changeMonth(1)} 
-                  style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
-                >
-                  <Feather name="chevron-right" size={18} color="#2563eb" />
-                </TouchableOpacity>
-              </View>
-
-              {!isCalendarCollapsed && (
-                <>
-                  {/* Weekdays Row with All Orange Accents */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                    {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day, idx) => (
-                      <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
-                      </View>
-                    ))}
-                  </View>
-
-                  {/* Days Grid */}
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-                    {getDaysInMonth(currentMonth).map((day, idx) => {
-                      if (!day) {
-                        return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
-                      }
-                      const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-                      const isSelected = selectedDate === dateString;
-                      const hasPlan = hasPlanOnDate(day);
-                      const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
-
-                      let cellBg = 'transparent';
-                      let cellTextColor = '#334155';
-                      let cellBorder = {};
-                      let dotColor = '#94a3b8';
-
-                      if (isSelected) {
-                        cellBg = '#2563eb';
-                        cellTextColor = '#ffffff';
-                        dotColor = '#ffffff';
-                      } else if (hasPlan) {
-                        const plansOnDay = getPlansOnDate(day);
-                        const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
-                        if (hasEmergency) {
-                          cellBg = 'rgba(239,68,68,0.15)';
-                          cellTextColor = '#dc2626';
-                          cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
-                          dotColor = '#dc2626';
-                        } else {
-                          // Vibrant Orange Accent for confirmed plans
-                          cellBg = 'rgba(249,115,22,0.14)';
-                          cellTextColor = '#c2410c';
-                          cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                          dotColor = '#f97316';
-                        }
-                      } else if (isToday) {
-                        cellBg = '#eff6ff';
-                        cellTextColor = '#2563eb';
-                        cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
-                      }
-
-                      return (
-                        <TouchableOpacity
-                          key={idx}
-                          onPress={() => {
-                            if (isSelected) {
-                              setSelectedDate(null);
-                            } else {
-                              setSelectedDate(dateString);
-                            }
-                          }}
-                          style={{
-                            width: '14.2%',
-                            height: 38,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            borderRadius: 19,
-                            backgroundColor: cellBg,
-                            ...cellBorder
-                          }}
-                        >
-                          <Text style={{
-                            fontFamily: 'Roboto',
-                            fontSize: 13,
-                            fontWeight: '700',
-                            color: cellTextColor
-                          }}>
-                            {day.getDate()}
-                          </Text>
-                          {hasPlan && (
-                            <View style={{
-                              width: 5,
-                              height: 5,
-                              borderRadius: 2.5,
-                              backgroundColor: dotColor,
-                              marginTop: 2
-                            }} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </>
+    <View style={{ flex: 1, backgroundColor: isDark ? '#0f172a' : '#f9fafb' }}>
+      {isDesktop ? (
+        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+          <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
+            {/* Left 50%: Filter Block + List of Plans */}
+            <View style={{ flex: 1 }}>
+              {renderFilterBlock()}
+              {filteredPlans.length === 0 ? (
+                renderEmptyState()
+              ) : (
+                filteredPlans.map(item => renderPlanCard(item))
               )}
             </View>
 
-            {/* ── FILTER SELECTION BLOCK (one liner 3 filters) ── */}
-            <View style={{
-              flexDirection: 'row',
-              backgroundColor: '#ffffff',
-              padding: 5,
-              borderRadius: 18,
-              borderWidth: 1.5,
-              borderColor: '#cbd5e1',
-              shadowColor: '#475569',
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.1,
-              shadowRadius: 14,
-              elevation: 4,
-              marginBottom: 16,
-              gap: 4
-            }}>
-              {(['all', 'upcoming', 'completed'] as const).map((filter) => {
-                const isActive = activeFilter === filter;
-                const filterLabel = filter === 'all' ? 'All' : filter === 'upcoming' ? 'Upcoming' : 'Completed';
-                return (
-                  <TouchableOpacity
-                    key={filter}
-                    onPress={() => setActiveFilter(filter)}
-                    style={{
-                      flex: 1,
-                      paddingVertical: 9,
-                      borderRadius: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isActive ? '#2563eb' : 'transparent',
-                      shadowColor: isActive ? '#2563eb' : 'transparent',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: isActive ? 0.35 : 0,
-                      shadowRadius: 10,
-                      elevation: isActive ? 4 : 0
-                    }}
-                  >
-                    <Text style={{
-                      fontFamily: 'Roboto',
-                      fontSize: 11,
-                      fontWeight: '900',
-                      textTransform: 'uppercase',
-                      color: isActive ? '#ffffff' : '#64748b',
-                      letterSpacing: 0.5
-                    }}>
-                      {filterLabel}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+            {/* Right 50%: Calendar Block */}
+            <View style={{ flex: 1 }}>
+              {renderCalendarBlock()}
             </View>
           </View>
-        }
-        ListEmptyComponent={
-          <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
-            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)' }}>
-              <Feather name="calendar" size={26} color="#2563eb" />
-            </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{t('no_confirmed_plans')}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 6, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 }}>
-              {t('scribe_confirmed_plans_desc')}
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const itemKey = `${item.requestType || 'exam'}-${item.id}`;
-          const isEmergency = item.is_emergency === 'yes';
-          const isConfirmed = item.status === 'matched' || !!item.scribe_id;
-          const isExpanded = expandedPlanIds.has(itemKey);
-
-          const toggleExpand = () => {
-            setExpandedPlanIds(prev => {
-              const next = new Set(prev);
-              if (next.has(itemKey)) next.delete(itemKey);
-              else next.add(itemKey);
-              return next;
-            });
-          };
-
-          // Status-based Border & Shadow colors
-          let borderColor = '#bfdbfe';
-          let shadowColor = '#2563eb';
-          let borderWidth = 1.5;
-          let shadowOpacity = 0.12;
-
-          if (isEmergency) {
-            borderColor = '#fca5a5';
-            shadowColor = '#dc2626';
-            borderWidth = 2;
-            shadowOpacity = 0.15;
-          } else if (isConfirmed) {
-            borderColor = '#a7f3d0';
-            shadowColor = '#059669';
-            borderWidth = 1.5;
-            shadowOpacity = 0.12;
-          } else {
-            // Non-Confirmed / Pending
-            borderColor = '#bfdbfe';
-            shadowColor = '#2563eb';
-            borderWidth = 1.5;
-            shadowOpacity = 0.12;
+        </ScrollView>
+      ) : (
+        <FlatList
+          style={{ flex: 1 }}
+          data={filteredPlans}
+          keyExtractor={(item) => `${item.requestType || 'exam'}-${item.id}`}
+          contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
           }
-
-          return (
-            <View style={{
-              backgroundColor: '#ffffff',
-              padding: 16,
-              borderRadius: 24,
-              borderWidth,
-              borderColor,
-              shadowColor,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity,
-              shadowRadius: 16,
-              elevation: 4,
-              marginBottom: 14
-            }}>
-              {/* Card Header */}
-              <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
-                    Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                
-                <View style={{
-                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20,
-                  backgroundColor: isEmergency ? '#fef2f2' : 'rgba(5,150,105,0.08)',
-                  borderWidth: 1,
-                  borderColor: isEmergency ? '#fca5a5' : 'rgba(5,150,105,0.2)'
-                }}>
-                  <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9.5, fontWeight: '800' }}>
-                    {isEmergency ? '🚨 EMERGENCY SOS' : t('status_matched')}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Collapsed Preview Summary Bar */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
-                  {!isEmergency && item.scribeProfile?.full_name && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
-                        {item.scribeProfile.full_name}
-                      </Text>
-                    </View>
-                  )}
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#475569', fontWeight: '600' }}>
-                      {item.exam_date ? item.exam_date.split(' ')[0] : 'Scheduled'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Details Expand/Collapse Button */}
-                <TouchableOpacity
-                  onPress={toggleExpand}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : '#f8fafc',
-                    borderWidth: 1,
-                    borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : '#e2e8f0',
-                    paddingHorizontal: 10,
-                    paddingVertical: 4,
-                    borderRadius: 10,
-                    gap: 4
-                  }}
-                >
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : '#64748b' }}>
-                    {isExpanded ? 'Collapse' : 'Details'}
-                  </Text>
-                  <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : "#64748b"} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Expanded Detailed View */}
-              {isExpanded && (
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-                  {isEmergency && (
-                    <View style={{ 
-                      backgroundColor: '#fef2f2', 
-                      padding: 12, borderRadius: 14, 
-                      borderWidth: 1, borderColor: '#fca5a5', 
-                      flexDirection: 'row', alignItems: 'center', 
-                      gap: 8, marginBottom: 12 
-                    }}>
-                      <Feather name="alert-triangle" size={14} color="#dc2626" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
-                        Scribe cancelled! Re-broadcasting emergency SOS.
-                      </Text>
-                    </View>
-                  )}
-
-                  <View style={{ gap: 8, marginBottom: 14 }}>
-                    {!isEmergency && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Feather name="user" size={13} color="#059669" style={{ marginRight: 8 }} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                          {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 8 }} />
-                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                        {t('exam_date')}: {item.exam_date || t('date_not_specified')}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Feather name="map-pin" size={13} color="#2563eb" style={{ marginRight: 8 }} />
-                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                        {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Feather name="globe" size={13} color="#64748b" style={{ marginRight: 8 }} />
-                      <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                        {t('exam_language')}: {item.exam_language}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Controls */}
-                  <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-                    {isEmergency ? (
-                      <TouchableOpacity
-                        onPress={() => router.push('/console/student/view_applications' as any)}
-                        style={{ 
-                          width: '100%', 
-                          backgroundColor: '#dc2626', 
-                          paddingVertical: 12, 
-                          borderRadius: 14, 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          flexDirection: 'row',
-                          gap: 6
-                        }}
-                      >
-                        <Feather name="users" size={14} color="#ffffff" />
-                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>View SOS Applications</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <>
-                        <View style={{ flexDirection: 'row', gap: 10 }}>
-                          <TouchableOpacity
-                            onPress={() => openCallSheet(item)}
-                            style={{ 
-                              flex: 1, 
-                              backgroundColor: 'rgba(5,150,105,0.08)', 
-                              borderWidth: 1, 
-                              borderColor: 'rgba(5,150,105,0.2)', 
-                              paddingVertical: 10, 
-                              borderRadius: 14, 
-                              alignItems: 'center', 
-                              justifyContent: 'center', 
-                              flexDirection: 'row', 
-                              gap: 6 
-                            }}
-                          >
-                            <Feather name="phone" size={14} color="#059669" />
-                            <Text style={{ fontFamily: 'Roboto', color: '#059669', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            onPress={() => {
-                              router.push(`/console/common/chat?id=${item.id}&type=exam` as any);
-                            }}
-                            style={{ 
-                              flex: 1, 
-                              backgroundColor: 'rgba(37,99,235,0.08)', 
-                              borderWidth: 1, 
-                              borderColor: 'rgba(37,99,235,0.2)', 
-                              paddingVertical: 10, 
-                              borderRadius: 14, 
-                              alignItems: 'center', 
-                              justifyContent: 'center', 
-                              flexDirection: 'row', 
-                              gap: 6 
-                            }}
-                          >
-                            <Feather name="message-square" size={14} color="#2563eb" />
-                            <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedExam(item);
-                            setIsDeclarationOpen(true);
-                          }}
-                          style={{
-                            width: '100%',
-                            backgroundColor: '#2563eb',
-                            paddingVertical: 12,
-                            borderRadius: 14,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexDirection: 'row',
-                            gap: 6,
-                            shadowColor: '#2563eb',
-                            shadowOffset: { width: 0, height: 4 },
-                            shadowOpacity: 0.15,
-                            shadowRadius: 8,
-                            elevation: 2
-                          }}
-                        >
-                          <Feather name="file-text" size={14} color="#ffffff" />
-                          <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                </View>
-              )}
+          ListHeaderComponent={
+            <View style={{ marginBottom: 12 }}>
+              {renderCalendarBlock()}
+              {renderFilterBlock()}
             </View>
-          );
-        }}
-      />
+          }
+          ListEmptyComponent={renderEmptyState()}
+          renderItem={({ item }) => renderPlanCard(item)}
+        />
+      )}
 
       {/* FORMAL SCRIBE DECLARATION MODAL */}
       <Modal
