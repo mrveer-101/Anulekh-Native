@@ -27,17 +27,6 @@ export default function LandingScreen() {
   const card2Anim = useRef(new Animated.Value(50)).current;
   const card3Anim = useRef(new Animated.Value(50)).current;
 
-  useEffect(() => {
-    checkExistingSession();
-    if (!isDesktop) {
-      runEntryAnimations();
-    }
-  }, [isDesktop]);
-
-  if (isDesktop) {
-    return <LandingPC />;
-  }
-
   const checkExistingSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -61,6 +50,17 @@ export default function LandingScreen() {
       ]).start();
     });
   };
+
+  useEffect(() => {
+    checkExistingSession();
+    if (!isDesktop) {
+      runEntryAnimations();
+    }
+  }, [isDesktop]);
+
+  if (isDesktop) {
+    return <LandingPC />;
+  }
 
   const handleGetStarted = () => {
     // Always show the intro flow when "Get Started" is tapped —

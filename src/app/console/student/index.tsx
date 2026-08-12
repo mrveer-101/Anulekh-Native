@@ -102,22 +102,12 @@ export default function StudentDashboard() {
   const currentWidth = mounted ? screenWidth : windowWidth;
   const isDesktop = currentWidth >= 768 && layoutMode !== 'mobile';
 
-  useEffect(() => { fetchSession(); }, []);
-
-  useEffect(() => {
-    if (params.tab) {
-      setActiveTab(params.tab as Tab);
-    }
-  }, [params.tab]);
-
-  useEffect(() => {
-    if (!showWelcome) return;
-    Animated.sequence([
-      Animated.timing(welcomeOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.delay(2600),
-      Animated.timing(welcomeOpacity, { toValue: 0, duration: 600, useNativeDriver: true }),
-    ]).start(() => setShowWelcome(false));
-  }, [showWelcome]);
+  // ── HELPER FUNCTIONS ───────────────────────────────────────────────────
+  const fetchUnread = async (uid: string) => {
+    const { data } = await supabase
+      .from('notifications').select('id').eq('user_id', uid).eq('is_read', 0);
+    setUnread(data?.length ?? 0);
+  };
 
   const fetchSession = async () => {
     try {
@@ -149,22 +139,6 @@ export default function StudentDashboard() {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      if (profile?.id) {
-        AsyncStorage.getItem(`profile_photo_${profile.id}`).then((photo) => {
-          if (photo) setProfilePhoto(photo);
-        });
-      }
-    }, [profile?.id, activeTab])
-  );
-
-  const fetchUnread = async (uid: string) => {
-    const { data } = await supabase
-      .from('notifications').select('id').eq('user_id', uid).eq('is_read', 0);
-    setUnread(data?.length ?? 0);
-  };
-
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
@@ -178,6 +152,33 @@ export default function StudentDashboard() {
       }
     ]);
   };
+
+  useEffect(() => { fetchSession(); }, []);
+
+  useEffect(() => {
+    if (params.tab) {
+      setActiveTab(params.tab as Tab);
+    }
+  }, [params.tab]);
+
+  useEffect(() => {
+    if (!showWelcome) return;
+    Animated.sequence([
+      Animated.timing(welcomeOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.delay(2600),
+      Animated.timing(welcomeOpacity, { toValue: 0, duration: 600, useNativeDriver: true }),
+    ]).start(() => setShowWelcome(false));
+  }, [showWelcome]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (profile?.id) {
+        AsyncStorage.getItem(`profile_photo_${profile.id}`).then((photo) => {
+          if (photo) setProfilePhoto(photo);
+        });
+      }
+    }, [profile?.id, activeTab])
+  );
 
   if (loading) {
     return (
