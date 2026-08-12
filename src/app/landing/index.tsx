@@ -17,8 +17,8 @@ import { Feather } from '@expo/vector-icons';
 import LandingPC from '@/components/pc_view/LandingPC';
 
 export default function LandingScreen() {
-  const { width: windowWidth, height } = useWindowDimensions();
-  const isDesktop = windowWidth >= 768;
+  const { width, height } = useWindowDimensions();
+  const isDesktop = width >= 768;
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
