@@ -399,16 +399,16 @@ export default function StudentPlanView() {
   const renderFilterBlock = () => (
     <View style={{
       flexDirection: 'row',
-      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
       padding: 5,
       borderRadius: 18,
       borderWidth: 1.5,
       borderColor: isDark ? '#334155' : '#cbd5e1',
       shadowColor: '#475569',
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.1,
-      shadowRadius: 14,
-      elevation: 4,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 3,
       marginBottom: 16,
       gap: 4
     }}>
