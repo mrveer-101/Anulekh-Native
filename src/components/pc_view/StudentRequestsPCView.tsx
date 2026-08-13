@@ -447,21 +447,27 @@ export default function StudentRequestsPCView({
           justifyContent: 'center',
           padding: 24,
         }}>
-          <View style={{
-            backgroundColor: '#ffffff',
-            borderRadius: 24,
-            width: '100%',
-            maxWidth: 520,
-            padding: 28,
-            borderWidth: 1,
-            borderColor: '#e2e8f0',
-            shadowColor: '#0f172a',
-            shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.2,
-            shadowRadius: 24,
-            elevation: 10,
-            gap: 20,
-          }}>
+          <ScrollView
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 24,
+              width: '100%',
+              maxWidth: 520,
+              maxHeight: '85vh' as any,
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 12 },
+              shadowOpacity: 0.2,
+              shadowRadius: 24,
+              elevation: 10,
+            }}
+            contentContainerStyle={{
+              padding: 28,
+              gap: 20,
+            }}
+            showsVerticalScrollIndicator={true}
+          >
             {/* Modal Header */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -598,7 +604,7 @@ export default function StudentRequestsPCView({
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#ffffff' }}>Apply Filters</Text>
               </Pressable>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>

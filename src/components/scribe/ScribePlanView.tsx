@@ -31,6 +31,7 @@ export default function ScribePlanView() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
+  const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
 
   // Declaration Modal State
   const [selectedExam, setSelectedExam] = useState<any>(null);
@@ -211,110 +212,130 @@ export default function ScribePlanView() {
           elevation: 4,
           marginBottom: 16
         }}>
-          {/* Header: Month Selector */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          {/* Header: Month Selector with Interactive Expand/Collapse Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
             <TouchableOpacity 
               onPress={() => changeMonth(-1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
             >
-              <Feather name="chevron-left" size={18} color="#2563eb" />
+              <Feather name="chevron-left" size={18} color="#059669" />
             </TouchableOpacity>
             
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#2563eb', letterSpacing: -0.3 }}>
+            <TouchableOpacity 
+              onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
+              activeOpacity={0.7}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                backgroundColor: 'rgba(5,150,105,0.06)',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: 'rgba(5,150,105,0.18)'
+              }}
+            >
+              <Feather name="calendar" size={14} color="#059669" />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#059669', letterSpacing: -0.3 }}>
                 {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </Text>
-            </View>
+              <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#059669" />
+            </TouchableOpacity>
 
             <TouchableOpacity 
               onPress={() => changeMonth(1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
+              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
             >
-              <Feather name="chevron-right" size={18} color="#2563eb" />
+              <Feather name="chevron-right" size={18} color="#059669" />
             </TouchableOpacity>
           </View>
 
-          {/* Weekdays Row with All Orange Accents */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
-              <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+          {!isCalendarCollapsed && (
+            <>
+              {/* Weekdays Row with All Orange Accents */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+                  <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
 
-          {/* Days Grid */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-            {getDaysInMonth(currentMonth).map((day, idx) => {
-              if (!day) {
-                return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
-              }
-              const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
-              const isSelected = selectedDate === dateString;
-              const hasPlan = hasPlanOnDate(day);
-              const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              {/* Days Grid */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+                {getDaysInMonth(currentMonth).map((day, idx) => {
+                  if (!day) {
+                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+                  }
+                  const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+                  const isSelected = selectedDate === dateString;
+                  const hasPlan = hasPlanOnDate(day);
+                  const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
-              let cellBg = 'transparent';
-              let cellTextColor = '#334155';
-              let cellBorder = {};
-              let dotColor = '#94a3b8';
+                  let cellBg = 'transparent';
+                  let cellTextColor = '#334155';
+                  let cellBorder = {};
+                  let dotColor = '#94a3b8';
 
-              if (isSelected) {
-                cellBg = '#059669';
-                cellTextColor = '#ffffff';
-                dotColor = '#ffffff';
-              } else if (hasPlan) {
-                cellBg = 'rgba(249,115,22,0.14)';
-                cellTextColor = '#c2410c';
-                cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                dotColor = '#f97316';
-              } else if (isToday) {
-                cellBg = 'rgba(5,150,105,0.08)';
-                cellTextColor = '#059669';
-                cellBorder = { borderWidth: 1.5, borderColor: 'rgba(5,150,105,0.3)' };
-              }
+                  if (isSelected) {
+                    cellBg = '#059669';
+                    cellTextColor = '#ffffff';
+                    dotColor = '#ffffff';
+                  } else if (hasPlan) {
+                    cellBg = 'rgba(249,115,22,0.14)';
+                    cellTextColor = '#c2410c';
+                    cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
+                    dotColor = '#f97316';
+                  } else if (isToday) {
+                    cellBg = 'rgba(5,150,105,0.08)';
+                    cellTextColor = '#059669';
+                    cellBorder = { borderWidth: 1.5, borderColor: 'rgba(5,150,105,0.3)' };
+                  }
 
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  onPress={() => {
-                    if (isSelected) {
-                      setSelectedDate(null);
-                    } else {
-                      setSelectedDate(dateString);
-                    }
-                  }}
-                  style={{
-                    width: '14.2%',
-                    height: 38,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 19,
-                    backgroundColor: cellBg,
-                    ...cellBorder
-                  }}
-                >
-                  <Text style={{
-                    fontFamily: 'Roboto',
-                    fontSize: 12,
-                    fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
-                    color: cellTextColor
-                  }}>
-                    {day.getDate()}
-                  </Text>
-                  {hasPlan && (
-                    <View style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 2.5,
-                      backgroundColor: dotColor,
-                      marginTop: 2
-                    }} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedDate(null);
+                        } else {
+                          setSelectedDate(dateString);
+                        }
+                      }}
+                      style={{
+                        width: '14.2%',
+                        height: 38,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 19,
+                        backgroundColor: cellBg,
+                        ...cellBorder
+                      }}
+                    >
+                      <Text style={{
+                        fontFamily: 'Roboto',
+                        fontSize: 12,
+                        fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
+                        color: cellTextColor
+                      }}>
+                        {day.getDate()}
+                      </Text>
+                      {hasPlan && (
+                        <View style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: 2.5,
+                          backgroundColor: dotColor,
+                          marginTop: 2
+                        }} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
         </View>
 
         {/* ── FILTER SELECTION BLOCK (one liner 3 filters) ── */}

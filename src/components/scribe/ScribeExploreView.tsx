@@ -916,9 +916,18 @@ export default function ScribeExploreView() {
             </TouchableOpacity>
           ) : null}
         </View>
+      </View>
 
+      {/* Main Opportunities List & Scrollable Filters */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
+        }
+      >
         {/* Collapsible Filter Block */}
-        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 14 }}>
           {/* Toggle bar */}
           <TouchableOpacity
             activeOpacity={0.7}
@@ -1016,16 +1025,6 @@ export default function ScribeExploreView() {
             </View>
           )}
         </View>
-      </View>
-
-      {/* Main Opportunities List */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
-        }
-      >
         
         {/* Scribe's Preferred Availability Windows */}
         {activeSegment === 'exams' && scribeProfile?.availability_slots ? (
