@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, TextInput, ActivityIndicator, Alert, Modal } from 'react-native';
+import { View, Text, Pressable, TextInput, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
