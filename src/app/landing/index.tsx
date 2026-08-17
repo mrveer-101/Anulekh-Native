@@ -130,26 +130,26 @@ export default function LandingScreen() {
 
       <SafeAreaView style={{ flex: 1 }}>
         <Animated.ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 36 }}
+          contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 20, paddingBottom: 16 }}
           showsVerticalScrollIndicator={false}
           style={{ opacity: fadeAnim }}
         >
           {/* ── Logo + tagline ── */}
           <Animated.View style={{
             alignItems: 'center',
-            paddingTop: 44,
-            paddingBottom: 32,
+            paddingTop: 16,
+            paddingBottom: 12,
             transform: [{ scale: scaleLogo }],
           }}>
              <View style={{
-              width: 84, height: 84, borderRadius: 26,
+              width: 64, height: 64, borderRadius: 20,
               backgroundColor: 'rgba(255,255,255,0.75)',
               borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
               alignItems: 'center', justifyContent: 'center',
-              marginBottom: 20,
+              marginBottom: 10,
               shadowColor: '#2563eb',
-              shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.2, shadowRadius: 24, elevation: 12,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.18, shadowRadius: 18, elevation: 8,
               overflow: 'hidden',
             }}>
               <Image 
@@ -160,46 +160,46 @@ export default function LandingScreen() {
             </View>
 
             <Text style={{
-              fontSize: 40, fontWeight: '900',
-              color: '#0f172a', letterSpacing: -1, marginBottom: 12,
+              fontSize: 32, fontWeight: '900',
+              color: '#0f172a', letterSpacing: -0.8, marginBottom: 2,
             }}>
               Anulekh
             </Text>
             <Text style={{
-              fontSize: 16, color: '#475569',
-              textAlign: 'center', lineHeight: 26, maxWidth: 280,
+              fontSize: 13.5, color: '#475569',
+              textAlign: 'center', lineHeight: 18, maxWidth: 280,
             }}>
               A Scribe for every Voice
             </Text>
           </Animated.View>
 
           {/* ── Feature cards (glass) ── */}
-          <Animated.View style={{ gap: 12, marginBottom: 32, transform: [{ translateY: slideAnim }] }}>
+          <Animated.View style={{ gap: 8, marginBottom: 14, transform: [{ translateY: slideAnim }] }}>
             {features.map((f) => (
               <Animated.View key={f.title} style={{ transform: [{ translateY: f.anim }] }}>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
                   backgroundColor: 'rgba(255,255,255,0.85)',
                   borderWidth: 1, borderColor: f.borderColor,
-                  borderRadius: 20, padding: 18,
+                  borderRadius: 18, padding: 12,
                   shadowColor: f.shadowColor,
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.12, shadowRadius: 16, elevation: 4,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.1, shadowRadius: 12, elevation: 3,
                 }}>
                   <View style={{
-                    width: 48, height: 48, borderRadius: 15,
+                    width: 40, height: 40, borderRadius: 13,
                     backgroundColor: f.bgColor,
                     borderWidth: 1, borderColor: f.borderColor,
                     alignItems: 'center', justifyContent: 'center',
-                    marginRight: 16,
+                    marginRight: 12,
                   }}>
-                    <Feather name={f.icon} size={22} color={f.color} />
+                    <Feather name={f.icon} size={19} color={f.color} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 3 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0f172a', marginBottom: 1 }}>
                       {f.title}
                     </Text>
-                    <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 19 }}>
+                    <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 16 }}>
                       {f.desc}
                     </Text>
                   </View>
@@ -209,25 +209,25 @@ export default function LandingScreen() {
           </Animated.View>
 
           {/* ── CTA Buttons ── */}
-          <View style={{ gap: 12, marginBottom: 28 }}>
+          <View style={{ gap: 6, marginBottom: 8 }}>
             {/* Primary CTA */}
             <TouchableOpacity
               onPress={handleGetStarted}
               activeOpacity={0.85}
               style={{
                 backgroundColor: '#2563eb',
-                borderRadius: 18, paddingVertical: 18,
+                borderRadius: 16, paddingVertical: 14,
                 flexDirection: 'row', alignItems: 'center',
                 justifyContent: 'center', gap: 8,
                 shadowColor: '#2563eb',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.35, shadowRadius: 20, elevation: 10,
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
               }}
             >
-              <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }}>
+              <Text style={{ color: '#ffffff', fontSize: 15.5, fontWeight: '800', letterSpacing: 0.2 }}>
                 Get Started
               </Text>
-              <Feather name="arrow-right" size={18} color="#ffffff" />
+              <Feather name="arrow-right" size={17} color="#ffffff" />
             </TouchableOpacity>
 
             {/* Secondary CTA */}
@@ -236,11 +236,11 @@ export default function LandingScreen() {
               activeOpacity={0.7}
               style={{
                 alignItems: 'center',
-                paddingVertical: 10,
-                marginTop: 4,
+                paddingVertical: 4,
+                marginTop: 0,
               }}
             >
-              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 14, fontWeight: '600' }}>
+              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 13, fontWeight: '600' }}>
                 Already have an account?{' '}
                 <Text style={{ color: '#2563eb', fontWeight: '800' }}>Log In</Text>
               </Text>
@@ -250,16 +250,16 @@ export default function LandingScreen() {
           {/* Footer */}
           <View style={{
             flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(255,255,255,0.8)',
+            backgroundColor: 'rgba(255,255,255,0.85)',
             borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
-            borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16,
-            alignSelf: 'center', marginTop: 24,
-            shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+            borderRadius: 14, paddingVertical: 6, paddingHorizontal: 14,
+            alignSelf: 'center', marginTop: 6,
+            shadowColor: '#64748b', shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.05, shadowRadius: 6, elevation: 2,
           }}>
             <Text style={{
               fontFamily: 'Roboto',
-              fontSize: 13,
+              fontSize: 12,
               fontWeight: '700',
               color: '#475569',
             }}>
