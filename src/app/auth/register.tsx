@@ -15,14 +15,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase, friendlyAuthError } from '@/core/supabase';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
 
 const { height } = Dimensions.get('window');
 
 export default function RegisterScreen() {
   const params = useLocalSearchParams<{ role?: string }>();
-  const [role, setRole]               = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
+  const [role, setRole]               = useState<'student' | 'scribe' | null>(
+    params.role === 'scribe' ? 'scribe' : params.role === 'student' ? 'student' : null
+  );
   const [fullName, setFullName]       = useState('');
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
@@ -41,9 +43,10 @@ export default function RegisterScreen() {
   const [showEmailField, setShowEmailField] = useState(false);
 
   const isStudent   = role === 'student';
-  const accentColor = isStudent ? '#2563eb' : '#16a34a';
-  const accentBg    = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
-  const accentBorder= isStudent ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
+  const isScribe    = role === 'scribe';
+  const accentColor = isScribe ? '#16a34a' : '#2563eb';
+  const accentBg    = isScribe ? 'rgba(22,163,74,0.08)' : 'rgba(37,99,235,0.08)';
+  const accentBorder= isScribe ? 'rgba(22,163,74,0.22)' : 'rgba(37,99,235,0.22)';
 
   const getStrength = (p: string) => {
     if (p.length >= 10) return 4;
@@ -56,6 +59,10 @@ export default function RegisterScreen() {
   const strengthLabels = ['Too short', 'Weak', 'Fair', 'Strong'];
 
   const handleRegister = async () => {
+    if (!role) {
+      setErrorMessage('Please select your role: Student or Scribe.');
+      return;
+    }
     if (!fullName.trim() || !phone.trim() || !password.trim()) {
       setErrorMessage('Please fill in Full Name, Phone Number, and Password.');
       return;
@@ -137,7 +144,7 @@ export default function RegisterScreen() {
       <StatusBar style="dark" />
 
       {/* Background orbs */}
-      <View style={{ position: 'absolute', top: -90, left: -70, width: 300, height: 300, borderRadius: 150, backgroundColor: isStudent ? 'rgba(37,99,235,0.20)' : 'rgba(22,163,74,0.20)' }} />
+      <View style={{ position: 'absolute', top: -90, left: -70, width: 300, height: 300, borderRadius: 150, backgroundColor: isScribe ? 'rgba(22,163,74,0.20)' : 'rgba(37,99,235,0.20)' }} />
       <View style={{ position: 'absolute', bottom: 60, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(234,88,12,0.16)' }} />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -172,7 +179,7 @@ export default function RegisterScreen() {
                 Create account ✨
               </Text>
               <Text style={{ fontSize: 15, color: '#64748b', marginTop: 6, lineHeight: 22 }}>
-                Join as a {isStudent ? 'student seeking a scribe' : 'volunteer scribe'}
+                {role === 'student' ? 'Join as a student seeking a scribe' : role === 'scribe' ? 'Join as a volunteer scribe' : 'Select your account type to get started'}
               </Text>
             </View>
 
@@ -189,35 +196,56 @@ export default function RegisterScreen() {
               </View>
             ) : null}
 
-            {/* Role toggle */}
+            {/* Premium Role Slider (No fill by default until explicitly selected) */}
             <View style={{
-              backgroundColor: 'rgba(255,255,255,0.7)',
-              borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
-              borderRadius: 18, padding: 4, flexDirection: 'row',
-              marginBottom: 24,
+              backgroundColor: '#f1f5f9',
+              borderWidth: 1.5, borderColor: '#cbd5e1',
+              borderRadius: 20, padding: 5, flexDirection: 'row',
+              marginBottom: 24, gap: 6,
               shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
+              shadowOpacity: 0.06, shadowRadius: 10, elevation: 2,
             }}>
               {(['student', 'scribe'] as const).map((r) => {
-                const active  = role === r;
-                const color   = r === 'student' ? '#2563eb' : '#16a34a';
-                const bg      = r === 'student' ? 'rgba(37,99,235,0.1)' : 'rgba(22,163,74,0.1)';
-                const border  = r === 'student' ? 'rgba(37,99,235,0.25)' : 'rgba(22,163,74,0.25)';
+                const isSelected = role === r;
+                const activeBg = r === 'student' ? '#2563eb' : '#16a34a';
+
                 return (
                   <TouchableOpacity
                     key={r}
                     onPress={() => setRole(r)}
                     disabled={loading}
+                    activeOpacity={0.8}
                     style={{
-                      flex: 1, paddingVertical: 14, borderRadius: 14,
+                      flex: 1,
+                      paddingVertical: 13,
+                      paddingHorizontal: 12,
+                      borderRadius: 15,
+                      flexDirection: 'row',
                       alignItems: 'center',
-                      backgroundColor: active ? bg : 'transparent',
-                      borderWidth: active ? 1 : 0,
-                      borderColor: active ? border : 'transparent',
+                      justifyContent: 'center',
+                      gap: 8,
+                      backgroundColor: isSelected ? activeBg : '#ffffff',
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? activeBg : '#cbd5e1',
+                      shadowColor: isSelected ? activeBg : '#000',
+                      shadowOffset: { width: 0, height: isSelected ? 4 : 2 },
+                      shadowOpacity: isSelected ? 0.3 : 0.04,
+                      shadowRadius: isSelected ? 8 : 4,
+                      elevation: isSelected ? 4 : 1,
                     }}
                   >
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: active ? color : '#94a3b8' }}>
-                      {r === 'student' ? '🎓 Student' : '🤝 Scribe'}
+                    <FontAwesome5
+                      name={r === 'student' ? 'user-graduate' : 'pen-nib'}
+                      size={15}
+                      color={isSelected ? '#ffffff' : '#0f172a'}
+                    />
+                    <Text style={{
+                      fontSize: 14,
+                      fontWeight: '800',
+                      color: isSelected ? '#ffffff' : '#0f172a',
+                      letterSpacing: 0.2
+                    }}>
+                      {r === 'student' ? 'Student' : 'Scribe'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -233,10 +261,10 @@ export default function RegisterScreen() {
               shadowOpacity: 0.07, shadowRadius: 20, elevation: 4,
               marginBottom: 20,
             }}>
-              {/* 1. Full Name */}
+              {/* 1. Name */}
               <View>
                 <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
-                  Full Name
+                  Name
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
@@ -258,11 +286,35 @@ export default function RegisterScreen() {
                 </View>
               </View>
 
-              {/* 2. Phone Number (Compulsory) */}
+              {/* 2. Phone + + Add Email ID button in header */}
               <View>
-                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
-                  Phone Number
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                    Phone
+                  </Text>
+                  {!showEmailField && (
+                    <TouchableOpacity
+                      onPress={() => setShowEmailField(true)}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        paddingVertical: 3,
+                        paddingHorizontal: 9,
+                        borderRadius: 12,
+                        backgroundColor: accentBg,
+                        borderWidth: 1,
+                        borderColor: accentBorder,
+                      }}
+                    >
+                      <Feather name="plus" size={11} color={accentColor} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: accentColor }}>
+                        Add Email ID
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
                   backgroundColor: '#f8faff', borderWidth: 1.5,
@@ -282,7 +334,40 @@ export default function RegisterScreen() {
                 </View>
               </View>
 
-              {/* 3. Password (Compulsory) */}
+              {/* Optional Email Field (expanded when user clicks + Add Email ID) */}
+              {showEmailField && (
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                      Email <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
+                    </Text>
+                    <TouchableOpacity onPress={() => { setShowEmailField(false); setEmail(''); }} style={{ padding: 2 }}>
+                      <Feather name="x" size={15} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                      placeholder="Enter your optional email"
+                      placeholderTextColor="#94a3b8"
+                      value={email}
+                      onChangeText={setEmail}
+                      editable={!loading}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* 3. Password */}
               <View>
                 <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
                   Password
@@ -332,63 +417,6 @@ export default function RegisterScreen() {
                   </Text>
                 </View>
               )}
-
-              {/* 4. Optional Email Field Toggle */}
-              {!showEmailField ? (
-                <TouchableOpacity
-                  onPress={() => setShowEmailField(true)}
-                  activeOpacity={0.7}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    paddingVertical: 11,
-                    paddingHorizontal: 16,
-                    borderRadius: 14,
-                    backgroundColor: accentBg,
-                    borderWidth: 1.5,
-                    borderColor: accentBorder,
-                    alignSelf: 'flex-start',
-                    marginTop: 2,
-                  }}
-                >
-                  <Feather name="plus" size={14} color={accentColor} />
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: accentColor }}>
-                    Add Email Address (Optional)
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={{ marginTop: 2 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
-                      Email Address <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
-                    </Text>
-                    <TouchableOpacity onPress={() => { setShowEmailField(false); setEmail(''); }} style={{ padding: 2 }}>
-                      <Feather name="x" size={16} color="#94a3b8" />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
-                      placeholder="Enter your optional email"
-                      placeholderTextColor="#94a3b8"
-                      value={email}
-                      onChangeText={setEmail}
-                      editable={!loading}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                </View>
-              )}
             </View>
 
             {/* Terms and Conditions Checkbox */}
@@ -431,11 +459,11 @@ export default function RegisterScreen() {
               onPress={handleRegister}
               disabled={loading}
               style={{
-                backgroundColor: accentColor,
+                backgroundColor: role === 'scribe' ? '#16a34a' : role === 'student' ? '#2563eb' : '#334155',
                 borderRadius: 18, paddingVertical: 18,
                 flexDirection: 'row', alignItems: 'center',
                 justifyContent: 'center', gap: 8,
-                shadowColor: accentColor,
+                shadowColor: role === 'scribe' ? '#16a34a' : role === 'student' ? '#2563eb' : '#334155',
                 shadowOffset: { width: 0, height: 10 },
                 shadowOpacity: 0.35, shadowRadius: 20, elevation: 10,
                 marginBottom: 12,
@@ -445,8 +473,8 @@ export default function RegisterScreen() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>
-                    Create {isStudent ? 'Student' : 'Scribe'} Account
+                  <Text style={{ color: '#fff', fontSize: 16.5, fontWeight: '800' }}>
+                    {role === 'student' ? 'Create Student Account' : role === 'scribe' ? 'Create Scribe Account' : 'Select Role & Create Account'}
                   </Text>
                   <Feather name="arrow-right" size={18} color="#fff" />
                 </>

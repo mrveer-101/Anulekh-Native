@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -58,18 +59,27 @@ export default function AppEntry() {
       <View style={{ flex: 1, backgroundColor: '#f0f4ff', alignItems: 'center', justifyContent: 'center' }}>
         <StatusBar style="dark" />
         <View style={{
-          width: 72, height: 72, borderRadius: 22,
-          backgroundColor: 'rgba(37,99,235,0.1)',
+          width: 80, height: 80, borderRadius: 24,
+          backgroundColor: 'rgba(255,255,255,0.85)',
           borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
           alignItems: 'center', justifyContent: 'center',
-          marginBottom: 14,
+          marginBottom: 16,
           shadowColor: '#2563eb', shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.2, shadowRadius: 20, elevation: 8,
+          shadowOpacity: 0.2, shadowRadius: 20, elevation: 10,
+          overflow: 'hidden',
         }}>
-          <Text style={{ fontSize: 34, color: '#2563eb', fontWeight: '900' }}>अ</Text>
+          <Image 
+            source={require('../../assets/images/custom/Pen_Logo.jpg')}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="cover"
+          />
         </View>
-        <Text style={{ fontSize: 22, color: '#0f172a', fontWeight: '800', letterSpacing: -0.5 }}>Anulekh</Text>
-        <Text style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>अनुलेख</Text>
+        <Text style={{ fontSize: 28, color: '#0f172a', fontWeight: '900', letterSpacing: -0.8 }}>
+          Anulekh
+        </Text>
+        <Text style={{ fontSize: 14, color: '#475569', fontWeight: '600', marginTop: 4 }}>
+          A Scribe for every Voice
+        </Text>
       </View>
     );
   }

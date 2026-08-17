@@ -132,15 +132,15 @@ export default function OnboardingCarousel() {
     }
   };
 
-  // Routing actions for user roles — mark onboarding complete before navigating
+  // Routing actions for user roles — mark onboarding complete before navigating to registration
   const handleNavigateToStudent = async () => {
     await AsyncStorage.setItem('onboarding_complete', 'true');
-    router.push(`/auth/login?role=student`);
+    router.push('/auth/register?role=student');
   };
 
   const handleNavigateToScribe = async () => {
     await AsyncStorage.setItem('onboarding_complete', 'true');
-    router.push(`/auth/login?role=scribe`);
+    router.push('/auth/register?role=scribe');
   };
 
   return (

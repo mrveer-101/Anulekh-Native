@@ -168,39 +168,8 @@ export default function ConsoleScribePC({
             </Text>
           </View>
         
-        {/* Top Right: Layout Switcher + Theme Toggle + Notifications + User Profile Pill */}
+        {/* Top Right: Theme Toggle + Notifications + User Profile Pill */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, position: 'relative' }}>
-          
-          {/* 1. Layout View 1-Click Toggle Button */}
-          {onChangeLayoutMode && (
-            <Pressable
-              onPress={() => {
-                const nextMode = layoutMode === 'mobile' ? 'pc' : 'mobile';
-                onChangeLayoutMode(nextMode);
-              }}
-              style={({ hovered }: any) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 8,
-                backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
-                borderWidth: 1, borderColor: pillBorder,
-                borderRadius: 14,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                cursor: 'pointer' as any,
-                backdropFilter: 'blur(10px)',
-              })}
-            >
-              <Feather
-                name={layoutMode === 'mobile' ? 'monitor' : 'smartphone'}
-                size={16}
-                color="#16a34a"
-              />
-              <Text style={{ fontSize: 12, fontWeight: '800', color: textPrimary }}>
-                {layoutMode === 'mobile' ? 'PC View' : 'Phone View'}
-              </Text>
-            </Pressable>
-          )}
 
           {/* 2. Theme Toggle Button */}
           <Pressable

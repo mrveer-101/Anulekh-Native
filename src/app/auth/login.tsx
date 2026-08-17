@@ -17,17 +17,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase, friendlyAuthError } from '@/core/supabase';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height } = Dimensions.get('window');
 
 export default function LoginScreen() {
+  const params = useLocalSearchParams<{ role?: string }>();
+  const [role, setRole]               = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]         = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  const isStudent   = role === 'student';
+  const accentColor = isStudent ? '#2563eb' : '#16a34a';
 
   // Forgot password modal state
   const [forgotModalVisible, setForgotModalVisible] = useState(false);
@@ -169,10 +174,9 @@ export default function LoginScreen() {
     }
   };
 
-  const accentColor  = '#2563eb';
-  const accentBg     = 'rgba(37,99,235,0.08)';
-  const accentBorder = 'rgba(37,99,235,0.22)';
-  const accentShadow = 'rgba(37,99,235,0.25)';
+  const accentBg     = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
+  const accentBorder = isStudent ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
+  const accentShadow = isStudent ? 'rgba(37,99,235,0.25)' : 'rgba(22,163,74,0.25)';
 
   const handleLogin = async () => {
     if (!emailOrPhone.trim() || !password.trim()) {
@@ -189,9 +193,13 @@ export default function LoginScreen() {
       );
       if (error) throw error;
       if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles').select('role').eq('id', data.user.id).single();
-        router.replace(profile?.role === 'scribe' ? '/console/scribe' : '/console/student');
+        let userRole = (data.user as any).role;
+        if (!userRole) {
+          const { data: profileData } = await supabase
+            .from('profiles').select('role').eq('id', data.user.id).single();
+          userRole = profileData?.role;
+        }
+        router.replace(userRole === 'scribe' ? '/console/scribe' : '/console/student');
       }
     } catch (err: any) {
       setErrorMessage(friendlyAuthError(err, 'Invalid credentials. Please try again.'));
@@ -235,7 +243,7 @@ export default function LoginScreen() {
             </View>
 
             {/* Header */}
-            <View style={{ paddingTop: 28, paddingBottom: 28 }}>
+            <View style={{ paddingTop: 24, paddingBottom: 20 }}>
               <Text style={{ fontSize: 34, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
                 Welcome back 👋
               </Text>
@@ -257,47 +265,43 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-
-
-
-            {/* Unified Portal Status Pill (Both Selected) */}
+            {/* Unified Portal Status Pill (Auto-Detects Account Type) */}
             <View style={{
-              backgroundColor: 'rgba(255,255,255,0.7)',
-              borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
-              borderRadius: 18, padding: 4,
-              flexDirection: 'row', marginBottom: 28,
-              shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.06, shadowRadius: 12, elevation: 2,
-              gap: 8,
+              backgroundColor: 'rgba(255,255,255,0.85)',
+              borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
+              borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16,
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 24,
+              shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
             }}>
-              <View
-                style={{
-                  flex: 1, paddingVertical: 14, borderRadius: 14,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
                   backgroundColor: 'rgba(37,99,235,0.08)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(37,99,235,0.22)',
-                }}
-              >
-                <Ionicons name="school" size={17} color="#334155" />
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#2563eb' }}>
-                  Student
-                </Text>
-              </View>
-              <View
-                style={{
-                  flex: 1, paddingVertical: 14, borderRadius: 14,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 10,
+                  borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)',
+                }}>
+                  <FontAwesome5 name="user-graduate" size={13} color="#2563eb" />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563eb' }}>Student</Text>
+                </View>
+
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#94a3b8' }}>&</Text>
+
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
                   backgroundColor: 'rgba(22,163,74,0.08)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(22,163,74,0.22)',
-                }}
-              >
-                <Ionicons name="pencil" size={16} color="#334155" />
-                <Text style={{ fontSize: 14, fontWeight: '800', color: '#16a34a' }}>
-                  Scribe
-                </Text>
+                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 10,
+                  borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)',
+                }}>
+                  <FontAwesome5 name="pen-nib" size={13} color="#16a34a" />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a' }}>Scribe</Text>
+                </View>
               </View>
+
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>
+                Auto-Detected
+              </Text>
             </View>
 
             {/* Form — glass card */}
@@ -409,7 +413,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => router.push('/auth/register')}
+              onPress={() => router.push(`/auth/register?role=${role}`)}
               disabled={loading}
               style={{ paddingVertical: 14, alignItems: 'center' }}
             >
@@ -453,8 +457,16 @@ export default function LoginScreen() {
                 />
               </TouchableOpacity>
 
-              {/* Apple */}
+              {/* Apple (Placeholder) */}
               <TouchableOpacity
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    alert(' Apple Sign-In is coming soon!\n\nPlease sign in using your Mobile Number or Email for now.');
+                  } else {
+                    Alert.alert(' Apple Sign-In', 'Apple Sign-In is coming soon! Please sign in using your Mobile Number or Email for now.');
+                  }
+                }}
+                activeOpacity={0.7}
                 style={{
                   width: 58, height: 58,
                   backgroundColor: 'rgba(255,255,255,0.85)',
@@ -466,7 +478,7 @@ export default function LoginScreen() {
               >
                 <Image 
                   source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Apple_logo_black.svg/120px-Apple_logo_black.svg.png' }} 
-                  style={{ width: 22, height: 22 }}
+                  style={{ width: 22, height: 22, opacity: 0.7 }}
                   resizeMode="contain"
                 />
               </TouchableOpacity>

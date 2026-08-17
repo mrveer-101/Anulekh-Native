@@ -298,32 +298,32 @@ export default function SharedSettingsView() {
           {/* Phone Number */}
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Feather name="phone" size={12} color="#94a3b8" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>Mobile Number (Non-editable)</Text>
+              <Feather name="phone" size={12} color="#2563eb" style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Mobile Number</Text>
             </View>
             <TextInput
               value={phone}
               editable={false}
-              style={{ backgroundColor: '#f1f5f9', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#94a3b8', fontWeight: '600' }}
-            />
-          </View>
-
-          {/* Email Address */}
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Feather name="mail" size={12} color="#94a3b8" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>Email Address (Non-editable)</Text>
-            </View>
-            <TextInput
-              value={email}
-              editable={false}
-              style={{ backgroundColor: '#f1f5f9', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#94a3b8', fontWeight: '600' }}
+              style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#334155', fontWeight: '600' }}
             />
           </View>
 
           {/* Expanded Fields */}
           {isExpanded && (
             <View style={{ gap: 14, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#f1f5f9', marginTop: 6 }}>
+              
+              {/* Email Address */}
+              <View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                  <Feather name="mail" size={12} color="#2563eb" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Email Address</Text>
+                </View>
+                <TextInput
+                  value={email}
+                  editable={false}
+                  style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#334155', fontWeight: '600' }}
+                />
+              </View>
               
               {/* Date of Birth */}
               <View>
@@ -587,57 +587,6 @@ export default function SharedSettingsView() {
           </View>
         )}
 
-        {/* Secret Display Layout Preferences */}
-        <View style={{ marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 0.5 }}>
-            Display Layout Preference
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <TouchableOpacity
-              onPress={async () => {
-                await AsyncStorage.setItem('@anulekh_layout_mode', 'pc');
-                if (typeof window !== 'undefined') window.location.reload();
-              }}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 10,
-                borderRadius: 12,
-                backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                borderWidth: 1,
-                borderColor: 'rgba(37, 99, 235, 0.25)',
-              }}
-            >
-              <Feather name="monitor" size={14} color="#2563eb" />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>Desktop PC View</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={async () => {
-                await AsyncStorage.setItem('@anulekh_layout_mode', 'mobile');
-                if (typeof window !== 'undefined') window.location.reload();
-              }}
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 10,
-                borderRadius: 12,
-                backgroundColor: '#f1f5f9',
-                borderWidth: 1,
-                borderColor: '#cbd5e1',
-              }}
-            >
-              <Feather name="smartphone" size={14} color="#475569" />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>Mobile View</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </View>
 
       {/* Primary Action Button (Save changes) */}

@@ -85,23 +85,9 @@ export default function ScribeDashboard() {
     }
   }, []);
 
-  useEffect(() => {
-    AsyncStorage.getItem('@anulekh_layout_mode').then((val) => {
-      if (val === 'pc' || val === 'mobile' || val === 'auto') {
-        setLayoutModeState(val as any);
-      }
-    }).catch(() => {});
-  }, []);
-
-  // ── DERIVED VALUES ───────────────────────────────────────────────────────
-  const changeLayoutMode = (mode: 'auto' | 'pc' | 'mobile') => {
-    setLayoutModeState(mode);
-    AsyncStorage.setItem('@anulekh_layout_mode', mode).catch(console.error);
-  };
-
   // Only evaluate responsive layout AFTER client has mounted (avoids SSR mismatch)
   const currentWidth = mounted ? screenWidth : windowWidth;
-  const isDesktop = currentWidth >= 768 && layoutMode !== 'mobile';
+  const isDesktop = currentWidth >= 768;
 
   // ── HELPER FUNCTIONS ───────────────────────────────────────────────────
   const fetchUnread = async (uid: string) => {
