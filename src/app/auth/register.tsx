@@ -38,6 +38,8 @@ export default function RegisterScreen() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  const [showEmailField, setShowEmailField] = useState(false);
+
   const isStudent   = role === 'student';
   const accentColor = isStudent ? '#2563eb' : '#16a34a';
   const accentBg    = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
@@ -54,8 +56,8 @@ export default function RegisterScreen() {
   const strengthLabels = ['Too short', 'Weak', 'Fair', 'Strong'];
 
   const handleRegister = async () => {
-    if (!fullName.trim() || !email.trim() || !phone.trim() || !password.trim()) {
-      setErrorMessage('Please fill in all fields.');
+    if (!fullName.trim() || !phone.trim() || !password.trim()) {
+      setErrorMessage('Please fill in Full Name, Phone Number, and Password.');
       return;
     }
     if (password.length < 6) {
@@ -89,7 +91,7 @@ export default function RegisterScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim(),
+          email: email.trim() || undefined,
           password,
           full_name: fullName.trim(),
           role,
@@ -128,16 +130,7 @@ export default function RegisterScreen() {
     }
   };
 
-  const handleVerifyOtpAndSignUp = async () => {};
-
   const strength = getStrength(password);
-
-  const fields = [
-    { label: 'Full Name',        icon: 'user'          as const, placeholder: 'Enter your full name',        value: fullName,         onChange: setFullName,         keyboard: 'default'        as const, secure: false,         showToggle: false,  showState: false },
-    { label: 'Email Address',    icon: 'mail'          as const, placeholder: 'Enter your email',            value: email,            onChange: setEmail,            keyboard: 'email-address'  as const, secure: false,         showToggle: false,  showState: false },
-    { label: 'Phone Number',     icon: 'phone'         as const, placeholder: 'Enter your 10-digit mobile number', value: phone, onChange: setPhone, keyboard: 'phone-pad' as const, secure: false, showToggle: false, showState: false },
-    { label: 'Password',         icon: 'lock'          as const, placeholder: 'Create a strong password',    value: password,         onChange: setPassword,         keyboard: 'default'        as const, secure: !showPass,      showToggle: true,   showState: showPass,    toggleFn: () => setShowPass(v => !v) },
-  ];
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
@@ -240,38 +233,83 @@ export default function RegisterScreen() {
               shadowOpacity: 0.07, shadowRadius: 20, elevation: 4,
               marginBottom: 20,
             }}>
-              {fields.map((field) => (
-                <View key={field.label}>
-                  <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
-                    {field.label}
-                  </Text>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name={field.icon} size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
-                      placeholder={field.placeholder}
-                      placeholderTextColor="#94a3b8"
-                      value={field.value}
-                      onChangeText={field.onChange}
-                      editable={!loading}
-                      keyboardType={field.keyboard}
-                      secureTextEntry={field.secure}
-                      autoCapitalize={field.keyboard === 'email-address' ? 'none' : 'words'}
-                      autoCorrect={false}
-                    />
-                    {field.showToggle && (
-                      <TouchableOpacity onPress={(field as any).toggleFn} style={{ padding: 4 }}>
-                        <Feather name={field.showState ? 'eye-off' : 'eye'} size={16} color="#94a3b8" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+              {/* 1. Full Name */}
+              <View>
+                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
+                  Full Name
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  backgroundColor: '#f8faff', borderWidth: 1.5,
+                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  paddingHorizontal: 14,
+                }}>
+                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    placeholder="Enter your full name"
+                    placeholderTextColor="#94a3b8"
+                    value={fullName}
+                    onChangeText={setFullName}
+                    editable={!loading}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                  />
                 </View>
-              ))}
+              </View>
+
+              {/* 2. Phone Number (Compulsory) */}
+              <View>
+                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
+                  Phone Number
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  backgroundColor: '#f8faff', borderWidth: 1.5,
+                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  paddingHorizontal: 14,
+                }}>
+                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    placeholder="Enter your 10-digit mobile number"
+                    placeholderTextColor="#94a3b8"
+                    value={phone}
+                    onChangeText={setPhone}
+                    editable={!loading}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* 3. Password (Compulsory) */}
+              <View>
+                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
+                  Password
+                </Text>
+                <View style={{
+                  flexDirection: 'row', alignItems: 'center',
+                  backgroundColor: '#f8faff', borderWidth: 1.5,
+                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  paddingHorizontal: 14,
+                }}>
+                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <TextInput
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    placeholder="Create a strong password"
+                    placeholderTextColor="#94a3b8"
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!loading}
+                    secureTextEntry={!showPass}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity onPress={() => setShowPass(!showPass)} style={{ padding: 4 }}>
+                    <Feather name={showPass ? 'eye-off' : 'eye'} size={16} color="#94a3b8" />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {/* Password strength */}
               {password.length > 0 && (
@@ -292,6 +330,63 @@ export default function RegisterScreen() {
                   <Text style={{ fontSize: 12, color: strength > 0 ? strengthColors[strength - 1] : '#94a3b8', fontWeight: '600' }}>
                     {strength > 0 ? strengthLabels[strength - 1] : ''}
                   </Text>
+                </View>
+              )}
+
+              {/* 4. Optional Email Field Toggle */}
+              {!showEmailField ? (
+                <TouchableOpacity
+                  onPress={() => setShowEmailField(true)}
+                  activeOpacity={0.7}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    paddingVertical: 11,
+                    paddingHorizontal: 16,
+                    borderRadius: 14,
+                    backgroundColor: accentBg,
+                    borderWidth: 1.5,
+                    borderColor: accentBorder,
+                    alignSelf: 'flex-start',
+                    marginTop: 2,
+                  }}
+                >
+                  <Feather name="plus" size={14} color={accentColor} />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: accentColor }}>
+                    Add Email Address (Optional)
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ marginTop: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                      Email Address <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
+                    </Text>
+                    <TouchableOpacity onPress={() => { setShowEmailField(false); setEmail(''); }} style={{ padding: 2 }}>
+                      <Feather name="x" size={16} color="#94a3b8" />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{
+                    flexDirection: 'row', alignItems: 'center',
+                    backgroundColor: '#f8faff', borderWidth: 1.5,
+                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    paddingHorizontal: 14,
+                  }}>
+                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                      placeholder="Enter your optional email"
+                      placeholderTextColor="#94a3b8"
+                      value={email}
+                      onChangeText={setEmail}
+                      editable={!loading}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
                 </View>
               )}
             </View>
