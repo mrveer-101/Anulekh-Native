@@ -3,14 +3,17 @@ import * as Notifications from 'expo-notifications';
 
 // ── CONFIGURE FOREGROUND NOTIFICATION HANDLER ────────────────────────────
 // Ensures notification banner slides down from top even while app is active (heads-up banner)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    priority: Notifications.AndroidNotificationPriority.MAX,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (e) {
+  console.warn('Could not set notification handler:', e);
+}
 
 /**
  * Initialize Android notification channels (High Priority & Emergency SOS channels)
@@ -128,7 +131,7 @@ export async function triggerLocalNotification({
         title,
         body,
         sound: 'default',
-        priority: Notifications.AndroidNotificationPriority.MAX,
+        priority: Notifications.AndroidNotificationPriority?.MAX || 'max',
         data,
         vibrate: channelId === 'anulekh-sos' ? [0, 500, 250, 500] : [0, 250, 250, 250],
       },
@@ -145,7 +148,7 @@ export async function triggerLocalNotification({
 export async function triggerTestNotification(
   type: 'match' | 'sos' | 'reminder' | 'general' = 'match'
 ): Promise<string> {
-  const granted = await requestNotificationPermissions();
+  await requestNotificationPermissions();
 
   let title = '';
   let body = '';

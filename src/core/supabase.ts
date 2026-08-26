@@ -1,6 +1,6 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-export const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+export const API_URL = (Platform.OS === 'web' && typeof window !== 'undefined' && (window?.location?.hostname === 'localhost' || window?.location?.hostname === '127.0.0.1'))
   ? 'http://localhost:3000'
   : (process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com');
 

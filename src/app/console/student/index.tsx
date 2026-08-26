@@ -70,7 +70,7 @@ export default function StudentDashboard() {
   // ── ALL EFFECTS (after all state) ───────────────────────────────────────
   // Mount guard: sync real window width after hydration to avoid SSR mismatch
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       setScreenWidth(window.innerWidth);
     }
     setMounted(true);
