@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
-const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+const DOCUMENT_TYPES = [
+  'Aadhar Card',
+  'PAN Card',
+  'Voter ID',
+  'Other'
+];
 
 const DISABILITY_TYPES = [
   'Visual Impairment (Blindness)',
@@ -24,28 +27,21 @@ export default function StudentCompleteProfileForm() {
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   
-  // Form State
-  const [phone, setPhone] = useState('');
+  // Step 1 State: Document Dropdown, Image, Emergency Contact
+  const [docType, setDocType] = useState('Aadhar Card');
+  const [isDocDropdownOpen, setIsDocDropdownOpen] = useState(false);
+  const [docImage, setDocImage] = useState<string | null>(null);
   const [emergencyPhone, setEmergencyPhone] = useState('');
-  const [dob, setDob] = useState('');
-  const [officialName, setOfficialName] = useState('');
-  const [aadharNumber, setAadharNumber] = useState('');
-  const [aadharImage, setAadharImage] = useState<string | null>(null);
   
-  // Step 3 Disability Details State
+  // Step 2 State: Disability Type Dropdown, Certificate
   const [disabilityType, setDisabilityType] = useState('Select Disability Type');
   const [isDisabilityDropdownOpen, setIsDisabilityDropdownOpen] = useState(false);
   const [disabilityCertificate, setDisabilityCertificate] = useState<string | null>(null);
 
-  // Calendar Picker State
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
-  const [calendarYear, setCalendarYear] = useState(2005); // Default start year for students
-  const [showYearDropdown, setShowYearDropdown] = useState(false);
-
-  const handleSimulateAadharUpload = () => {
-    setAadharImage('aadhar_card_copy.jpg');
-    Alert.alert('Upload Simulated', 'Your Aadhar Card image "aadhar_card_copy.jpg" has been prepared for upload.');
+  const handleSimulateDocUpload = () => {
+    const filename = `${docType.toLowerCase().replace(/\s+/g, '_')}_document.jpg`;
+    setDocImage(filename);
+    Alert.alert('Upload Simulated', `Your ${docType} image "${filename}" has been prepared for upload.`);
   };
 
   const handleSimulateCertificateUpload = () => {
@@ -53,93 +49,27 @@ export default function StudentCompleteProfileForm() {
     Alert.alert('Upload Simulated', 'Your Disability Certificate "medical_disability_certificate.pdf" has been prepared for upload.');
   };
 
-  // Calendar Helper functions
-  const getDaysInMonth = (month: number, year: number) => {
-    return new Date(year, month + 1, 0).getDate();
-  };
-
-  const getFirstDayOfMonth = (month: number, year: number) => {
-    return new Date(year, month, 1).getDay();
-  };
-
-  const handleSelectDay = (day: number) => {
-    const formattedDay = day < 10 ? `0${day}` : day;
-    const formattedMonth = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
-    setDob(`${formattedDay}/${formattedMonth}/${calendarYear}`);
-    setShowCalendar(false);
-  };
-
-  const changeMonth = (direction: 'next' | 'prev') => {
-    if (direction === 'prev') {
-      if (calendarMonth === 0) {
-        setCalendarMonth(11);
-        setCalendarYear(calendarYear - 1);
-      } else {
-        setCalendarMonth(calendarMonth - 1);
-      }
-    } else {
-      if (calendarMonth === 11) {
-        setCalendarMonth(0);
-        setCalendarYear(calendarYear + 1);
-      } else {
-        setCalendarMonth(calendarMonth + 1);
-      }
-    }
-  };
-
-  const renderCalendarDays = () => {
-    const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
-    const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
-    const totalSlots = [];
-
-    // Empty slots for days before the 1st
-    for (let i = 0; i < firstDay; i++) {
-      totalSlots.push(<View key={`empty-${i}`} className="w-[14%] h-9 items-center justify-center" />);
-    }
-
-    // Days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      totalSlots.push(
-        <TouchableOpacity 
-          key={`day-${day}`}
-          onPress={() => handleSelectDay(day)}
-          className="w-[14%] h-9 items-center justify-center rounded-full active:bg-blue-100"
-        >
-          <Text className="text-slate-800 text-xs font-semibold">{day}</Text>
-        </TouchableOpacity>
-      );
-    }
-
-    return totalSlots;
-  };
-
   const handleNextStep = () => {
     if (currentStep === 1) {
-      if (!emergencyPhone.trim() || !dob.trim()) {
-        Alert.alert('Missing Fields', 'Please enter your Emergency Contact and Date of Birth.');
+      if (!docImage) {
+        Alert.alert('Missing Document', `Please upload an image of your ${docType}.`);
+        return;
+      }
+      if (!emergencyPhone.trim()) {
+        Alert.alert('Missing Contact', 'Please enter your Emergency Contact Phone Number.');
         return;
       }
     }
-    if (currentStep === 2) {
-      if (!officialName.trim() || !aadharNumber.trim() || !aadharImage) {
-        Alert.alert('Missing Fields', 'Please enter your Official Name, Aadhar Number, and upload your Aadhar Card image.');
-        return;
-      }
-      if (aadharNumber.trim().length !== 12 || isNaN(Number(aadharNumber.trim()))) {
-        Alert.alert('Invalid ID', 'Please enter a valid 12-digit Aadhar Card number.');
-        return;
-      }
-    }
-    setCurrentStep(currentStep + 1);
+    setCurrentStep(2);
   };
 
   const handleSubmit = async () => {
     if (disabilityType === 'Select Disability Type') {
-      Alert.alert('Missing Fields', 'Please select your Disability Type.');
+      Alert.alert('Missing Disability Type', 'Please select your Disability Type from the options.');
       return;
     }
     if (!disabilityCertificate) {
-      Alert.alert('Missing Document', 'Please upload a valid Disability Certificate.');
+      Alert.alert('Missing Certificate', 'Please upload a valid Disability Certificate.');
       return;
     }
 
@@ -149,14 +79,12 @@ export default function StudentCompleteProfileForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
-      // Update profile in local SQLite database and Supabase
+      // Update profile in local database and backend
       const { error } = await supabase
         .from('profiles')
         .update({
-          official_name: officialName.trim(),
-          dob: dob.trim(),
-          aadhar_number: aadharNumber.trim(),
-          aadhar_image_proof: aadharImage,
+          aadhar_number: docType,
+          aadhar_image_proof: docImage,
           emergency_phone: emergencyPhone.trim(),
           disability_type: disabilityType,
           disability_certificate: disabilityCertificate,
@@ -184,9 +112,8 @@ export default function StudentCompleteProfileForm() {
 
   const getStepTitle = () => {
     switch (currentStep) {
-      case 1: return 'Contact & Personal Details';
-      case 2: return 'Identity & Documents';
-      case 3: return 'Disability Details';
+      case 1: return 'Document & Contact Details';
+      case 2: return 'Disability Verification';
       default: return '';
     }
   };
@@ -210,37 +137,128 @@ export default function StudentCompleteProfileForm() {
           >
             <Feather name="arrow-left" size={24} color="#334155" />
           </TouchableOpacity>
-          <Text className="text-xl font-black text-slate-800">Register</Text>
+          <Text className="text-xl font-black text-slate-800">Verification Form</Text>
         </View>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>Disability Details</Text>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>
+          Step {currentStep} of 2
+        </Text>
       </View>
 
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
-        <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+        <View className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
           
           {/* Progress Indicator */}
           <View className="mb-5">
             <View className="flex-row justify-between items-center mb-1.5">
-              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step {currentStep} of 3</Text>
+              <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step {currentStep} of 2</Text>
               <Text className="text-[10px] font-black text-blue-600 uppercase tracking-wider">{getStepTitle()}</Text>
             </View>
             <View className="h-1 bg-slate-100 rounded-full w-full">
               <View 
                 className="h-1 bg-blue-500 rounded-full" 
-                style={{ width: `${(currentStep / 3) * 100}%` }} 
+                style={{ width: `${(currentStep / 2) * 100}%` }} 
               />
             </View>
           </View>
 
-          {/* STEP 1: CONTACT & PERSONAL DETAILS */}
+          {/* STEP 1: OFFICIAL DOCUMENT & EMERGENCY CONTACT */}
           {currentStep === 1 && (
             <View className="space-y-4">
-              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Personal Information</Text>
+              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Official Document & Emergency Phone</Text>
               
-              <View className="space-y-3">
+              <View className="space-y-4">
 
+                {/* 1. Official Document Type Dropdown */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Emergency Contact Number *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Document Type *</Text>
+                  <TouchableOpacity 
+                    onPress={() => setIsDocDropdownOpen(!isDocDropdownOpen)}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#f8fafc',
+                      borderWidth: 1.5,
+                      borderColor: '#e2e8f0',
+                      borderRadius: 14,
+                      paddingHorizontal: 14,
+                      paddingVertical: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
+                      {docType}
+                    </Text>
+                    <Feather name={isDocDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+                  </TouchableOpacity>
+
+                  {isDocDropdownOpen && (
+                    <View style={{
+                      marginTop: 6,
+                      backgroundColor: '#ffffff',
+                      borderWidth: 1.5,
+                      borderColor: '#f1f5f9',
+                      borderRadius: 14,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 5,
+                      elevation: 2,
+                      overflow: 'hidden'
+                    }}>
+                      {DOCUMENT_TYPES.map((item) => (
+                        <TouchableOpacity
+                          key={item}
+                          onPress={() => {
+                            setDocType(item);
+                            setIsDocDropdownOpen(false);
+                            setDocImage(null); // Reset uploaded image when doc type changes
+                          }}
+                          style={{
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            borderBottomWidth: 1,
+                            borderBottomColor: '#f8fafc',
+                            backgroundColor: docType === item ? 'rgba(37,99,235,0.06)' : '#ffffff'
+                          }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: docType === item ? '#2563eb' : '#334155' }}>
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {/* 2. Upload Image of Official Document */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload {docType} Image *</Text>
+                  <TouchableOpacity 
+                    onPress={handleSimulateDocUpload}
+                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
+                      docImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
+                    }`}
+                  >
+                    {docImage ? (
+                      <View className="items-center">
+                        <Feather name="image" size={24} color="#2563eb" />
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{docImage}</Text>
+                        <Text className="text-[10px] text-blue-600 font-bold mt-0.5">Tap to change image</Text>
+                      </View>
+                    ) : (
+                      <View className="items-center">
+                        <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Image of {docType}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* 3. Emergency Contact Number */}
+                <View>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Emergency Phone Number *</Text>
                   <TextInput 
                     value={emergencyPhone}
                     onChangeText={setEmergencyPhone}
@@ -250,91 +268,23 @@ export default function StudentCompleteProfileForm() {
                   />
                 </View>
 
-                {/* DOB with Calendar Trigger */}
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Date of Birth *</Text>
-                  <TouchableOpacity 
-                    onPress={() => setShowCalendar(true)}
-                    activeOpacity={0.8}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
-                  >
-                    <Text className={`text-sm ${dob ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
-                      {dob || 'DD/MM/YYYY'}
-                    </Text>
-                    <Feather name="calendar" size={16} color="#2563eb" />
-                  </TouchableOpacity>
-                </View>
               </View>
             </View>
           )}
 
-          {/* STEP 2: IDENTITY & DOCUMENTS */}
+          {/* STEP 2: DISABILITY DETAILS */}
           {currentStep === 2 && (
             <View className="space-y-4">
-              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Identity & Proofs</Text>
-              
-              <View className="space-y-3.5">
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Name (as per ID) *</Text>
-                  <TextInput 
-                    value={officialName}
-                    onChangeText={setOfficialName}
-                    placeholder="e.g. Anand Kumar Sen"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Aadhar Card Number *</Text>
-                  <TextInput 
-                    value={aadharNumber}
-                    onChangeText={setAadharNumber}
-                    keyboardType="numeric"
-                    maxLength={12}
-                    placeholder="12-digit Aadhar Number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
-                  />
-                </View>
-
-                <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image *</Text>
-                  <TouchableOpacity 
-                    onPress={handleSimulateAadharUpload}
-                    className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
-                      aadharImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
-                    }`}
-                  >
-                    {aadharImage ? (
-                      <View className="items-center">
-                        <Feather name="image" size={24} color="#2563eb" />
-                        <Text className="text-xs font-semibold text-slate-800 mt-1">{aadharImage}</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change image</Text>
-                      </View>
-                    ) : (
-                      <View className="items-center">
-                        <Feather name="upload-cloud" size={24} color="#94a3b8" />
-                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Aadhar Card Image</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* STEP 3: DISABILITY DETAILS */}
-          {currentStep === 3 && (
-            <View className="space-y-4">
-              <Text className="text-xs font-bold text-slate-850 uppercase tracking-wider">Disability Type*</Text>
+              <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Disability Type & Certificate</Text>
               
               {/* Custom Dropdown Trigger */}
               <View>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Disability Type *</Text>
                 <TouchableOpacity 
                   onPress={() => setIsDisabilityDropdownOpen(!isDisabilityDropdownOpen)}
                   style={{
                     width: '100%',
-                    backgroundColor: '#ffffff',
+                    backgroundColor: '#f8fafc',
                     borderWidth: 1.5,
                     borderColor: '#e2e8f0',
                     borderRadius: 14,
@@ -400,7 +350,7 @@ export default function StudentCompleteProfileForm() {
 
               {/* Disability Certificate Upload Card */}
               <View style={{ marginTop: 8 }}>
-                <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate</Text>
+                <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate *</Text>
                 
                 <TouchableOpacity 
                   onPress={handleSimulateCertificateUpload}
@@ -411,7 +361,7 @@ export default function StudentCompleteProfileForm() {
                     borderColor: disabilityCertificate ? '#93c5fd' : '#e2e8f0',
                     borderRadius: 16,
                     backgroundColor: disabilityCertificate ? 'rgba(37,99,235,0.02)' : '#ffffff',
-                    paddingVertical: 28,
+                    paddingVertical: 24,
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}
@@ -438,14 +388,14 @@ export default function StudentCompleteProfileForm() {
                 </TouchableOpacity>
               </View>
 
-              {/* Custom Info Banner Card */}
+              {/* Info Banner Card */}
               <View style={{
                 flexDirection: 'row',
                 backgroundColor: '#f1f5f9',
                 padding: 12,
                 borderRadius: 14,
                 alignItems: 'flex-start',
-                marginTop: 10
+                marginTop: 6
               }}>
                 <Feather name="info" size={14} color="#64748b" style={{ marginRight: 8, marginTop: 1 }} />
                 <Text style={{ fontSize: 10.5, color: '#475569', flex: 1, lineHeight: 15, fontWeight: '600' }}>
@@ -467,7 +417,7 @@ export default function StudentCompleteProfileForm() {
               </TouchableOpacity>
             )}
             
-            {currentStep < 3 ? (
+            {currentStep < 2 ? (
               <TouchableOpacity 
                 onPress={handleNextStep}
                 className="flex-1 bg-blue-500 py-3 rounded-xl items-center justify-center shadow-md shadow-blue-500/20"
@@ -491,92 +441,6 @@ export default function StudentCompleteProfileForm() {
 
         </View>
       </ScrollView>
-
-      {/* CUSTOM CALENDAR MODAL */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={showCalendar}
-        onRequestClose={() => setShowCalendar(false)}
-      >
-        <View className="flex-1 bg-slate-950/50 justify-center items-center px-6">
-          <View className="bg-white w-full max-w-sm rounded-3xl p-5 border border-slate-100 shadow-2xl">
-            
-            {/* Calendar Header */}
-            <View className="flex-row items-center justify-between mb-4">
-              <TouchableOpacity onPress={() => changeMonth('prev')} className="p-2 bg-slate-50 rounded-xl">
-                <Feather name="chevron-left" size={16} color="#334155" />
-              </TouchableOpacity>
-              
-              <View className="flex-row items-center">
-                <Text className="text-sm font-bold text-slate-800 mr-1.5">{MONTHS[calendarMonth]}</Text>
-                
-                <TouchableOpacity 
-                  onPress={() => setShowYearDropdown(!showYearDropdown)}
-                  className="bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg flex-row items-center"
-                >
-                  <Text className="text-xs font-bold text-slate-700 mr-1">{calendarYear}</Text>
-                  <Feather name={showYearDropdown ? "chevron-up" : "chevron-down"} size={10} color="#64748b" />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity onPress={() => changeMonth('next')} className="p-2 bg-slate-50 rounded-xl">
-                <Feather name="chevron-right" size={16} color="#334155" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Year Selector Dropdown */}
-            {showYearDropdown ? (
-              <View className="h-48 mb-4 border border-slate-100 rounded-2xl overflow-hidden bg-slate-50">
-                <FlatList
-                  data={YEARS}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setCalendarYear(parseInt(item));
-                        setShowYearDropdown(false);
-                      }}
-                      className={`py-3 items-center border-b border-slate-100 ${
-                        calendarYear.toString() === item ? 'bg-blue-50' : 'bg-transparent'
-                      }`}
-                    >
-                      <Text className={`text-xs font-bold ${calendarYear.toString() === item ? 'text-blue-600' : 'text-slate-700'}`}>
-                        {item}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                />
-              </View>
-            ) : (
-              <>
-                <View className="flex-row flex-wrap mb-2">
-                  {WEEKDAYS.map((day) => (
-                    <View key={day} className="w-[14.28%] items-center py-1">
-                      <Text className="text-[10px] font-bold text-slate-400 uppercase">{day}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View className="flex-row flex-wrap mb-4">
-                  {renderCalendarDays()}
-                </View>
-              </>
-            )}
-
-            <TouchableOpacity 
-              onPress={() => {
-                setShowCalendar(false);
-                setShowYearDropdown(false);
-              }}
-              className="w-full bg-slate-100 py-3 rounded-2xl items-center justify-center"
-            >
-              <Text className="text-slate-600 font-bold text-xs">Cancel</Text>
-            </TouchableOpacity>
-
-          </View>
-        </View>
-      </Modal>
 
       {/* 100% PROFILE COMPLETION SUCCESS OVERLAY */}
       {showSuccessOverlay && (

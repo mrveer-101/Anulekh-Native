@@ -181,8 +181,6 @@ export default function StudentDashboard() {
       <ConsoleStudentPC
         userProfile={profile}
         onRefresh={fetchSession}
-        layoutMode={layoutMode}
-        onChangeLayoutMode={changeLayoutMode}
       />
     );
   }

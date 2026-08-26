@@ -6,6 +6,7 @@ import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
+import { triggerTestNotification } from '@/core/notifications';
 
 export default function SharedSettingsView() {
   const { lang, changeLanguage, t } = useLanguage();
@@ -35,6 +36,24 @@ export default function SharedSettingsView() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
+  const [notifTriggering, setNotifTriggering] = useState(false);
+  const [notifStatusText, setNotifStatusText] = useState<string | null>(null);
+
+  const handleSendTestNotification = async (type: 'match' | 'sos' | 'reminder') => {
+    setNotifTriggering(true);
+    setNotifStatusText('Triggering notification...');
+    try {
+      const summary = await triggerTestNotification(type);
+      setNotifStatusText(`✅ Notification triggered: ${summary}`);
+    } catch (err: any) {
+      setNotifStatusText(`⚠️ Notification error: ${err?.message || err}`);
+    } finally {
+      setNotifTriggering(false);
+      setTimeout(() => {
+        setNotifStatusText(null);
+      }, 5000);
+    }
+  };
 
   useEffect(() => {
     fetchUserData();
@@ -587,6 +606,130 @@ export default function SharedSettingsView() {
           </View>
         )}
 
+      </View>
+
+      {/* System Notifications & Alerts Card (Demo Testing) */}
+      <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Feather name="bell" size={14} color="#2563eb" style={{ marginRight: 6 }} />
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>System Notifications & Alerts</Text>
+          </View>
+          <View style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
+            <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563eb' }}>DEMO</Text>
+          </View>
+        </View>
+
+        <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 16 }}>
+          Test native push banners, vibrations, and heads-up alerts on your Android device / browser.
+        </Text>
+
+        <View style={{ gap: 8 }}>
+          {/* Test Scribe Matched Alert */}
+          <TouchableOpacity
+            onPress={() => handleSendTestNotification('match')}
+            disabled={notifTriggering}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <Feather name="check-circle" size={16} color="#2563eb" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0f172a' }}>Test Scribe Matched Alert</Text>
+                <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates instant match confirmation alert</Text>
+              </View>
+            </View>
+            <Feather name="send" size={14} color="#2563eb" />
+          </TouchableOpacity>
+
+          {/* Test Emergency SOS Broadcast Alert */}
+          <TouchableOpacity
+            onPress={() => handleSendTestNotification('sos')}
+            disabled={notifTriggering}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: 'rgba(220,38,38,0.25)',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              shadowColor: '#dc2626',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(220,38,38,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <Feather name="alert-triangle" size={16} color="#dc2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#dc2626' }}>Test Emergency SOS Alert</Text>
+                <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates high-priority SOS emergency dispatch</Text>
+              </View>
+            </View>
+            <Feather name="zap" size={14} color="#dc2626" />
+          </TouchableOpacity>
+
+          {/* Test 24h Exam Reminder */}
+          <TouchableOpacity
+            onPress={() => handleSendTestNotification('reminder')}
+            disabled={notifTriggering}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 14,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.04,
+              shadowRadius: 4,
+              elevation: 1,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(234,88,12,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                <Feather name="clock" size={16} color="#ea580c" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0f172a' }}>Test Exam Reminder</Text>
+                <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates scheduled exam day reminder</Text>
+              </View>
+            </View>
+            <Feather name="bell" size={14} color="#ea580c" />
+          </TouchableOpacity>
+        </View>
+
+        {notifStatusText && (
+          <View style={{ marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}>
+            <Text style={{ fontSize: 11, color: '#334155', fontWeight: '600' }}>{notifStatusText}</Text>
+          </View>
+        )}
       </View>
 
       {/* Primary Action Button (Save changes) */}

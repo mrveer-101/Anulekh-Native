@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Points to the hosted Axum Rust server (https://anulekh-axum.onrender.com)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+export const API_URL = (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'))
+  ? 'http://localhost:3000'
+  : (process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com');
 
-console.log(`🌐 Running in SERVER Mode (connecting to hosted Axum backend at ${API_URL})`);
+console.log(`🌐 Running in SERVER Mode (connecting to Axum backend at ${API_URL})`);
 
 // fetch() rejects with a generic "Network request failed" (or "Failed to fetch" on web)
 // when the backend host is unreachable — surface that as a clear connectivity message

@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { supabase, friendlyAuthError } from '@/core/supabase';
+import { supabase, friendlyAuthError, API_URL } from '@/core/supabase';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
 
@@ -94,7 +94,7 @@ export default function RegisterScreen() {
 
     try {
       // Direct registration without OTP modal (OTP verification paused for testing)
-      const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com'}/api/auth/verify-otp-signup`, {
+      const res = await fetch(`${API_URL}/api/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -102,12 +102,23 @@ export default function RegisterScreen() {
           password,
           full_name: fullName.trim(),
           role,
+          phone: formattedPhone,
           email_otp: '123456',
           mobile_otp: '123456',
         }),
       });
-      const resData = await res.json();
-      if (!res.ok) throw new Error(resData.message || 'Failed to create account.');
+
+      const resText = await res.text();
+      let resData: any = {};
+      try {
+        resData = JSON.parse(resText);
+      } catch (e) {
+        resData = { message: resText, error: resText };
+      }
+
+      if (!res.ok) {
+        throw new Error(resData.message || resData.error || 'Failed to create account.');
+      }
 
       if (resData.user) {
         const { error: profileError } = await supabase.from('profiles').insert({

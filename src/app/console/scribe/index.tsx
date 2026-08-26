@@ -180,8 +180,6 @@ export default function ScribeDashboard() {
       <ConsoleScribePC
         userProfile={profile}
         onRefresh={fetchSession}
-        layoutMode={layoutMode}
-        onChangeLayoutMode={changeLayoutMode}
       />
     );
   }

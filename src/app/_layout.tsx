@@ -131,9 +131,16 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
 }
 
 import { ThemeProvider as AppThemeProvider } from '@/core/themeContext';
+import { initializeNotificationChannels } from '@/core/notifications';
+import { useEffect } from 'react';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  useEffect(() => {
+    initializeNotificationChannels().catch(console.warn);
+  }, []);
+
   return (
     <GlobalErrorBoundary>
       <AppThemeProvider>
