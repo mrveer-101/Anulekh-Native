@@ -93,13 +93,15 @@ export default function RegisterScreen() {
     setLoading(true);
     setErrorMessage('');
 
+    const finalEmail = email.trim() || `${formattedPhone.replace(/[^0-9]/g, '')}@anulekh.app`;
+
     try {
       // Direct registration without OTP modal (OTP verification paused for testing)
       const res = await fetch(`${API_URL}/api/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: email.trim() || undefined,
+          email: finalEmail,
           password,
           full_name: fullName.trim(),
           role,
@@ -122,14 +124,23 @@ export default function RegisterScreen() {
       }
 
       if (resData.user) {
-        const { error: profileError } = await supabase.from('profiles').insert({
-          id: resData.user.id,
+        // Ensure profile record has phone and role saved
+        const { error: updateError } = await supabase.from('profiles').update({
           full_name: fullName.trim(),
           role,
           phone: formattedPhone,
-          languages: [],
-        });
-        if (profileError) throw profileError;
+        }).eq('id', resData.user.id);
+
+        if (updateError) {
+          // If row doesn't exist, insert it
+          await supabase.from('profiles').insert({
+            id: resData.user.id,
+            full_name: fullName.trim(),
+            role,
+            phone: formattedPhone,
+            languages: [],
+          });
+        }
 
         if (Platform.OS === 'web') {
           alert(`🎉 Account Created!\n\n${role === 'scribe' ? 'Scribe' : 'Student'} account created successfully.`);
