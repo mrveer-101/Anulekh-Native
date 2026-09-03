@@ -6,6 +6,7 @@ import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { hoursUntilExam } from '@/core/examDate';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { announceForAccessibility } from '@/core/a11y';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -265,28 +266,33 @@ export default function StudentHomeView() {
   return (
     <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Welcome & Profile Header Section */}
-      <View style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 16,
-        backgroundColor: '#fff',
-        borderRadius: 24,
-        padding: 16,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        shadowColor: '#64748b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 2,
-      }}>
+      <View
+        accessible={true}
+        accessibilityRole="header"
+        accessibilityLabel={`Welcome ${getFirstName(profile?.full_name, 'Student')}, Student Portal`}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: 16,
+          backgroundColor: '#fff',
+          borderRadius: 24,
+          padding: 16,
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          shadowColor: '#64748b',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.05,
+          shadowRadius: 12,
+          elevation: 2,
+        }}
+      >
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 0.5 }}>
               Student Portal
             </Text>
-            <Ionicons name="school" size={12} color="#94a3b8" />
+            <Ionicons name="school" size={12} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 24, fontWeight: '900', color: TEXT, marginTop: 4, letterSpacing: -0.5 }}>
             {t('hello_user', { name: getFirstName(profile?.full_name, 'Student') })}
@@ -313,7 +319,7 @@ export default function StudentHomeView() {
             shadowRadius: 8,
             elevation: 3,
           }}>
-            <Feather name="award" size={22} color={BLUE} />
+            <Feather name="award" size={22} color={BLUE} importantForAccessibility="no" accessibilityElementsHidden={true} />
           </View>
           {isVerified && (
             <View style={{
@@ -329,7 +335,7 @@ export default function StudentHomeView() {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Feather name="check" size={10} color="#fff" />
+              <Feather name="check" size={10} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </View>
           )}
         </View>
@@ -337,7 +343,11 @@ export default function StudentHomeView() {
 
       {/* 1. Complete Profile Onboarding Card */}
       {isUnverified && (
-        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#fef3c7', padding: 20, borderRadius: 24, shadowColor: '#d97706', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View
+          accessible={true}
+          accessibilityLabel={`${t('complete_profile')}. ${t('profile_onboarding_desc')}`}
+          style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#fef3c7', padding: 20, borderRadius: 24, shadowColor: '#d97706', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+        >
           <View style={{ flex: 1, paddingRight: 16 }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#92400e' }}>{t('complete_profile')}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: MUTED, marginTop: 4, lineHeight: 18 }}>
@@ -346,6 +356,10 @@ export default function StudentHomeView() {
           </View>
           <TouchableOpacity 
             onPress={() => router.replace('/console/student/complete_profile' as any)}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('verify_now')}, button`}
+            accessibilityHint="Opens identity and disability verification form"
             style={{ backgroundColor: '#d97706', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12 }}
           >
             <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>{t('verify_now')}</Text>
@@ -355,9 +369,13 @@ export default function StudentHomeView() {
 
       {/* 2. Verification Pending Card with Simulation Tool */}
       {isPending && (
-        <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbeafe', padding: 20, borderRadius: 24, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20 }}>
+        <View
+          accessible={true}
+          accessibilityLabel={`${t('verification_pending')}. ${t('verification_pending_desc')}`}
+          style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbeafe', padding: 20, borderRadius: 24, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 3, marginBottom: 20 }}
+        >
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-            <Feather name="clock" size={18} color={BLUE} />
+            <Feather name="clock" size={18} color={BLUE} importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#1e40af' }}>{t('verification_pending')}</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: MUTED, marginBottom: 14, lineHeight: 18 }}>
@@ -365,6 +383,10 @@ export default function StudentHomeView() {
           </Text>
           <TouchableOpacity 
             onPress={simulateAdminApproval}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Instant Admin Approval Simulation"
+            accessibilityHint="Simulates profile verification approval for testing"
             style={{ width: '100%', backgroundColor: BLUE, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 12 }}>{t('auto_approve')}</Text>
@@ -374,17 +396,21 @@ export default function StudentHomeView() {
 
       {/* 3. Verified Badge (Vibrant soft banner) */}
       {isVerified && (
-        <View style={{
-          backgroundColor: '#ecfdf5',
-          borderWidth: 1, borderColor: '#a7f3d0',
-          paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16,
-          flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10,
-        }}>
+        <View
+          accessible={true}
+          accessibilityLabel="Verified Anulekh Candidate Profile badge"
+          style={{
+            backgroundColor: '#ecfdf5',
+            borderWidth: 1, borderColor: '#a7f3d0',
+            paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16,
+            flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10,
+          }}
+        >
           <View style={{
             width: 24, height: 24, borderRadius: 12, backgroundColor: '#10b981',
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <Feather name="shield" size={12} color="#fff" />
+            <Feather name="shield" size={12} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
           </View>
           <Text style={{ fontFamily: 'Roboto', color: '#047857', fontSize: 12, fontWeight: '800' }}>
             Verified Anulekh Candidate Profile
@@ -393,23 +419,27 @@ export default function StudentHomeView() {
       )}
 
       {/* Student Stats Summary (One block, color coded Blue, Orange, Green) */}
-      <View style={{
-        backgroundColor: '#ffffff',
-        borderRadius: 24,
-        borderWidth: 1, borderColor: '#e2e8f0',
-        paddingVertical: 14,
-        paddingHorizontal: 8,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-around',
-        marginBottom: 20,
-        shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
-      }}>
+      <View
+        accessible={true}
+        accessibilityLabel={`Summary Statistics: ${examRequestsCount} exams requested, ${assignmentRequestsCount} assignments requested, ${confirmedPlans.length + confirmedAssignmentsCount} matched scribes`}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
+          borderWidth: 1, borderColor: '#e2e8f0',
+          paddingVertical: 14,
+          paddingHorizontal: 8,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-around',
+          marginBottom: 20,
+          shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
+        }}
+      >
         {/* Exams Stats (Blue) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="file-text" size={12} color="#2563eb" />
+            <Feather name="file-text" size={12} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Exams</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{examRequestsCount}</Text>
@@ -420,7 +450,7 @@ export default function StudentHomeView() {
         {/* Assignments Stats (Orange) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="book-open" size={12} color="#ea580c" />
+            <Feather name="book-open" size={12} color="#ea580c" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Assignments</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#ea580c' }}>{assignmentRequestsCount}</Text>
@@ -431,7 +461,7 @@ export default function StudentHomeView() {
         {/* Matched Stats (Green) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="users" size={12} color="#10b981" />
+            <Feather name="users" size={12} color="#10b981" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Matched</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#10b981' }}>
@@ -442,7 +472,13 @@ export default function StudentHomeView() {
 
       {/* Upcoming Exam Schedule / Plan */}
       <View style={{ marginBottom: 20 }}>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Schedule</Text>
+        <Text
+          accessible={true}
+          accessibilityRole="header"
+          style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}
+        >
+          My Schedule
+        </Text>
 
         {confirmedPlans.length === 0 ? (
           <View style={{
@@ -453,7 +489,7 @@ export default function StudentHomeView() {
             shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.08, shadowRadius: 16, elevation: 2,
           }}>
-            <Feather name="calendar" size={28} color="#94a3b8" />
+            <Feather name="calendar" size={28} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_upcoming_exams')}</Text>
             <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, marginTop: 6, textAlign: 'center', paddingHorizontal: 16 }}>
               {t('need_scribe_desc')}
@@ -466,6 +502,10 @@ export default function StudentHomeView() {
                   Alert.alert(t('error'), t('verify_first_error'));
                 }
               }}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('request_scribe')}, button`}
+              accessibilityHint="Opens exam scribe request booking form"
               style={{ 
                 backgroundColor: BLUE, 
                 paddingVertical: 12, paddingHorizontal: 24, 
@@ -501,8 +541,14 @@ export default function StudentHomeView() {
               >
                 {/* ── Collapsed Header Row (Icon + Subject + Status + Chevron) ── */}
                 <TouchableOpacity
-                  onPress={() => toggleExamCard(exam.id)}
+                  onPress={() => {
+                    toggleExamCard(exam.id);
+                    announceForAccessibility(isExpanded ? 'Exam details collapsed' : 'Exam details expanded');
+                  }}
                   activeOpacity={0.8}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${exam.subject || t('exam_fallback')}, on ${exam.exam_date || 'scheduled date'}, status: ${isEmergency ? 'Emergency SOS' : 'Confirmed'}. Double tap to ${isExpanded ? 'collapse' : 'expand'} details`}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
                     paddingHorizontal: 16, paddingVertical: 14, gap: 10,
@@ -517,7 +563,7 @@ export default function StudentHomeView() {
                     borderColor: isEmergency ? '#fecaca' : 'rgba(37,99,235,0.18)',
                   }}>
                     <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
-                      color={isEmergency ? '#dc2626' : BLUE} />
+                      color={isEmergency ? '#dc2626' : BLUE} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </View>
 
                   {/* Subject Name */}
@@ -547,6 +593,7 @@ export default function StudentHomeView() {
                   <Feather
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     size={16} color={MUTED}
+                    importantForAccessibility="no" accessibilityElementsHidden={true}
                   />
                 </TouchableOpacity>
 
@@ -555,12 +602,16 @@ export default function StudentHomeView() {
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
 
                     {isEmergency && (
-                      <View style={{
-                        backgroundColor: '#fef2f2', padding: 10, borderRadius: 12,
-                        borderWidth: 1, borderColor: '#fca5a5',
-                        flexDirection: 'row', alignItems: 'center', gap: 8,
-                      }}>
-                        <Feather name="alert-triangle" size={13} color="#dc2626" />
+                      <View
+                        accessible={true}
+                        accessibilityLabel="Alert: Scribe cancelled. Re-broadcasting emergency SOS to all available scribes."
+                        style={{
+                          backgroundColor: '#fef2f2', padding: 10, borderRadius: 12,
+                          borderWidth: 1, borderColor: '#fca5a5',
+                          flexDirection: 'row', alignItems: 'center', gap: 8,
+                        }}
+                      >
+                        <Feather name="alert-triangle" size={13} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
                           Scribe cancelled! Re-broadcasting emergency SOS to all available scribes.
                         </Text>
@@ -571,7 +622,7 @@ export default function StudentHomeView() {
                     <View style={{ gap: 6 }}>
                       {/* 1. Level of exam */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
                           Level: {exam.exam_type}
                         </Text>
@@ -579,7 +630,7 @@ export default function StudentHomeView() {
 
                       {/* 2. Date and time */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
                           Date & Time: {exam.exam_date || t('date_not_specified')}
                         </Text>
@@ -587,7 +638,7 @@ export default function StudentHomeView() {
 
                       {/* 3. Location */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                        <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
                           Location: {exam.exam_venue || t('venue_not_specified')}
                         </Text>
@@ -595,7 +646,7 @@ export default function StudentHomeView() {
 
                       {!isEmergency && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Feather name="user" size={12} color={BLUE} style={{ width: 14 }} />
+                          <Feather name="user" size={12} color={BLUE} style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                           <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
                             {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
                           </Text>
@@ -603,7 +654,7 @@ export default function StudentHomeView() {
                       )}
 
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="globe" size={12} color={MUTED} style={{ width: 14 }} />
+                        <Feather name="globe" size={12} color={MUTED} style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
                           {t('exam_language')}: {exam.exam_language}
                         </Text>
@@ -615,6 +666,10 @@ export default function StudentHomeView() {
                       {isEmergency ? (
                         <TouchableOpacity
                           onPress={() => router.push('/console/student/view_applications' as any)}
+                          accessible={true}
+                          accessibilityRole="button"
+                          accessibilityLabel="Tracking Emergency SOS Applications"
+                          accessibilityHint="Opens applications list to accept a volunteer scribe"
                           style={{
                             width: '100%', backgroundColor: '#dc2626',
                             paddingVertical: 11, borderRadius: 12,
@@ -630,16 +685,24 @@ export default function StudentHomeView() {
                           <View style={{ flexDirection: 'row', gap: 8 }}>
                             <TouchableOpacity
                               onPress={() => openCallSheet(exam)}
+                              accessible={true}
+                              accessibilityRole="button"
+                              accessibilityLabel="Call Volunteer Scribe"
+                              accessibilityHint="Opens call bottom sheet to dial assigned scribe"
                               style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                             >
-                              <Feather name="phone" size={12} color="#334155" />
+                              <Feather name="phone" size={12} color="#334155" importantForAccessibility="no" accessibilityElementsHidden={true} />
                               <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
+                              accessible={true}
+                              accessibilityRole="button"
+                              accessibilityLabel="Chat with Volunteer Scribe"
+                              accessibilityHint="Opens messaging screen with your scribe"
                               style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                             >
-                              <Feather name="message-square" size={12} color="#334155" />
+                              <Feather name="message-square" size={12} color="#334155" importantForAccessibility="no" accessibilityElementsHidden={true} />
                               <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
                             </TouchableOpacity>
                           </View>
@@ -653,19 +716,27 @@ export default function StudentHomeView() {
                                 <View style={{ flexDirection: 'row', gap: 8 }}>
                                   <TouchableOpacity
                                     onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
+                                    accessible={true}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="View Scribe Declaration Certificate"
+                                    accessibilityHint="Opens formal certification letter modal"
                                     style={{ flex: 1, backgroundColor: BLUE, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
                                   >
-                                    <Feather name="file-text" size={12} color="white" />
+                                    <Feather name="file-text" size={12} color="white" importantForAccessibility="no" accessibilityElementsHidden={true} />
                                     <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
                                   </TouchableOpacity>
                                   <TouchableOpacity
                                     onPress={() => handleSosBroadcast(exam)}
                                     disabled={sending}
+                                    accessible={true}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Emergency SOS: Scribe Cancelled? Tap to broadcast immediately"
+                                    accessibilityHint="Broadcasts an urgent high-priority alert to all approved scribes in your area"
                                     style={{ flex: 1, backgroundColor: '#fef2f2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                                   >
                                     {sending
                                       ? <ActivityIndicator size="small" color="#dc2626" />
-                                      : <><Feather name="alert-triangle" size={12} color="#dc2626" /><Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 11 }}>SOS - Cancelled?</Text></>
+                                      : <><Feather name="alert-triangle" size={12} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} /><Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 11 }}>SOS - Cancelled?</Text></>
                                     }
                                   </TouchableOpacity>
                                 </View>
@@ -674,9 +745,13 @@ export default function StudentHomeView() {
                             return (
                               <TouchableOpacity
                                 onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
+                                accessible={true}
+                                accessibilityRole="button"
+                                accessibilityLabel="View Scribe Declaration Certificate"
+                                accessibilityHint="Opens formal certification letter modal"
                                 style={{ width: '100%', backgroundColor: BLUE, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
                               >
-                                <Feather name="file-text" size={12} color="white" />
+                                <Feather name="file-text" size={12} color="white" importantForAccessibility="no" accessibilityElementsHidden={true} />
                                 <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
                               </TouchableOpacity>
                             );
@@ -691,9 +766,7 @@ export default function StudentHomeView() {
           })
         )}
 
-
         {/* Persistent "New Request" action once at least one request already exists */}
-
         {confirmedPlans.length > 0 && (
           <TouchableOpacity
             onPress={() => {
@@ -703,6 +776,10 @@ export default function StudentHomeView() {
                 Alert.alert(t('error'), t('verify_first_error'));
               }
             }}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Request another scribe for an exam"
+            accessibilityHint="Opens booking form to request an exam scribe"
             style={{ 
               width: '100%', 
               backgroundColor: BLUE, 
@@ -721,7 +798,7 @@ export default function StudentHomeView() {
             }}
             activeOpacity={0.85}
           >
-            <Feather name="plus" size={18} color="#ffffff" />
+            <Feather name="plus" size={18} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 15, letterSpacing: 0.3 }}>{t('request_scribe')}</Text>
           </TouchableOpacity>
         )}
@@ -730,6 +807,10 @@ export default function StudentHomeView() {
       {/* 4. Need Help? Contact Support Card */}
       <TouchableOpacity 
         onPress={() => router.push('/console/common/support' as any)}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Need Help? Contact Support. Contact support to resolve application or matching issues"
+        accessibilityHint="Navigates to support center"
         style={{
           backgroundColor: '#fff',
           borderWidth: 1,
@@ -777,14 +858,28 @@ export default function StudentHomeView() {
         transparent={true}
         visible={isDeclarationOpen}
         onRequestClose={() => setIsDeclarationOpen(false)}
+        accessibilityViewIsModal={true}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
           <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
             {/* Modal Header */}
             <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: TEXT, textTransform: 'uppercase' }}>{t('scribe_declaration')}</Text>
-              <TouchableOpacity onPress={() => setIsDeclarationOpen(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={18} color={MUTED} />
+              <Text
+                accessible={true}
+                accessibilityRole="header"
+                style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: TEXT, textTransform: 'uppercase' }}
+              >
+                {t('scribe_declaration')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setIsDeclarationOpen(false)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Close Declaration"
+                accessibilityHint="Closes the scribe declaration modal"
+                style={{ padding: 4 }}
+              >
+                <Feather name="x" size={18} color={MUTED} importantForAccessibility="no" accessibilityElementsHidden={true} />
               </TouchableOpacity>
             </View>
 
@@ -796,7 +891,11 @@ export default function StudentHomeView() {
               </View>
 
               {/* 1. Exam Details */}
-              <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
+              <View
+                accessible={true}
+                accessibilityLabel={`Exam Details: Candidate ${profile?.full_name}, Subject ${selectedExam?.subject}, Level ${selectedExam?.exam_type}, Date ${selectedExam?.exam_date}, Venue ${selectedExam?.exam_venue}`}
+                style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}
+              >
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: MUTED, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('exam_details')}</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>{t('candidate_student')}: {selectedExam?.subject}</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_level')}: {selectedExam?.exam_type}</Text>
@@ -806,7 +905,7 @@ export default function StudentHomeView() {
 
               {/* 2. Candidate & Scribe Details */}
               <View style={{ gap: 10 }}>
-                <View>
+                <View accessible={true} accessibilityLabel={`Candidate Student: ${profile?.full_name}, Grade: ${selectedExam?.education_grade}, Aadhaar ID: Verified`}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: MUTED, textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: TEXT, fontWeight: '800' }}>{profile?.full_name}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>Grade: {selectedExam?.education_grade}</Text>
@@ -815,7 +914,7 @@ export default function StudentHomeView() {
 
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
 
-                <View>
+                <View accessible={true} accessibilityLabel={`Volunteer Scribe: ${selectedExam?.scribeProfile?.full_name || t('volunteer_scribe')}, Occupation: ${selectedExam?.scribeProfile?.occupation || t('student_scribe_fallback')}`}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: MUTED, textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: TEXT, fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name || t('volunteer_scribe')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: MUTED, marginTop: 1 }}>{t('occupation_label')}{selectedExam?.scribeProfile?.occupation || t('student_scribe_fallback')}</Text>
@@ -846,12 +945,18 @@ export default function StudentHomeView() {
             <View style={{ padding: 16, backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#f1f5f9', flexDirection: 'row', gap: 8 }}>
               <TouchableOpacity 
                 onPress={() => setIsDeclarationOpen(false)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Close Declaration"
                 style={{ flex: 1, backgroundColor: '#e2e8f0', paddingVertical: 11, borderRadius: 12, alignItems: 'center' }}
               >
                 <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '700', fontSize: 13 }}>{t('close')}</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 onPress={() => Alert.alert(t('download'), t('download_declaration'))}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Download Declaration Certificate"
                 style={{ flex: 1, backgroundColor: BLUE, paddingVertical: 11, borderRadius: 12, alignItems: 'center', shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}
               >
                 <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 13 }}>{t('download')}</Text>
@@ -869,12 +974,16 @@ export default function StudentHomeView() {
         transparent
         visible={isCallOpen}
         onRequestClose={closeCallSheet}
+        accessibilityViewIsModal={true}
       >
         {/* Backdrop */}
         <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)' }}
           activeOpacity={1}
           onPress={closeCallSheet}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Close call dialog backdrop"
         />
 
         {/* Sheet */}
@@ -911,27 +1020,40 @@ export default function StudentHomeView() {
                 backgroundColor: GREEN_BG_LIGHT, borderWidth: 1, borderColor: GREEN_BD,
                 alignItems: 'center', justifyContent: 'center',
               }}>
-                <Feather name="phone" size={16} color={GREEN} />
+                <Feather name="phone" size={16} color={GREEN} importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: TEXT }}>{t('call_detail')}</Text>
+              <Text
+                accessible={true}
+                accessibilityRole="header"
+                style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: TEXT }}
+              >
+                {t('call_detail')}
+              </Text>
             </View>
             <TouchableOpacity
               onPress={closeCallSheet}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Close Call Sheet"
               style={{
                 width: 34, height: 34, borderRadius: 10,
                 backgroundColor: 'rgba(0,0,0,0.05)',
                 alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <Feather name="x" size={16} color={MUTED} />
+              <Feather name="x" size={16} color={MUTED} importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
           </View>
 
           {/* Contact card */}
-          <View style={{
-            backgroundColor: GREEN_BG_LIGHT, borderWidth: 1, borderColor: GREEN_BD,
-            borderRadius: 20, padding: 20,
-          }}>
+          <View
+            accessible={true}
+            accessibilityLabel={`Volunteer Scribe: ${callExam?.scribeProfile?.full_name ?? t('volunteer_scribe')}, Phone number: ${callExam?.scribeProfile?.phone || '9876543210'}`}
+            style={{
+              backgroundColor: GREEN_BG_LIGHT, borderWidth: 1, borderColor: GREEN_BD,
+              borderRadius: 20, padding: 20,
+            }}
+          >
             {/* Avatar + name */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
               <View style={{
@@ -966,7 +1088,7 @@ export default function StudentHomeView() {
                 flexDirection: 'row', alignItems: 'center', gap: 12,
                 borderWidth: 1, borderColor: GREEN_BD,
               }}>
-                <Feather name="phone" size={18} color={GREEN} />
+                <Feather name="phone" size={18} color={GREEN} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: TEXT, letterSpacing: 1.5 }}>
                   {callExam?.scribeProfile?.phone || '9876543210'}
                 </Text>
@@ -974,6 +1096,10 @@ export default function StudentHomeView() {
             ) : (
               <TouchableOpacity
                 onPress={() => setShowMaskedNumber(true)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Unhide Phone Number"
+                accessibilityHint="Reveals full mobile number of the scribe"
                 style={{
                   backgroundColor: '#fff',
                   borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
@@ -982,7 +1108,7 @@ export default function StudentHomeView() {
                   borderStyle: 'dashed'
                 }}
               >
-                <Feather name="eye" size={16} color={GREEN} />
+                <Feather name="eye" size={16} color={GREEN} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: GREEN }}>{t('view_number')}</Text>
               </TouchableOpacity>
             )}
@@ -996,6 +1122,10 @@ export default function StudentHomeView() {
           {/* Dial Now CTA */}
           <TouchableOpacity
             onPress={() => dialNumber(callExam?.scribeProfile?.phone || '9876543210')}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={`Dial scribe at ${callExam?.scribeProfile?.phone || '9876543210'}`}
+            accessibilityHint="Opens system dialer to place call"
             style={{
               backgroundColor: GREEN,
               borderRadius: 18, paddingVertical: 16, marginTop: 16,
@@ -1005,13 +1135,16 @@ export default function StudentHomeView() {
             }}
             activeOpacity={0.85}
           >
-            <Feather name="phone-call" size={20} color="#fff" />
+            <Feather name="phone-call" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 16, fontWeight: '900' }}>{t('dial_now')}</Text>
           </TouchableOpacity>
 
           {/* Cancel */}
           <TouchableOpacity
             onPress={closeCallSheet}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel Call"
             style={{ paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
           >
             <Text style={{ fontFamily: 'Roboto', color: MUTED, fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>

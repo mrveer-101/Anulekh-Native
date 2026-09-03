@@ -10,6 +10,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/core/supabase';
 import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
+import { announceForAccessibility } from '@/core/a11y';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
@@ -629,67 +630,105 @@ export default function ScribeRequestForm() {
                 if (router.canGoBack()) router.back();
                 else router.replace('/console/student' as any);
               }}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Student Console"
               style={{ marginRight: 16, padding: 8, marginLeft: -8, borderRadius: 10 }}
             >
-              <Feather name="arrow-left" size={24} color="#334155" />
+              <Feather name="arrow-left" size={24} color="#334155" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '700', color: '#1e293b' }}>Request a Scribe</Text>
+            <Text
+              accessible={true}
+              accessibilityRole="header"
+              style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '700', color: '#1e293b' }}
+            >
+              Request a Scribe
+            </Text>
           </View>
         </SafeAreaView>
 
         <ScrollView className="flex-1 px-6 pt-6 pb-8" contentContainerStyle={{ paddingBottom: 40 }}>
-          <Text className="text-xl font-bold text-slate-800 mb-6" style={{ fontFamily: 'Roboto' }}>Select Request Type</Text>
+          <Text
+            accessible={true}
+            accessibilityRole="header"
+            className="text-xl font-bold text-slate-800 mb-6"
+            style={{ fontFamily: 'Roboto' }}
+          >
+            Select Request Type
+          </Text>
 
           {/* Request Assignment Block */}
           <View className="mb-8">
             <TouchableOpacity
               onPress={() => router.push('/console/student/assignment_form' as any)}
               activeOpacity={0.85}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Request Assignment Help. Get assistance for academic assignments"
+              accessibilityHint="Navigates to assignment helper booking form"
               className="w-full bg-indigo-500 rounded-2xl p-5 flex-row items-center shadow-md shadow-indigo-500/30"
             >
               <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
-                <Feather name="file-text" size={22} color="#fff" />
+                <Feather name="file-text" size={22} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View className="flex-1">
                 <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Request Assignment</Text>
                 <Text className="text-indigo-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Get help with your assignments</Text>
               </View>
-              <Feather name="chevron-right" size={20} color="#fff" />
+              <Feather name="chevron-right" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
           </View>
 
           {/* Exam Request Block */}
           <View>
-            <Text className="text-lg font-bold text-slate-800 mb-4" style={{ fontFamily: 'Roboto' }}>Exam Request</Text>
+            <Text
+              accessible={true}
+              accessibilityRole="header"
+              className="text-lg font-bold text-slate-800 mb-4"
+              style={{ fontFamily: 'Roboto' }}
+            >
+              Exam Request
+            </Text>
 
             <TouchableOpacity
               onPress={startAutoFillEntry}
               activeOpacity={0.85}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Auto-Fill with Admit Card. Upload a photo or PDF of your hall ticket to fill details automatically"
+              accessibilityHint="Opens file picker to select hall ticket"
               className="w-full bg-blue-500 rounded-2xl p-5 flex-row items-center mb-4 shadow-md shadow-blue-500/30"
             >
               <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
-                <Feather name="upload-cloud" size={22} color="#fff" />
+                <Feather name="upload-cloud" size={22} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View className="flex-1">
                 <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Auto-Fill (ADMIT Card)</Text>
                 <Text className="text-blue-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Upload a photo or PDF — details filled automatically</Text>
               </View>
-              <Feather name="chevron-right" size={20} color="#fff" />
+              <Feather name="chevron-right" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setEntryMode('form')}
+              onPress={() => {
+                setEntryMode('form');
+                announceForAccessibility('Manual scribe request form opened');
+              }}
               activeOpacity={0.85}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Manual Fill Form. Enter exam details, date, time, and venue step by step"
+              accessibilityHint="Opens the manual scribe request form"
               className="w-full bg-white border border-slate-200 rounded-2xl p-5 flex-row items-center shadow-sm"
             >
               <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mr-4">
-                <Feather name="edit-3" size={22} color="#334155" />
+                <Feather name="edit-3" size={22} color="#475569" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View className="flex-1">
                 <Text className="text-slate-800 font-bold text-base" style={{ fontFamily: 'Roboto' }}>Manual Fill Form</Text>
-                <Text className="text-slate-400 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Enter exam details yourself, step by step</Text>
+                <Text className="text-slate-500 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Fill in details yourself</Text>
               </View>
-              <Feather name="chevron-right" size={20} color="#334155" />
+              <Feather name="chevron-right" size={20} color="#475569" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -946,6 +985,9 @@ export default function ScribeRequestForm() {
                   value={subject}
                   onChangeText={setSubject}
                   placeholder="e.g. Mathematics-II"
+                  accessible={true}
+                  accessibilityLabel="Subject or Paper Name"
+                  accessibilityHint="Enter exam subject name, for example Mathematics"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
                 />
               </View>
@@ -957,12 +999,16 @@ export default function ScribeRequestForm() {
                 <TouchableOpacity
                   onPress={() => { setActiveExtraIndex(-1); setShowDatePicker(true); }}
                   activeOpacity={0.8}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Exam Date and Time: ${examDate || 'Not selected'}`}
+                  accessibilityHint="Opens calendar and time picker dialog"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
                 >
                   <Text className={`text-sm ${examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
                     {examDate || 'Select Date & Time'}
                   </Text>
-                  <Feather name="calendar" size={16} color="#2563eb" />
+                  <Feather name="calendar" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </TouchableOpacity>
               </View>
 
@@ -976,25 +1022,36 @@ export default function ScribeRequestForm() {
                     placeholder="Enter exam venue address"
                     multiline={true}
                     numberOfLines={2}
+                    accessible={true}
+                    accessibilityLabel="Exam Venue and Address"
+                    accessibilityHint="Enter examination center location address"
                     className="flex-1 text-sm text-slate-800 mr-2 py-1"
                   />
                   <View className="flex-row gap-2">
                     <TouchableOpacity
                       onPress={() => handleGetCurrentLocation(-1)}
                       disabled={isLocating}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel="Detect Current Location"
+                      accessibilityHint="Fills venue with your current GPS location"
                       className="p-2 bg-blue-50 rounded-lg active:bg-blue-100 items-center justify-center"
                     >
                       {isLocating && activeExtraIndex === -1 ? (
                         <ActivityIndicator size="small" color="#2563eb" style={{ width: 16, height: 16 }} />
                       ) : (
-                        <Feather name="navigation" size={16} color="#2563eb" />
+                        <Feather name="navigation" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel="Pick Exam Venue on Map"
+                      accessibilityHint="Opens interactive map to choose nearby exam center"
                       className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
                     >
-                      <Feather name="map" size={16} color="#2563eb" />
+                      <Feather name="map" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -1008,19 +1065,30 @@ export default function ScribeRequestForm() {
                 <TouchableOpacity
                   onPress={handlePickAdmitCard}
                   disabled={isParsingHallTicket}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={admitCardFileName ? `Hall Ticket uploaded: ${admitCardFileName}` : "Upload Admit Card or Hall Ticket"}
+                  accessibilityHint="Select a photo or PDF of your hall ticket"
                   className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
-                    admitCardImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
+                    admitCardImage
+                      ? 'border-emerald-300 bg-emerald-50/40'
+                      : 'border-slate-200 bg-slate-50/60 active:border-blue-400'
                   }`}
                 >
                   {admitCardImage ? (
                     <View className="items-center">
-                      <Feather name={admitCardFileName?.toLowerCase().endsWith('.pdf') ? 'file-text' : 'image'} size={24} color="#2563eb" />
-                      <Text className="text-xs font-semibold text-slate-800 mt-1">{admitCardImage}</Text>
-                      <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change file</Text>
+                      <Feather
+                        name={admitCardFileName?.toLowerCase().endsWith('.pdf') ? 'file-text' : 'image'}
+                        size={24}
+                        color="#059669"
+                        importantForAccessibility="no" accessibilityElementsHidden={true}
+                      />
+                      <Text className="text-xs font-semibold text-slate-800 mt-1">{admitCardFileName || admitCardImage}</Text>
+                      <Text className="text-[10px] text-emerald-600 font-bold mt-0.5">Tap to change file</Text>
                     </View>
                   ) : (
                     <View className="items-center">
-                      <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                      <Feather name="upload-cloud" size={24} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
                       <Text className="text-xs font-semibold text-slate-600 mt-1">Upload Hall Ticket (Photo or PDF)</Text>
                       <Text className="text-[10px] text-slate-400 mt-0.5">We'll auto-fill subject, date & venue for you</Text>
                     </View>
@@ -1144,6 +1212,7 @@ export default function ScribeRequestForm() {
         transparent={true}
         visible={showDatePicker}
         onRequestClose={() => setShowDatePicker(false)}
+        accessibilityViewIsModal={true}
       >
         <View className="flex-1 bg-slate-950/50 justify-center items-center px-6">
           <View className="bg-white w-full max-w-sm rounded-3xl p-5 border border-slate-100 shadow-2xl">
@@ -1253,15 +1322,28 @@ export default function ScribeRequestForm() {
         transparent={true}
         visible={showMapPicker}
         onRequestClose={() => setShowMapPicker(false)}
+        accessibilityViewIsModal={true}
       >
         <View className="flex-1 bg-slate-950/60 justify-center items-center px-6">
           <View className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-slate-100">
             
             {/* Map Header */}
             <View className="px-5 py-4 border-b border-slate-100 flex-row items-center justify-between bg-white">
-              <Text className="text-sm font-bold text-slate-800">Select Exam Venue</Text>
-              <TouchableOpacity onPress={() => setShowMapPicker(false)} className="p-1">
-                <Feather name="x" size={18} color="#64748b" />
+              <Text
+                accessible={true}
+                accessibilityRole="header"
+                className="text-sm font-bold text-slate-800"
+              >
+                Select Exam Venue
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowMapPicker(false)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Close Venue Picker"
+                className="p-1"
+              >
+                <Feather name="x" size={18} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </TouchableOpacity>
             </View>
 
@@ -1302,10 +1384,14 @@ export default function ScribeRequestForm() {
                         updateExtraSubject(activeExtraIndex, 'examVenue', value);
                       }
                       setShowMapPicker(false);
+                      announceForAccessibility(`Venue selected: ${loc.name}`);
                     }}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${loc.name}, ${loc.address}`}
                     className="flex-row items-start p-2.5 mb-2 bg-white rounded-xl border border-slate-100 active:bg-blue-50/20"
                   >
-                    <Feather name="map-pin" size={14} color="#2563eb" className="mr-2.5 mt-0.5" />
+                    <Feather name="map-pin" size={14} color="#2563eb" className="mr-2.5 mt-0.5" importantForAccessibility="no" accessibilityElementsHidden={true} />
                     <View className="flex-1">
                       <Text className="text-xs font-bold text-slate-800">{loc.name}</Text>
                       <Text className="text-[10px] text-slate-400 mt-0.5" numberOfLines={2}>{loc.address}</Text>
@@ -1325,6 +1411,7 @@ export default function ScribeRequestForm() {
         transparent={true}
         visible={isParsingHallTicket}
         onRequestClose={() => {}}
+        accessibilityViewIsModal={true}
       >
         <View className="flex-1 bg-slate-950/80 items-center justify-center px-10">
           <HallTicketScanningAnimation />

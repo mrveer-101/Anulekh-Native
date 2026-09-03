@@ -19,6 +19,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase, friendlyAuthError } from '@/core/supabase';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { announceForAccessibility } from '@/core/a11y';
 
 const { height } = Dimensions.get('window');
 
@@ -324,7 +325,7 @@ export default function LoginScreen() {
                   borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
                     style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                     placeholder="email@example.com or phone"
@@ -335,6 +336,9 @@ export default function LoginScreen() {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    accessible={true}
+                    accessibilityLabel="Email or Phone Number"
+                    accessibilityHint="Enter your registered email address or mobile number"
                   />
                 </View>
               </View>
@@ -350,7 +354,7 @@ export default function LoginScreen() {
                   borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
                     style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                     placeholder="Enter your password"
@@ -361,9 +365,19 @@ export default function LoginScreen() {
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    accessible={true}
+                    accessibilityLabel="Password"
+                    accessibilityHint="Enter your account password"
                   />
-                  <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={{ padding: 4 }}>
-                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color="#94a3b8" />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(v => !v)}
+                    style={{ padding: 6 }}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    accessibilityHint="Toggles password visibility"
+                  >
+                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -378,7 +392,12 @@ export default function LoginScreen() {
                   setForgotStep(1);
                   setForgotError('');
                   setForgotModalVisible(true);
+                  announceForAccessibility('Forgot password modal opened');
                 }}
+                accessible={true}
+                accessibilityRole="link"
+                accessibilityLabel="Forgot Password? Reset here"
+                accessibilityHint="Opens password recovery form"
                 style={{ alignSelf: 'flex-end', marginTop: -6 }}
               >
                 <Text style={{ color: accentColor, fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
@@ -389,6 +408,11 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={handleLogin}
               disabled={loading}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={loading ? "Signing in, please wait" : "Sign In button"}
+              accessibilityHint="Signs into your account and redirects to your portal"
+              accessibilityState={{ busy: loading, disabled: loading }}
               style={{
                 backgroundColor: accentColor,
                 borderRadius: 18, paddingVertical: 18,
@@ -407,7 +431,7 @@ export default function LoginScreen() {
                   <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>
                     Sign In
                   </Text>
-                  <Feather name="arrow-right" size={18} color="#fff" />
+                  <Feather name="arrow-right" size={18} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </>
               )}
             </TouchableOpacity>
@@ -415,6 +439,10 @@ export default function LoginScreen() {
             <TouchableOpacity
               onPress={() => router.push(`/auth/register?role=${role}`)}
               disabled={loading}
+              accessible={true}
+              accessibilityRole="link"
+              accessibilityLabel="Don't have an account? Register here"
+              accessibilityHint="Opens registration page to create a student or scribe account"
               style={{ paddingVertical: 14, alignItems: 'center' }}
             >
               <Text style={{ color: '#64748b', fontSize: 14 }}>

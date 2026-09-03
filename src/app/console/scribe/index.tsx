@@ -18,6 +18,7 @@ import { supabase } from '@/core/supabase';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { announceForAccessibility } from '@/core/a11y';
 
 import { useThemeMode } from '@/core/themeContext';
 
@@ -321,8 +322,16 @@ export default function ScribeDashboard() {
             return (
               <TouchableOpacity
                 key={tab.id}
-                onPress={() => setActiveTab(tab.id)}
+                onPress={() => {
+                  setActiveTab(tab.id);
+                  announceForAccessibility(`${translatedLabel} tab selected`);
+                }}
                 activeOpacity={0.7}
+                accessible={true}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`${translatedLabel} tab`}
+                accessibilityHint={`Switches to ${translatedLabel} screen`}
                 style={{
                   flex: 1,
                   alignItems: 'center',
@@ -335,14 +344,24 @@ export default function ScribeDashboard() {
                   borderColor: active ? ACCENT_BD : 'transparent',
                 }}
               >
-                <Feather name={(active ? tab.iconActive : tab.iconInactive) as any} size={20} color={active ? ACCENT : '#94a3b8'} />
-                <Text style={{
-                  fontFamily: 'Roboto',
-                  fontSize: 11.5,
-                  fontWeight: active ? '800' : '600',
-                  marginTop: 3,
-                  color: active ? ACCENT : '#64748b',
-                }}>
+                <Feather
+                  name={(active ? tab.iconActive : tab.iconInactive) as any}
+                  size={20}
+                  color={active ? ACCENT : '#94a3b8'}
+                  importantForAccessibility="no"
+                  accessibilityElementsHidden={true}
+                />
+                <Text
+                  importantForAccessibility="no"
+                  accessibilityElementsHidden={true}
+                  style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 11.5,
+                    fontWeight: active ? '800' : '600',
+                    marginTop: 3,
+                    color: active ? ACCENT : '#64748b',
+                  }}
+                >
                   {translatedLabel}
                 </Text>
               </TouchableOpacity>

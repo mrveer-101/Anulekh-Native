@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
+import { announceForAccessibility } from '@/core/a11y';
 
 const DOCUMENT_TYPES = [
   'Aadhar Card',
@@ -172,7 +173,14 @@ export default function StudentCompleteProfileForm() {
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Document Type *</Text>
                   <TouchableOpacity 
-                    onPress={() => setIsDocDropdownOpen(!isDocDropdownOpen)}
+                    onPress={() => {
+                      setIsDocDropdownOpen(!isDocDropdownOpen);
+                      announceForAccessibility(!isDocDropdownOpen ? 'Document type options opened' : 'Document type options closed');
+                    }}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Official Document Type: ${docType}`}
+                    accessibilityHint="Double tap to change document type"
                     style={{
                       width: '100%',
                       backgroundColor: '#f8fafc',
@@ -189,7 +197,7 @@ export default function StudentCompleteProfileForm() {
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>
                       {docType}
                     </Text>
-                    <Feather name={isDocDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+                    <Feather name={isDocDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </TouchableOpacity>
 
                   {isDocDropdownOpen && (
@@ -213,7 +221,11 @@ export default function StudentCompleteProfileForm() {
                             setDocType(item);
                             setIsDocDropdownOpen(false);
                             setDocImage(null); // Reset uploaded image when doc type changes
+                            announceForAccessibility(`Selected document type: ${item}`);
                           }}
+                          accessible={true}
+                          accessibilityRole="button"
+                          accessibilityLabel={item}
                           style={{
                             paddingVertical: 12,
                             paddingHorizontal: 14,
@@ -236,19 +248,23 @@ export default function StudentCompleteProfileForm() {
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload {docType} Image *</Text>
                   <TouchableOpacity 
                     onPress={handleSimulateDocUpload}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={docImage ? `${docType} image uploaded: ${docImage}` : `Upload Image of ${docType}`}
+                    accessibilityHint="Opens file selector to choose document image"
                     className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
                       docImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
                     }`}
                   >
                     {docImage ? (
                       <View className="items-center">
-                        <Feather name="image" size={24} color="#2563eb" />
+                        <Feather name="image" size={24} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text className="text-xs font-semibold text-slate-800 mt-1">{docImage}</Text>
                         <Text className="text-[10px] text-blue-600 font-bold mt-0.5">Tap to change image</Text>
                       </View>
                     ) : (
                       <View className="items-center">
-                        <Feather name="upload-cloud" size={24} color="#94a3b8" />
+                        <Feather name="upload-cloud" size={24} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
                         <Text className="text-xs font-semibold text-slate-600 mt-1">Select Image of {docType}</Text>
                         <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
                       </View>
@@ -264,6 +280,9 @@ export default function StudentCompleteProfileForm() {
                     onChangeText={setEmergencyPhone}
                     keyboardType="phone-pad"
                     placeholder="Parent/Guardian Phone Number"
+                    accessible={true}
+                    accessibilityLabel="Emergency Phone Number"
+                    accessibilityHint="Enter parent or guardian phone number"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-blue-500 focus:bg-white transition-all"
                   />
                 </View>
@@ -281,7 +300,14 @@ export default function StudentCompleteProfileForm() {
               <View>
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Disability Type *</Text>
                 <TouchableOpacity 
-                  onPress={() => setIsDisabilityDropdownOpen(!isDisabilityDropdownOpen)}
+                  onPress={() => {
+                    setIsDisabilityDropdownOpen(!isDisabilityDropdownOpen);
+                    announceForAccessibility(!isDisabilityDropdownOpen ? 'Disability category options opened' : 'Disability category options closed');
+                  }}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Disability Category: ${disabilityType}`}
+                  accessibilityHint="Double tap to choose disability type such as Visual Impairment or Blindness"
                   style={{
                     width: '100%',
                     backgroundColor: '#f8fafc',
@@ -298,7 +324,7 @@ export default function StudentCompleteProfileForm() {
                   <Text style={{ fontSize: 13, fontWeight: '700', color: disabilityType === 'Select Disability Type' ? '#94a3b8' : '#334155' }}>
                     {disabilityType}
                   </Text>
-                  <Feather name={isDisabilityDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+                  <Feather name={isDisabilityDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </TouchableOpacity>
 
                 {isDisabilityDropdownOpen && (
@@ -325,7 +351,11 @@ export default function StudentCompleteProfileForm() {
                           onPress={() => {
                             setDisabilityType(item);
                             setIsDisabilityDropdownOpen(false);
+                            announceForAccessibility(`Selected disability category: ${item}`);
                           }}
+                          accessible={true}
+                          accessibilityRole="button"
+                          accessibilityLabel={item}
                           style={{
                             paddingVertical: 12,
                             paddingHorizontal: 14,
@@ -354,6 +384,10 @@ export default function StudentCompleteProfileForm() {
                 
                 <TouchableOpacity 
                   onPress={handleSimulateCertificateUpload}
+                  accessible={true}
+                  accessibilityRole="button"
+                  accessibilityLabel={disabilityCertificate ? `Disability certificate uploaded: ${disabilityCertificate}` : "Upload valid Disability Certificate"}
+                  accessibilityHint="Select scan or photo of your disability certificate"
                   style={{
                     width: '100%',
                     borderWidth: 2,
@@ -367,7 +401,7 @@ export default function StudentCompleteProfileForm() {
                   }}
                 >
                   <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(37,99,235,0.09)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                    <Feather name="upload-cloud" size={20} color="#2563eb" />
+                    <Feather name="upload-cloud" size={20} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </View>
                   
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
@@ -382,22 +416,26 @@ export default function StudentCompleteProfileForm() {
                   </Text>
                   
                   <View style={{ marginTop: 14, flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#2563eb', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: '#ffffff' }}>
-                    <Feather name="folder" size={13} color="#2563eb" style={{ marginRight: 6 }} />
+                    <Feather name="folder" size={13} color="#2563eb" style={{ marginRight: 6 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>Choose File</Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
               {/* Info Banner Card */}
-              <View style={{
-                flexDirection: 'row',
-                backgroundColor: '#f1f5f9',
-                padding: 12,
-                borderRadius: 14,
-                alignItems: 'flex-start',
-                marginTop: 6
-              }}>
-                <Feather name="info" size={14} color="#64748b" style={{ marginRight: 8, marginTop: 1 }} />
+              <View
+                accessible={true}
+                accessibilityLabel="Notice: This document is required to match you with the most suitable scribe based on your specific requirements and government norms."
+                style={{
+                  flexDirection: 'row',
+                  backgroundColor: '#f1f5f9',
+                  padding: 12,
+                  borderRadius: 14,
+                  alignItems: 'flex-start',
+                  marginTop: 6
+                }}
+              >
+                <Feather name="info" size={14} color="#64748b" style={{ marginRight: 8, marginTop: 1 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 <Text style={{ fontSize: 10.5, color: '#475569', flex: 1, lineHeight: 15, fontWeight: '600' }}>
                   This document is required to match you with the most suitable scribe based on your specific requirements and government norms.
                 </Text>
@@ -410,7 +448,13 @@ export default function StudentCompleteProfileForm() {
           <View className="flex-row gap-3 mt-6 pt-4 border-t border-slate-100">
             {currentStep > 1 && (
               <TouchableOpacity 
-                onPress={() => setCurrentStep(currentStep - 1)}
+                onPress={() => {
+                  setCurrentStep(currentStep - 1);
+                  announceForAccessibility('Returned to Step 1: Official Document and Emergency Contact');
+                }}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Back to Step 1"
                 className="flex-1 bg-slate-100 py-3 rounded-xl items-center justify-center border border-slate-200"
               >
                 <Text className="text-slate-700 font-bold text-sm">Back</Text>
@@ -419,7 +463,13 @@ export default function StudentCompleteProfileForm() {
             
             {currentStep < 2 ? (
               <TouchableOpacity 
-                onPress={handleNextStep}
+                onPress={() => {
+                  handleNextStep();
+                  announceForAccessibility('Proceeding to Step 2: Disability Details');
+                }}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Next: Proceed to Step 2 Disability Details"
                 className="flex-1 bg-blue-500 py-3 rounded-xl items-center justify-center shadow-md shadow-blue-500/20"
               >
                 <Text className="text-white font-bold text-sm">Next</Text>
@@ -428,6 +478,10 @@ export default function StudentCompleteProfileForm() {
               <TouchableOpacity 
                 onPress={handleSubmit}
                 disabled={loading}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={loading ? "Submitting profile verification, please wait" : "Submit Profile for Verification"}
+                accessibilityState={{ busy: loading, disabled: loading }}
                 className="flex-1 bg-blue-500 py-3 rounded-xl items-center justify-center shadow-md shadow-blue-500/30"
               >
                 {loading ? (

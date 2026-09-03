@@ -17,6 +17,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { supabase, friendlyAuthError, API_URL } from '@/core/supabase';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
+import { announceForAccessibility } from '@/core/a11y';
 
 const { height } = Dimensions.get('window');
 
@@ -283,7 +284,7 @@ export default function RegisterScreen() {
                   borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
                     style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                     placeholder="Enter your full name"
@@ -293,6 +294,9 @@ export default function RegisterScreen() {
                     editable={!loading}
                     autoCapitalize="words"
                     autoCorrect={false}
+                    accessible={true}
+                    accessibilityLabel="Full Name"
+                    accessibilityHint="Enter your full name"
                   />
                 </View>
               </View>
@@ -307,6 +311,9 @@ export default function RegisterScreen() {
                     <TouchableOpacity
                       onPress={() => setShowEmailField(true)}
                       activeOpacity={0.7}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel="Add optional Email ID"
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -319,7 +326,7 @@ export default function RegisterScreen() {
                         borderColor: accentBorder,
                       }}
                     >
-                      <Feather name="plus" size={11} color={accentColor} />
+                      <Feather name="plus" size={11} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
                       <Text style={{ fontSize: 11, fontWeight: '700', color: accentColor }}>
                         Add Email ID
                       </Text>
@@ -332,7 +339,7 @@ export default function RegisterScreen() {
                   borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
                     style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                     placeholder="Enter your 10-digit mobile number"
@@ -341,6 +348,9 @@ export default function RegisterScreen() {
                     onChangeText={setPhone}
                     editable={!loading}
                     keyboardType="phone-pad"
+                    accessible={true}
+                    accessibilityLabel="Mobile Phone Number"
+                    accessibilityHint="Enter your 10-digit mobile number"
                   />
                 </View>
               </View>
@@ -352,8 +362,14 @@ export default function RegisterScreen() {
                     <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
                       Email <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
                     </Text>
-                    <TouchableOpacity onPress={() => { setShowEmailField(false); setEmail(''); }} style={{ padding: 2 }}>
-                      <Feather name="x" size={15} color="#94a3b8" />
+                    <TouchableOpacity
+                      onPress={() => { setShowEmailField(false); setEmail(''); }}
+                      accessible={true}
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove email input"
+                      style={{ padding: 2 }}
+                    >
+                      <Feather name="x" size={15} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
                     </TouchableOpacity>
                   </View>
                   <View style={{
@@ -362,7 +378,7 @@ export default function RegisterScreen() {
                     borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                     paddingHorizontal: 14,
                   }}>
-                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                     <TextInput
                       style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                       placeholder="Enter your optional email"
@@ -373,6 +389,9 @@ export default function RegisterScreen() {
                       keyboardType="email-address"
                       autoCapitalize="none"
                       autoCorrect={false}
+                      accessible={true}
+                      accessibilityLabel="Optional Email Address"
+                      accessibilityHint="Enter your email address"
                     />
                   </View>
                 </View>
@@ -389,7 +408,7 @@ export default function RegisterScreen() {
                   borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
                     style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
                     placeholder="Create a strong password"
@@ -400,16 +419,30 @@ export default function RegisterScreen() {
                     secureTextEntry={!showPass}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    accessible={true}
+                    accessibilityLabel="Password"
+                    accessibilityHint="Create a password with at least 6 characters"
                   />
-                  <TouchableOpacity onPress={() => setShowPass(!showPass)} style={{ padding: 4 }}>
-                    <Feather name={showPass ? 'eye-off' : 'eye'} size={16} color="#94a3b8" />
+                  <TouchableOpacity
+                    onPress={() => setShowPass(!showPass)}
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={showPass ? "Hide password" : "Show password"}
+                    accessibilityHint="Toggles password visibility"
+                    style={{ padding: 6 }}
+                  >
+                    <Feather name={showPass ? 'eye-off' : 'eye'} size={16} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Password strength */}
               {password.length > 0 && (
-                <View style={{ marginTop: -6 }}>
+                <View
+                  accessible={true}
+                  accessibilityLabel={`Password strength: ${strength > 0 ? strengthLabels[strength - 1] : 'Weak'}`}
+                  style={{ marginTop: -6 }}
+                >
                   <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
                     {[1, 2, 3, 4].map((i) => (
                       <View
@@ -439,10 +472,18 @@ export default function RegisterScreen() {
               gap: 10,
             }}>
               <TouchableOpacity
-                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                onPress={() => {
+                  setAgreedToTerms(!agreedToTerms);
+                  announceForAccessibility(!agreedToTerms ? 'Agreed to Terms and Conditions checked' : 'Terms and Conditions unchecked');
+                }}
+                accessible={true}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreedToTerms }}
+                accessibilityLabel="I agree to Terms & Conditions"
+                accessibilityHint="Toggles agreement to terms and conditions"
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 24,
+                  height: 24,
                   borderRadius: 6,
                   borderWidth: 2,
                   borderColor: agreedToTerms ? accentColor : '#94a3b8',
@@ -451,13 +492,16 @@ export default function RegisterScreen() {
                   justifyContent: 'center',
                 }}
               >
-                {agreedToTerms && <Feather name="check" size={14} color="#ffffff" />}
+                {agreedToTerms && <Feather name="check" size={14} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />}
               </TouchableOpacity>
               
               <Text style={{ flex: 1, fontSize: 13, color: '#475569', lineHeight: 18 }}>
                 I agree to the{' '}
                 <Text
                   onPress={() => setShowTermsModal(true)}
+                  accessible={true}
+                  accessibilityRole="link"
+                  accessibilityLabel={isStudent ? 'Read Student Terms & Conditions' : 'Read Scribe Terms & Conditions'}
                   style={{ color: accentColor, fontWeight: '800', textDecorationLine: 'underline' }}
                 >
                   {isStudent ? 'Student Terms & Conditions' : 'Scribe Terms & Conditions'}
@@ -469,6 +513,10 @@ export default function RegisterScreen() {
             <TouchableOpacity
               onPress={handleRegister}
               disabled={loading}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={loading ? "Creating account, please wait" : (role === 'student' ? 'Create Student Account' : role === 'scribe' ? 'Create Scribe Account' : 'Select Role & Create Account')}
+              accessibilityState={{ busy: loading, disabled: loading }}
               style={{
                 backgroundColor: role === 'scribe' ? '#16a34a' : role === 'student' ? '#2563eb' : '#334155',
                 borderRadius: 18, paddingVertical: 18,
@@ -487,7 +535,7 @@ export default function RegisterScreen() {
                   <Text style={{ color: '#fff', fontSize: 16.5, fontWeight: '800' }}>
                     {role === 'student' ? 'Create Student Account' : role === 'scribe' ? 'Create Scribe Account' : 'Select Role & Create Account'}
                   </Text>
-                  <Feather name="arrow-right" size={18} color="#fff" />
+                  <Feather name="arrow-right" size={18} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </>
               )}
             </TouchableOpacity>
@@ -495,6 +543,9 @@ export default function RegisterScreen() {
             <TouchableOpacity
               onPress={() => router.push(`/auth/login?role=${role}`)}
               disabled={loading}
+              accessible={true}
+              accessibilityRole="link"
+              accessibilityLabel="Already have an account? Sign In"
               style={{ paddingVertical: 14, alignItems: 'center' }}
             >
               <Text style={{ color: '#64748b', fontSize: 14 }}>

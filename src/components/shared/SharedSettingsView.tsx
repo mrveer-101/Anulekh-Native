@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 import { triggerTestNotification } from '@/core/notifications';
+import { announceForAccessibility } from '@/core/a11y';
 
 export default function SharedSettingsView() {
   const { lang, changeLanguage, t } = useLanguage();
@@ -573,15 +574,28 @@ export default function SharedSettingsView() {
 
       {/* App Settings Card (Language Toggle Display) */}
       <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 20 }}>
-        <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}>{t('language_display')}</Text>
+        <Text
+          accessible={true}
+          accessibilityRole="header"
+          style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.5 }}
+        >
+          {t('language_display')}
+        </Text>
         <Text style={{ fontSize: 10, color: '#64748b', marginBottom: 12 }}>{t('select_language_desc')}</Text>
         
         <TouchableOpacity 
-          onPress={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
+          onPress={() => {
+            setIsLangDropdownOpen(!isLangDropdownOpen);
+            announceForAccessibility(!isLangDropdownOpen ? 'Language selection menu opened' : 'Language menu closed');
+          }}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={`App Language: ${lang}`}
+          accessibilityHint="Double tap to open language selection menu"
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10 }}
         >
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>{lang}</Text>
-          <Feather name={isLangDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
+          <Feather name={isLangDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
         </TouchableOpacity>
 
         {isLangDropdownOpen && (
@@ -592,14 +606,18 @@ export default function SharedSettingsView() {
                 onPress={async () => {
                   await changeLanguage(l);
                   setIsLangDropdownOpen(false);
+                  announceForAccessibility(`Language changed to ${l}`);
                 }}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={`${l} language`}
                 style={{ paddingVertical: 12, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#f8fafc', backgroundColor: lang === l ? 'rgba(37,99,235,0.06)' : '#ffffff' }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: lang === l ? '#2563eb' : '#334155' }}>
                     {l}
                   </Text>
-                  {lang === l && <Feather name="check" size={14} color="#2563eb" />}
+                  {lang === l && <Feather name="check" size={14} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />}
                 </View>
               </TouchableOpacity>
             ))}
@@ -612,8 +630,14 @@ export default function SharedSettingsView() {
       <View style={{ backgroundColor: '#f8fafc', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, marginBottom: 20 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Feather name="bell" size={14} color="#2563eb" style={{ marginRight: 6 }} />
-            <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>System Notifications & Alerts</Text>
+            <Feather name="bell" size={14} color="#2563eb" style={{ marginRight: 6 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+            <Text
+              accessible={true}
+              accessibilityRole="header"
+              style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}
+            >
+              System Notifications & Alerts
+            </Text>
           </View>
           <View style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}>
             <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563eb' }}>DEMO</Text>
@@ -629,6 +653,10 @@ export default function SharedSettingsView() {
           <TouchableOpacity
             onPress={() => handleSendTestNotification('match')}
             disabled={notifTriggering}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Test Scribe Matched Alert"
+            accessibilityHint="Sends a test notification simulating scribe match confirmation"
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -648,20 +676,24 @@ export default function SharedSettingsView() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                <Feather name="check-circle" size={16} color="#2563eb" />
+                <Feather name="check-circle" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0f172a' }}>Test Scribe Matched Alert</Text>
                 <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates instant match confirmation alert</Text>
               </View>
             </View>
-            <Feather name="send" size={14} color="#2563eb" />
+            <Feather name="send" size={14} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
           </TouchableOpacity>
 
           {/* Test Emergency SOS Broadcast Alert */}
           <TouchableOpacity
             onPress={() => handleSendTestNotification('sos')}
             disabled={notifTriggering}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Test Emergency SOS Alert"
+            accessibilityHint="Sends high-priority emergency SOS broadcast alert"
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -681,20 +713,24 @@ export default function SharedSettingsView() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(220,38,38,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                <Feather name="alert-triangle" size={16} color="#dc2626" />
+                <Feather name="alert-triangle" size={16} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#dc2626' }}>Test Emergency SOS Alert</Text>
                 <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates high-priority SOS emergency dispatch</Text>
               </View>
             </View>
-            <Feather name="zap" size={14} color="#dc2626" />
+            <Feather name="zap" size={14} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
           </TouchableOpacity>
 
           {/* Test 24h Exam Reminder */}
           <TouchableOpacity
             onPress={() => handleSendTestNotification('reminder')}
             disabled={notifTriggering}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Test Exam Reminder"
+            accessibilityHint="Sends scheduled exam day reminder"
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -714,19 +750,23 @@ export default function SharedSettingsView() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
               <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(234,88,12,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
-                <Feather name="clock" size={16} color="#ea580c" />
+                <Feather name="clock" size={16} color="#ea580c" importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0f172a' }}>Test Exam Reminder</Text>
                 <Text style={{ fontSize: 10, color: '#64748b' }}>Simulates scheduled exam day reminder</Text>
               </View>
             </View>
-            <Feather name="bell" size={14} color="#ea580c" />
+            <Feather name="bell" size={14} color="#ea580c" importantForAccessibility="no" accessibilityElementsHidden={true} />
           </TouchableOpacity>
         </View>
 
         {notifStatusText && (
-          <View style={{ marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}>
+          <View
+            accessible={true}
+            accessibilityRole="alert"
+            style={{ marginTop: 12, padding: 10, borderRadius: 10, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0' }}
+          >
             <Text style={{ fontSize: 11, color: '#334155', fontWeight: '600' }}>{notifStatusText}</Text>
           </View>
         )}
@@ -736,6 +776,10 @@ export default function SharedSettingsView() {
       <TouchableOpacity
         onPress={handleSaveSettings}
         disabled={updating}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={updating ? "Saving settings, please wait" : "Save Settings"}
+        accessibilityState={{ busy: updating, disabled: updating }}
         style={{ backgroundColor: '#2563eb', paddingVertical: 14, borderRadius: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 4, marginBottom: 12 }}
       >
         {updating ? (
@@ -748,6 +792,9 @@ export default function SharedSettingsView() {
       {/* Secondary Action Button (Log Out) */}
       <TouchableOpacity
         onPress={handleSignOut}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Sign Out of Anulekh account"
         style={{ 
           width: '100%', 
           backgroundColor: '#dc2626', 
@@ -765,7 +812,7 @@ export default function SharedSettingsView() {
         }}
         activeOpacity={0.85}
       >
-        <Feather name="log-out" size={16} color="#ffffff" style={{ marginRight: 8 }} />
+        <Feather name="log-out" size={16} color="#ffffff" style={{ marginRight: 8 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
         <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('sign_out')}</Text>
       </TouchableOpacity>
 
