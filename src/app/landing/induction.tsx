@@ -166,7 +166,14 @@ export default function OnboardingCarousel() {
         Contains back button/language switcher, step dots, and skip button.
       */}
       <View 
-        className="px-6 py-4 flex-row items-center justify-between"
+        style={{
+          paddingTop: Platform.OS === 'android' ? 20 : 8,
+          paddingHorizontal: 24,
+          paddingBottom: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
         accessible={true}
         accessibilityLabel={`Onboarding Progress: Step ${currentStep + 1} of ${totalSteps}`}
       >
@@ -178,37 +185,68 @@ export default function OnboardingCarousel() {
         {currentStep === 0 ? (
           <TouchableOpacity
             onPress={() => setShowLanguageModal(true)}
-            className="flex-row items-center py-2 px-3 bg-white border border-slate-100 rounded-lg shadow shadow-slate-200/80"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 6,
+              elevation: 2,
+            }}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`Select Language. Current: ${appLanguage}. Button`}
             accessibilityHint="Opens language selection sheet"
           >
-            <Text className="text-blue-500 font-bold text-xs">
+            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>
               🌐 {appLanguage === 'Hindi' ? 'हिन्दी' : appLanguage === 'Gujarati' ? 'ગુજરાતી' : 'EN'}
             </Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
             onPress={handleBack} 
-            className="py-2 px-3 bg-white border border-slate-100 rounded-lg flex-row items-center shadow shadow-slate-200/80"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 6,
+              elevation: 2,
+            }}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`${t.back}, button`}
             accessibilityHint="Goes back to the previous onboarding slide"
           >
-            <Text className="text-blue-500 font-bold text-xs">{t.back}</Text>
+            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>{t.back}</Text>
           </TouchableOpacity>
         )}
 
         {/* Progress indicators (Dots / Pills) */}
-        <View className="flex-row space-x-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {Array.from({ length: totalSteps }).map((_, index) => (
             <View 
               key={index}
-              className={`h-2 rounded-full transition-all duration-300 ${
-                index === currentStep ? 'w-8 bg-blue-500' : 'w-2 bg-slate-200'
-              }`}
+              style={{
+                height: 8,
+                borderRadius: 4,
+                width: index === currentStep ? 32 : 8,
+                backgroundColor: index === currentStep ? '#2563eb' : '#cbd5e1',
+              }}
             />
           ))}
         </View>
@@ -221,16 +259,30 @@ export default function OnboardingCarousel() {
         {currentStep < totalSteps - 1 ? (
           <TouchableOpacity 
             onPress={() => setCurrentStep(totalSteps - 1)}
-            className="py-2 px-3 bg-white border border-slate-100 rounded-lg shadow shadow-slate-200/80"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 8,
+              paddingHorizontal: 14,
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5,
+              borderColor: '#e2e8f0',
+              borderRadius: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.06,
+              shadowRadius: 6,
+              elevation: 2,
+            }}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`${t.skip}, button`}
             accessibilityHint="Skips straight to selecting student or volunteer role"
           >
-            <Text className="text-blue-500 font-bold text-xs">{t.skip}</Text>
+            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>{t.skip}</Text>
           </TouchableOpacity>
         ) : (
-          <View className="w-14" />
+          <View style={{ width: 64 }} />
         )}
       </View>
 
@@ -246,28 +298,28 @@ export default function OnboardingCarousel() {
         {/* SLIDE 1: Primary Branding Introduction */}
         {currentStep === 0 && (
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderWidth: 1.5, borderColor: '#cbd5e1',
+            backgroundColor: '#ffffff',
+            borderWidth: 1.5, borderColor: '#e2e8f0',
             borderRadius: 28, padding: 32, alignItems: 'center',
             shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 },
             shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* White rounded corner square container for the logo */}
+            {/* Clean rounded container for the logo */}
             <View style={{
-              width: 120,
-              height: 120,
+              width: 110,
+              height: 110,
               backgroundColor: '#ffffff',
               borderWidth: 1.5,
               borderColor: '#e2e8f0',
-              borderRadius: 26,
+              borderRadius: 24,
               alignItems: 'center',
               justifyContent: 'center',
               marginBottom: 24,
               shadowColor: '#2563eb',
               shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.16,
+              shadowOpacity: 0.12,
               shadowRadius: 16,
               elevation: 4,
               padding: 6,
@@ -303,11 +355,11 @@ export default function OnboardingCarousel() {
         {/* SLIDE 2: Student Flow explanation */}
         {currentStep === 1 && (
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
+            backgroundColor: '#ffffff',
+            borderWidth: 1.5, borderColor: '#e2e8f0',
             borderRadius: 28, padding: 32, alignItems: 'center',
             shadowColor: '#2563eb', shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.12, shadowRadius: 24, elevation: 5,
+            shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
@@ -345,11 +397,11 @@ export default function OnboardingCarousel() {
         {/* SLIDE 3: Scribe Flow explanation */}
         {currentStep === 2 && (
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.18)',
+            backgroundColor: '#ffffff',
+            borderWidth: 1.5, borderColor: '#e2e8f0',
             borderRadius: 28, padding: 32, alignItems: 'center',
             shadowColor: '#10b981', shadowOffset: { width: 0, height: 12 },
-            shadowOpacity: 0.12, shadowRadius: 24, elevation: 5,
+            shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
@@ -387,8 +439,8 @@ export default function OnboardingCarousel() {
         {/* SLIDE 4: Call-To-Action & Role Selection Gate */}
         {currentStep === 3 && (
           <View style={{
-            backgroundColor: 'rgba(255,255,255,0.85)',
-            borderWidth: 1.5, borderColor: '#cbd5e1',
+            backgroundColor: '#ffffff',
+            borderWidth: 1.5, borderColor: '#e2e8f0',
             borderRadius: 28, padding: 32, alignItems: 'center',
             shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 },
             shadowOpacity: 0.08, shadowRadius: 24, elevation: 5,
@@ -475,21 +527,33 @@ export default function OnboardingCarousel() {
       </ScrollView>
 
       {/* 
-        BOTTOM NAVIGATION BAR
+        BOTTOM NAVIGATION BAR (Floating Pill Button)
         Rendered only when onboarding slides are in progress.
       */}
       {currentStep < totalSteps - 1 && (
-        <View className="px-6 py-6 border-t border-slate-100 bg-white">
+        <View style={{ paddingHorizontal: 24, paddingBottom: Platform.OS === 'android' ? 24 : 16, paddingTop: 8 }}>
           <TouchableOpacity 
             onPress={handleNext}
-            className="w-full bg-blue-500 active:bg-blue-600 py-4 px-6 rounded-xl items-center justify-center shadow-lg shadow-blue-500/25"
+            style={{
+              width: '100%',
+              backgroundColor: '#2563eb',
+              paddingVertical: 16,
+              borderRadius: 18,
+              alignItems: 'center',
+              justifyContent: 'center',
+              shadowColor: '#2563eb',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.3,
+              shadowRadius: 16,
+              elevation: 6,
+            }}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`${t.next}, button`}
             accessibilityHint="Goes to the next onboarding screen"
             activeOpacity={0.85}
           >
-            <Text className="text-white text-lg font-bold">{t.next}</Text>
+            <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '800' }}>{t.next}</Text>
           </TouchableOpacity>
         </View>
       )}

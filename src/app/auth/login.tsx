@@ -220,7 +220,7 @@ export default function LoginScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 36 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 72 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -230,8 +230,8 @@ export default function LoginScreen() {
                 onPress={() => router.replace('/landing')}
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1.5, borderColor: '#e2e8f0',
                   borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
                   alignSelf: 'flex-start',
                   shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
@@ -266,10 +266,10 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
-            {/* Unified Portal Status Pill (Auto-Detects Account Type) */}
+            {/* Auto-detected role banner */}
             <View style={{
-              backgroundColor: 'rgba(255,255,255,0.85)',
-              borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.18)',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5, borderColor: '#e2e8f0',
               borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16,
               flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
               marginBottom: 24,
@@ -300,15 +300,15 @@ export default function LoginScreen() {
                 </View>
               </View>
 
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>
+              <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>
                 Auto-Detected
               </Text>
             </View>
 
-            {/* Form — glass card */}
+            {/* Form — crisp card */}
             <View style={{
-              backgroundColor: 'rgba(255,255,255,0.75)',
-              borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5, borderColor: '#e2e8f0',
               borderRadius: 24, padding: 20, gap: 18,
               shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
               shadowOpacity: 0.07, shadowRadius: 20, elevation: 4,
@@ -321,8 +321,8 @@ export default function LoginScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  backgroundColor: '#f8fafc', borderWidth: 1.5,
+                  borderColor: '#e2e8f0', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
                   <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -350,8 +350,8 @@ export default function LoginScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  backgroundColor: '#f8fafc', borderWidth: 1.5,
+                  borderColor: '#e2e8f0', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
                   <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -469,20 +469,19 @@ export default function LoginScreen() {
                   setGoogleModalVisible(true);
                 }}
                 disabled={loading}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with Google"
                 style={{
                   width: 58, height: 58,
-                  backgroundColor: 'rgba(255,255,255,0.85)',
-                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1.5, borderColor: '#e2e8f0',
                   borderRadius: 18, alignItems: 'center', justifyContent: 'center',
                   shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
                 }}
               >
-                <Image 
-                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/120px-Google_%22G%22_logo.svg.png' }} 
-                  style={{ width: 24, height: 24 }}
-                  resizeMode="contain"
-                />
+                <FontAwesome5 name="google" size={24} color="#EA4335" />
               </TouchableOpacity>
 
               {/* Apple (Placeholder) */}
@@ -495,20 +494,19 @@ export default function LoginScreen() {
                   }
                 }}
                 activeOpacity={0.7}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in with Apple"
                 style={{
                   width: 58, height: 58,
-                  backgroundColor: 'rgba(255,255,255,0.85)',
-                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1.5, borderColor: '#e2e8f0',
                   borderRadius: 18, alignItems: 'center', justifyContent: 'center',
                   shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
                 }}
               >
-                <Image 
-                  source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Apple_logo_black.svg/120px-Apple_logo_black.svg.png' }} 
-                  style={{ width: 22, height: 22, opacity: 0.7 }}
-                  resizeMode="contain"
-                />
+                <Ionicons name="logo-apple" size={26} color="#000000" />
               </TouchableOpacity>
             </View>
           </ScrollView>

@@ -1,8 +1,33 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
-import { useColorScheme, Alert, Platform, View, Text, ScrollView, LogBox } from 'react-native';
+import { useColorScheme, Alert, Platform, View, Text, TextInput, ScrollView, LogBox } from 'react-native';
+import {
+  useFonts,
+  Roboto_300Light,
+  Roboto_400Regular,
+  Roboto_500Medium,
+  Roboto_700Bold,
+  Roboto_900Black,
+} from '@expo-google-fonts/roboto';
 
 LogBox.ignoreAllLogs(true);
+
+// Set global fixed Roboto typography across Android & iOS
+if ((Text as any).defaultProps == null) {
+  (Text as any).defaultProps = {};
+}
+const defaultTextStyle = (Text as any).defaultProps.style;
+(Text as any).defaultProps.style = defaultTextStyle
+  ? [defaultTextStyle, { fontFamily: 'Roboto' }]
+  : { fontFamily: 'Roboto' };
+
+if ((TextInput as any).defaultProps == null) {
+  (TextInput as any).defaultProps = {};
+}
+const defaultInputStyle = (TextInput as any).defaultProps.style;
+(TextInput as any).defaultProps.style = defaultInputStyle
+  ? [defaultInputStyle, { fontFamily: 'Roboto' }]
+  : { fontFamily: 'Roboto' };
 
 import '@/global.css';
 import { AnimatedSplashOverlay } from '@/components/ui/animated-icon';
@@ -136,6 +161,19 @@ import { useEffect } from 'react';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+
+  const [fontsLoaded] = useFonts({
+    Roboto_300Light,
+    Roboto_400Regular,
+    Roboto_500Medium,
+    Roboto_700Bold,
+    Roboto_900Black,
+    Roboto: Roboto_400Regular,
+    'Roboto-Regular': Roboto_400Regular,
+    'Roboto-Medium': Roboto_500Medium,
+    'Roboto-Bold': Roboto_700Bold,
+    'Roboto-Black': Roboto_900Black,
+  });
 
   useEffect(() => {
     initializeNotificationChannels().catch(console.warn);

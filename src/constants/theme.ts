@@ -28,25 +28,22 @@ export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
+    /** iOS Roboto / system design */
+    sans: 'Roboto',
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
+    rounded: 'Roboto',
     mono: 'ui-monospace',
   },
   default: {
-    sans: 'normal',
+    sans: 'Roboto',
     serif: 'serif',
-    rounded: 'normal',
+    rounded: 'Roboto',
     mono: 'monospace',
   },
   web: {
-    sans: 'var(--font-display)',
+    sans: "'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
     serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
+    rounded: "'Roboto', sans-serif",
     mono: 'var(--font-mono)',
   },
 });

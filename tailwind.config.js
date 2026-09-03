@@ -9,6 +9,10 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Roboto', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        roboto: ['Roboto', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
       colors: {
         // ── Primary Blue ──────────────────────────────────
         brand: {

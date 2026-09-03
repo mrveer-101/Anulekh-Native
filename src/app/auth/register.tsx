@@ -162,7 +162,7 @@ export default function RegisterScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40 }}
+            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 80 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -172,8 +172,8 @@ export default function RegisterScreen() {
                 onPress={() => router.replace('/landing')}
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: 'rgba(255,255,255,0.8)',
-                  borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)',
+                  backgroundColor: '#ffffff',
+                  borderWidth: 1.5, borderColor: '#e2e8f0',
                   borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
                   alignSelf: 'flex-start',
                   shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
@@ -266,8 +266,8 @@ export default function RegisterScreen() {
 
             {/* Form card */}
             <View style={{
-              backgroundColor: 'rgba(255,255,255,0.75)',
-              borderWidth: 1, borderColor: 'rgba(0,0,0,0.07)',
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5, borderColor: '#e2e8f0',
               borderRadius: 24, padding: 20, gap: 18,
               shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
               shadowOpacity: 0.07, shadowRadius: 20, elevation: 4,
@@ -280,8 +280,8 @@ export default function RegisterScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  backgroundColor: '#f8fafc', borderWidth: 1.5,
+                  borderColor: '#e2e8f0', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
                   <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -335,8 +335,8 @@ export default function RegisterScreen() {
                 </View>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  backgroundColor: '#f8fafc', borderWidth: 1.5,
+                  borderColor: '#e2e8f0', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
                   <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -374,8 +374,8 @@ export default function RegisterScreen() {
                   </View>
                   <View style={{
                     flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                    backgroundColor: '#f8fafc', borderWidth: 1.5,
+                    borderColor: '#e2e8f0', borderRadius: 14,
                     paddingHorizontal: 14,
                   }}>
                     <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -404,8 +404,8 @@ export default function RegisterScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
+                  backgroundColor: '#f8fafc', borderWidth: 1.5,
+                  borderColor: '#e2e8f0', borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
                   <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
