@@ -15,7 +15,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://anulekh-axum.onrender.com"
+        "EXPO_PUBLIC_API_URL": "https://anulekh-axum.onrender.com",
+        "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx4096m -XX:MaxMetaspaceSize=1024m\" -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true"
       }
     },
     "production": {
