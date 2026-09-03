@@ -166,22 +166,44 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Back */}
-            <View style={{ paddingTop: 16, paddingBottom: 4 }}>
+            {/* Back & Top Action Row */}
+            <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <TouchableOpacity
                 onPress={() => router.replace('/landing')}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
                   backgroundColor: '#ffffff',
                   borderWidth: 1.5, borderColor: '#e2e8f0',
                   borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
-                  alignSelf: 'flex-start',
                   shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
                 }}
               >
                 <Feather name="arrow-left" size={14} color="#64748b" />
                 <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '600' }}>Back</Text>
+              </TouchableOpacity>
+
+              {/* Top Sign In Tag Button */}
+              <TouchableOpacity
+                onPress={() => router.push(`/auth/login?role=${role}`)}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in to your account"
+                accessibilityHint="Navigates to the sign in login page"
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 6,
+                  backgroundColor: '#2563eb',
+                  borderWidth: 1.5, borderColor: '#1d4ed8',
+                  borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
+                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '800' }}>Sign In</Text>
+                <Feather name="log-in" size={13} color="#ffffff" />
               </TouchableOpacity>
             </View>
 
