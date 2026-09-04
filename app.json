@@ -90,15 +90,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "3b8104b4-54b8-4023-8684-a2dab267f651"
+        "projectId": "d9f3efd7-1ab3-4b4d-b3b3-cafdac5dfbe6"
       }
     },
-    "owner": "celestials-team",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/3b8104b4-54b8-4023-8684-a2dab267f651"
-    }
+    "owner": "orion-celestial"
   }
 }
