@@ -236,24 +236,26 @@ export default function StudentDashboard() {
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               activeOpacity={0.75}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`Notifications, ${unreadNotifs} unread`}
               style={{
                 width: 44, height: 44, borderRadius: 15,
-                backgroundColor: activeTab === 'notifications' ? ACCENT_BG : '#f1f5f9',
-                borderWidth: 1.5, borderColor: activeTab === 'notifications' ? ACCENT_BD : '#cbd5e1',
+                backgroundColor: '#2563eb',
+                borderWidth: 1.5, borderColor: '#1d4ed8',
                 alignItems: 'center', justifyContent: 'center',
+                shadowColor: '#2563eb', shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
               }}
             >
-              <Image 
-                source={{ uri: activeTab === 'notifications' 
-                  ? 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMyNTYzZWIiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA4YTYgNiAwIDAgMSAxMiAwYzAgNyAzIDkgMyA5SDNzMy0yIDMtOSIvPjxwYXRoIGQ9Ik0xMC4zIDIxYTEuOTQgMS45NCAwIDAgMCAzLjQgMCIvPjwvc3ZnPg=='
-                  : 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM0NzU1NjkiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNiA4YTYgNiAwIDAgMSAxMiAwYzAgNyAzIDkgMyA5SDNzMy0yIDMtOSIvPjxwYXRoIGQ9Ik0xMC4zIDIxYTEuOTQgMS45NCAwIDAgMCAzLjQgMCIvPjwvc3ZnPg=='
-                }} 
-                style={{ width: 20, height: 20 }}
-                resizeMode="contain"
+              <Ionicons 
+                name={activeTab === 'notifications' ? "notifications" : "notifications-outline"} 
+                size={20} 
+                color="#ffffff" 
               />
               {unreadNotifs > 0 && (
                 <View style={{
-                  position: 'absolute', top: 6, right: 6,
+                  position: 'absolute', top: 5, right: 5,
                   width: 9, height: 9, borderRadius: 4.5,
                   backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: '#ffffff',
                 }} />

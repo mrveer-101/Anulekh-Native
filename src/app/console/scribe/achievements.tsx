@@ -44,13 +44,15 @@ export default function ScribeAchievementsPage() {
   };
 
   const badgesList = [
-    { key: 'bronze', title: 'Bronze Volunteer', desc: 'Completed 5 successful scribing assignments', icon: 'award', color: '#cd7f32', current: Math.min(completedExamsCount, 5), max: 5, unlocked: true },
+    { key: 'bronze', title: 'Bronze Volunteer', desc: 'Completed 5 successful scribing assignments', icon: 'award', color: '#cd7f32', current: Math.min(completedExamsCount, 5), max: 5, unlocked: completedExamsCount >= 5 },
     { key: 'silver', title: 'Silver Volunteer', desc: 'Completed 15 successful scribing assignments', icon: 'shield-checkmark', color: '#94a3b8', current: Math.min(completedExamsCount, 15), max: 15, unlocked: completedExamsCount >= 15 },
     { key: 'gold', title: 'Gold Elite Scribe', desc: 'Completed 30+ successful scribing assignments', icon: 'star', color: '#eab308', current: Math.min(completedExamsCount, 30), max: 30, unlocked: completedExamsCount >= 30 },
-    { key: 'emergency', title: 'Emergency Hero', desc: 'Responded to 3+ Urgent SOS Emergency dispatches', icon: 'flash', color: '#ef4444', current: 1, max: 3, unlocked: true },
-    { key: 'asg_ally', title: 'Assignment Ally', desc: 'Completed 1+ Academic Assignment assistance request', icon: 'document-text', color: '#6366f1', current: 1, max: 1, unlocked: true },
-    { key: 'asg_master', title: 'Submission Hero', desc: 'Completed 5+ Homework & Assignment assistances', icon: 'checkmark-done-circle', color: '#10b981', current: 1, max: 5, unlocked: true },
+    { key: 'emergency', title: 'Emergency Hero', desc: 'Responded to 3+ Urgent SOS Emergency dispatches', icon: 'flash', color: '#ef4444', current: 0, max: 3, unlocked: false },
+    { key: 'asg_ally', title: 'Assignment Ally', desc: 'Completed 1+ Academic Assignment assistance request', icon: 'document-text', color: '#6366f1', current: 0, max: 1, unlocked: false },
+    { key: 'asg_master', title: 'Submission Hero', desc: 'Completed 5+ Homework & Assignment assistances', icon: 'checkmark-done-circle', color: '#10b981', current: 0, max: 5, unlocked: false },
   ];
+
+  const earnedBadgesCount = badgesList.filter(b => b.unlocked).length;
 
   if (loading) {
     return (
@@ -93,11 +95,11 @@ export default function ScribeAchievementsPage() {
 
           <View style={{ flexDirection: 'row', gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
             <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#d97706' }}>4 / 6</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#d97706' }}>{earnedBadgesCount} / {badgesList.length}</Text>
               <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b', marginTop: 2 }}>Badges Earned</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#2563eb' }}>{completedExamsCount > 0 ? completedExamsCount : 1}</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#2563eb' }}>{completedExamsCount}</Text>
               <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b', marginTop: 2 }}>PDF Certificates</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>

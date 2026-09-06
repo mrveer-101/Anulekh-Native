@@ -346,28 +346,10 @@ export default function CompleteProfileForm() {
           <Text className="text-xl font-black text-slate-800">Verify Scribe Profile</Text>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#16a34a' }}>
             Step {currentStep} of 3
           </Text>
-          <TouchableOpacity
-            onPress={async () => {
-              await supabase.auth.signOut();
-              router.replace('/landing' as any);
-            }}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Log out of account"
-            accessibilityHint="Exits the verification form and logs out"
-            style={{
-              flexDirection: 'row', alignItems: 'center', gap: 4,
-              backgroundColor: '#fee2e2', paddingVertical: 5, paddingHorizontal: 10,
-              borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5'
-            }}
-          >
-            <Feather name="log-out" size={12} color="#dc2626" />
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Log Out</Text>
-          </TouchableOpacity>
         </View>
       </View>
 

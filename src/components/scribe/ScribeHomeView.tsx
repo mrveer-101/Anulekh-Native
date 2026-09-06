@@ -1243,7 +1243,7 @@ export default function ScribeHomeView() {
             onPress={() => router.push('/console/scribe/achievements' as any)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>View All 📜</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>View All</Text>
           </TouchableOpacity>
         </View>
 
@@ -1260,7 +1260,9 @@ export default function ScribeHomeView() {
                 <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>BADGES</Text>
               </View>
             </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>4 Badges</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>
+              {(completedExamsCount >= 5 ? 1 : 0) + (completedExamsCount >= 15 ? 1 : 0) + (completedExamsCount >= 30 ? 1 : 0)} Badges
+            </Text>
           </TouchableOpacity>
 
           {/* Card 2: Verified Certificates */}
@@ -1276,7 +1278,7 @@ export default function ScribeHomeView() {
               </View>
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>
-              {completedExamsCount > 0 ? completedExamsCount : 1} Certify
+              {completedExamsCount} Certify
             </Text>
           </TouchableOpacity>
         </View>
@@ -1648,12 +1650,12 @@ export default function ScribeHomeView() {
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                   {[
-                    { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: true, desc: '5 Scribe Jobs Completed' },
-                    { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Scribe Jobs Required' },
-                    { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: false, desc: '30 Scribe Jobs Required' },
-                    { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: true, desc: '3 SOS Emergency Dispatches' },
-                    { title: 'Assignment Ally', icon: 'document-text', color: '#6366f1', unlocked: true, desc: '1 Assignment Completed' },
-                    { title: 'Submission Hero', icon: 'checkmark-done-circle', color: '#10b981', unlocked: true, desc: '5 Assignments Completed' },
+                    { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: completedExamsCount >= 5, desc: '5 Scribe Jobs Required' },
+                    { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: completedExamsCount >= 15, desc: '15 Scribe Jobs Required' },
+                    { title: 'Gold Scribe', icon: 'star', color: '#eab308', unlocked: completedExamsCount >= 30, desc: '30 Scribe Jobs Required' },
+                    { title: 'Emergency Hero', icon: 'flash', color: '#ef4444', unlocked: false, desc: '3 SOS Emergency Dispatches' },
+                    { title: 'Assignment Ally', icon: 'document-text', color: '#6366f1', unlocked: false, desc: '1 Assignment Completed' },
+                    { title: 'Submission Hero', icon: 'checkmark-done-circle', color: '#10b981', unlocked: false, desc: '5 Assignments Completed' },
                   ].map((b, idx) => (
                     <View key={idx} style={{
                       width: '48%',

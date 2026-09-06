@@ -126,7 +126,7 @@ export default function LandingPC() {
                 paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
                 alignSelf: 'flex-start', marginBottom: 20,
               }}>
-                <Feather name="sparkles" size={14} color="#2563eb" />
+                <Feather name={"sparkles" as any} size={14} color="#2563eb" />
                 <Text style={{ fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
                   India's Dedicated Digital Scribe Platform
                 </Text>
@@ -252,7 +252,7 @@ export default function LandingPC() {
                       <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }}>Rahul Sharma (Scribe)</Text>
                       <Text style={{ fontSize: 12, color: '#64748b' }}>B.Tech Senior • English & Hindi</Text>
                     </View>
-                    <Feather name="shield-check" size={20} color="#16a34a" />
+                    <Feather name={"shield-check" as any} size={20} color="#16a34a" />
                   </View>
 
                   <View style={{

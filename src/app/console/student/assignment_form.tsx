@@ -362,18 +362,18 @@ export default function AssignmentRequestForm() {
               ))}
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-                <TouchableOpacity onPress={handlePickDocument} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
+                <TouchableOpacity onPress={pickDocument} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
                   <Feather name="paperclip" size={16} color="#2563eb" />
                   <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>Add PDF / Doc</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handlePickImage} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
+                <TouchableOpacity onPress={pickImage} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
                   <Feather name="image" size={16} color="#2563eb" />
                   <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>Add Photo</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            <TouchableOpacity onPress={handleSubmit} disabled={loading} style={[s.saveBtn, { cursor: 'pointer' as any }]}>
+            <TouchableOpacity onPress={handleSave} disabled={loading} style={[s.saveBtn, { cursor: 'pointer' as any }]}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEditing ? 'Update Assignment' : 'Submit Assignment Request'}</Text>}
             </TouchableOpacity>
           </View>

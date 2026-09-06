@@ -485,9 +485,9 @@ export default function ConsoleStudentPC({
                 <>
                   {activeTab === 'home' && <StudentHomePCView userProfile={userProfile} requests={requests} onRefresh={onRefresh} />}
                   {activeTab === 'requests' && <StudentRequestsPCView requests={requests} onRefresh={onRefresh} />}
-                  {activeTab === 'plan' && <StudentPlanView userProfile={userProfile} requests={requests} />}
+                  {activeTab === 'plan' && <StudentPlanView />}
                   {activeTab === 'profile' && <StudentProfilePCView userProfile={userProfile} onRefresh={onRefresh} />}
-                  {activeTab === 'settings' && <SharedSettingsView userProfile={userProfile} />}
+                  {activeTab === 'settings' && <SharedSettingsView />}
                   {activeTab === 'notifications' && <SharedNotificationsPCView userRole="student" />}
                 </>
               )}

@@ -9,7 +9,7 @@ try {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
-    }),
+    } as any),
   });
 } catch (e) {
   console.warn('Could not set notification handler:', e);

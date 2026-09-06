@@ -460,30 +460,12 @@ export default function ConsoleScribePC({
               )}
 
               {/* Tab View Content */}
-              {activeTab === 'home' && (
-                <ScribeHomeView
-                  userProfile={userProfile}
-                  availableRequests={availableRequests}
-                  myAssignedRequests={myAssignedRequests}
-                  onAcceptRequest={onAcceptRequest}
-                  onRefresh={onRefresh}
-                />
-              )}
-              {activeTab === 'explore' && (
-                <ScribeExploreView
-                  availableRequests={availableRequests}
-                  onAcceptRequest={onAcceptRequest}
-                />
-              )}
-              {activeTab === 'commitments' && (
-                <ScribeCommitmentsView
-                  myAssignedRequests={myAssignedRequests}
-                  onRefresh={onRefresh}
-                />
-              )}
-              {activeTab === 'plan' && <ScribePlanView userProfile={userProfile} myAssignedRequests={myAssignedRequests} />}
-              {activeTab === 'profile' && <ScribeProfileView userProfile={userProfile} onRefresh={onRefresh} />}
-              {activeTab === 'settings' && <SharedSettingsView userProfile={userProfile} />}
+              {activeTab === 'home' && <ScribeHomeView />}
+              {activeTab === 'explore' && <ScribeExploreView />}
+              {activeTab === 'commitments' && <ScribeCommitmentsView />}
+              {activeTab === 'plan' && <ScribePlanView />}
+              {activeTab === 'profile' && <ScribeProfileView />}
+              {activeTab === 'settings' && <SharedSettingsView />}
               {activeTab === 'notifications' && <SharedNotificationsPCView userRole="scribe" />}
 
             </View>
