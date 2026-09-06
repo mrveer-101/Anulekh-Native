@@ -201,12 +201,23 @@ export default function LoginScreen() {
       if (error) throw error;
       if (data.user) {
         let userRole = (data.user as any).role;
-        if (!userRole) {
-          const { data: profileData } = await supabase
-            .from('profiles').select('role').eq('id', data.user.id).single();
-          userRole = profileData?.role;
+        let verificationStatus = (data.user as any).verification_status;
+
+        const { data: profileData } = await supabase
+          .from('profiles').select('role, verification_status').eq('id', data.user.id).single();
+        if (profileData) {
+          userRole = profileData.role || userRole;
+          verificationStatus = profileData.verification_status || verificationStatus;
         }
-        router.replace(userRole === 'scribe' ? '/console/scribe' : '/console/student');
+
+        const isScribe = userRole === 'scribe';
+        const isApproved = verificationStatus === 'approved';
+
+        if (!isApproved) {
+          router.replace(isScribe ? '/console/scribe/complete_profile' as any : '/console/student/complete_profile' as any);
+        } else {
+          router.replace(isScribe ? '/console/scribe' : '/console/student');
+        }
       }
     } catch (err: any) {
       setErrorMessage(friendlyAuthError(err, 'Invalid credentials. Please try again.'));

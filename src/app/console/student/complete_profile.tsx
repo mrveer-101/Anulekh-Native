@@ -126,23 +126,43 @@ export default function StudentCompleteProfileForm() {
       {/* Header */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center justify-between shadow-sm">
         <View className="flex-row items-center">
-          <TouchableOpacity 
-            onPress={() => {
-              if (currentStep > 1) {
-                setCurrentStep(currentStep - 1);
-              } else {
-                router.replace('/console/student' as any);
-              }
-            }} 
-            className="mr-4 p-2 -ml-2 rounded-lg active:bg-slate-50"
-          >
-            <Feather name="arrow-left" size={24} color="#334155" />
-          </TouchableOpacity>
+          {currentStep > 1 && (
+            <TouchableOpacity 
+              onPress={() => setCurrentStep(currentStep - 1)} 
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Step 1"
+              className="mr-3 p-1.5 -ml-1 rounded-lg active:bg-slate-50"
+            >
+              <Feather name="arrow-left" size={22} color="#334155" />
+            </TouchableOpacity>
+          )}
           <Text className="text-xl font-black text-slate-800">Verification Form</Text>
         </View>
-        <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>
-          Step {currentStep} of 2
-        </Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>
+            Step {currentStep} of 2
+          </Text>
+          <TouchableOpacity
+            onPress={async () => {
+              await supabase.auth.signOut();
+              router.replace('/landing' as any);
+            }}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Log out of account"
+            accessibilityHint="Exits the verification form and logs out"
+            style={{
+              flexDirection: 'row', alignItems: 'center', gap: 4,
+              backgroundColor: '#fee2e2', paddingVertical: 5, paddingHorizontal: 10,
+              borderRadius: 8, borderWidth: 1, borderColor: '#fca5a5'
+            }}
+          >
+            <Feather name="log-out" size={12} color="#dc2626" />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Log Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>

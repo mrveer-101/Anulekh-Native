@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
@@ -117,6 +117,11 @@ export default function ScribeHomeView() {
         .select('*')
         .eq('id', session.user.id)
         .single();
+
+      if (profileData && profileData.verification_status !== 'approved') {
+        router.replace('/console/scribe/complete_profile' as any);
+        return;
+      }
 
       setProfile(profileData);
       if (profileData && profileData.is_sos_registered !== undefined && profileData.is_sos_registered !== null) {
@@ -565,7 +570,7 @@ export default function ScribeHomeView() {
             shadowRadius: 8,
             elevation: 3,
           }}>
-            <Feather name="edit-3" size={22} color="#059669" />
+            <FontAwesome5 name="pen-nib" size={20} color="#059669" />
           </View>
           {isVerified && (
             <View style={{
@@ -581,7 +586,7 @@ export default function ScribeHomeView() {
               alignItems: 'center',
               justifyContent: 'center',
             }}>
-              <Feather name="check" size={10} color="#fff" />
+              <Ionicons name="checkmark" size={12} color="#fff" />
             </View>
           )}
         </View>
@@ -630,7 +635,7 @@ export default function ScribeHomeView() {
             width: 24, height: 24, borderRadius: 12, backgroundColor: '#10b981',
             alignItems: 'center', justifyContent: 'center',
           }}>
-            <Feather name="shield" size={12} color="#fff" />
+            <Ionicons name="shield-checkmark" size={13} color="#fff" />
           </View>
           <Text style={{ fontFamily: 'Roboto', color: '#047857', fontSize: 12, fontWeight: '800' }}>
             Verified Scribe Volunteer Profile
@@ -788,7 +793,7 @@ export default function ScribeHomeView() {
         {/* Contributions Stats (Blue) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="award" size={12} color="#2563eb" />
+            <FontAwesome5 name="award" size={12} color="#2563eb" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Contributions</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{scribeCommitments.length}</Text>
@@ -799,7 +804,7 @@ export default function ScribeHomeView() {
         {/* Applications Stats (Orange) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="file-text" size={12} color="#ea580c" />
+            <FontAwesome5 name="file-alt" size={12} color="#ea580c" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Applications</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#ea580c' }}>{pendingApplicationsCount}</Text>
@@ -810,7 +815,7 @@ export default function ScribeHomeView() {
         {/* Available Stats (Green) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Feather name="search" size={12} color="#10b981" />
+            <Ionicons name="search" size={13} color="#10b981" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Available</Text>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#10b981' }}>{availableExams.length}</Text>

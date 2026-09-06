@@ -33,11 +33,11 @@ import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
 
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
 
-const TABS: { id: Tab; iconActive: keyof typeof Feather.glyphMap; iconInactive: keyof typeof Feather.glyphMap; label: string }[] = [
-  { id: 'home',     iconActive: 'home',      iconInactive: 'home',      label: 'Home' },
-  { id: 'requests', iconActive: 'file-text', iconInactive: 'file-text', label: 'Requests' },
-  { id: 'plan',     iconActive: 'calendar',  iconInactive: 'calendar',  label: 'Plan' },
-  { id: 'settings', iconActive: 'user',      iconInactive: 'user',      label: 'Account' },
+const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { id: 'home',     iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
+  { id: 'requests', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
+  { id: 'plan',     iconActive: 'calendar',      iconInactive: 'calendar-outline',      label: 'Plan' },
+  { id: 'settings', iconActive: 'person',        iconInactive: 'person-outline',        label: 'Account' },
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
@@ -345,9 +345,9 @@ export default function StudentDashboard() {
                   borderColor: active ? ACCENT_BD : 'transparent',
                 }}
               >
-                <Feather
+                <Ionicons
                   name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={20}
+                  size={21}
                   color={active ? ACCENT : '#94a3b8'}
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}

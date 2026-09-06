@@ -139,6 +139,7 @@ export default function RegisterScreen() {
             role,
             phone: formattedPhone,
             languages: [],
+            verification_status: 'unverified',
           });
         }
 
@@ -159,6 +160,8 @@ export default function RegisterScreen() {
       setLoading(false);
     }
   };
+
+  const handleVerifyOtpAndSignUp = handleRegister;
 
   const strength = getStrength(password);
 

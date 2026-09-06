@@ -34,11 +34,11 @@ import ConsoleScribePC from '@/components/pc_view/ConsoleScribePC';
 
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 
-const TABS: { id: Tab; iconActive: keyof typeof Feather.glyphMap; iconInactive: keyof typeof Feather.glyphMap; label: string }[] = [
-  { id: 'home',        iconActive: 'home',      iconInactive: 'home',      label: 'Home' },
-  { id: 'explore',     iconActive: 'search',    iconInactive: 'search',    label: 'Search' },
-  { id: 'commitments', iconActive: 'file-text', iconInactive: 'file-text', label: 'Requests' },
-  { id: 'settings',    iconActive: 'user',      iconInactive: 'user',      label: 'Account' },
+const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
+  { id: 'home',        iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
+  { id: 'explore',     iconActive: 'search',        iconInactive: 'search-outline',        label: 'Search' },
+  { id: 'commitments', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
+  { id: 'settings',    iconActive: 'person',        iconInactive: 'person-outline',        label: 'Account' },
 ];
 
 // ── Design tokens (light theme) ────────────────────────────────
@@ -344,9 +344,9 @@ export default function ScribeDashboard() {
                   borderColor: active ? ACCENT_BD : 'transparent',
                 }}
               >
-                <Feather
+                <Ionicons
                   name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={20}
+                  size={21}
                   color={active ? ACCENT : '#94a3b8'}
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}
