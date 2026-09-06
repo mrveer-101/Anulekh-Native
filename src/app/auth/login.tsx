@@ -187,11 +187,17 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      const input   = emailOrPhone.trim();
+      const input = emailOrPhone.trim();
       const isEmail = input.includes('@');
-      const { data, error } = await supabase.auth.signInWithPassword(
-        isEmail ? { email: input, password } : { phone: input, password }
-      );
+      const cleanPhone = input.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone.length === 10 ? `+91${cleanPhone}` : cleanPhone ? `+${cleanPhone}` : input;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        identifier: input,
+        email: isEmail ? input : undefined,
+        phone: !isEmail ? formattedPhone : undefined,
+        password: password.trim(),
+      });
       if (error) throw error;
       if (data.user) {
         let userRole = (data.user as any).role;

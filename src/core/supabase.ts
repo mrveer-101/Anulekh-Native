@@ -155,12 +155,22 @@ const mockAuth = {
     }
   },
 
-  signInWithPassword: async ({ email, phone, password }: { email?: string; phone?: string; password?: string }) => {
+  signInWithPassword: async ({
+    email,
+    phone,
+    identifier,
+    password
+  }: {
+    email?: string;
+    phone?: string;
+    identifier?: string;
+    password?: string;
+  }) => {
     try {
       const res = await fetch(`${API_URL}/api/auth/signin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, phone, password })
+        body: JSON.stringify({ email, phone, identifier, password })
       });
       const resText = await res.text();
       let data: any = {};
