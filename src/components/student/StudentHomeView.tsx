@@ -59,9 +59,17 @@ export default function StudentHomeView() {
         .eq('id', session.user.id)
         .single();
 
-      if (profileData && profileData.verification_status !== 'approved') {
+      const hasIdProof = !!(profileData?.aadhar_number || profileData?.aadhar_image_proof || profileData?.disability_certificate || profileData?.location);
+      const isApproved = profileData?.verification_status === 'approved' || hasIdProof;
+
+      if (profileData && !isApproved) {
         router.replace('/console/student/complete_profile' as any);
         return;
+      }
+
+      if (profileData && hasIdProof && profileData.verification_status !== 'approved') {
+        supabase.from('profiles').update({ verification_status: 'approved' }).eq('id', session.user.id);
+        profileData.verification_status = 'approved';
       }
 
       setProfile(profileData);

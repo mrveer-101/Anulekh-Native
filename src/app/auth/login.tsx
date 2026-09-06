@@ -202,16 +202,28 @@ export default function LoginScreen() {
       if (data.user) {
         let userRole = (data.user as any).role;
         let verificationStatus = (data.user as any).verification_status;
+        let hasIdProof = !!(data.user as any).aadhar_number;
 
-        const { data: profileData } = await supabase
-          .from('profiles').select('role, verification_status').eq('id', data.user.id).single();
-        if (profileData) {
-          userRole = profileData.role || userRole;
-          verificationStatus = profileData.verification_status || verificationStatus;
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('role, verification_status, aadhar_number, aadhar_image_proof, disability_certificate, location')
+            .eq('id', data.user.id)
+            .single();
+          if (profileData) {
+            userRole = profileData.role || userRole;
+            verificationStatus = profileData.verification_status || verificationStatus;
+            if (profileData.aadhar_number || profileData.aadhar_image_proof || profileData.disability_certificate || profileData.location) {
+              hasIdProof = true;
+            }
+          }
+        } catch (e) {
+          console.log('Non-critical: could not fetch profile in login:', e);
         }
 
         const isScribe = userRole === 'scribe';
-        const isApproved = verificationStatus === 'approved';
+        // A user is considered approved if explicitly approved, or if an existing user already provided ID / verification details
+        const isApproved = verificationStatus === 'approved' || hasIdProof;
 
         if (!isApproved) {
           router.replace(isScribe ? '/console/scribe/complete_profile' as any : '/console/student/complete_profile' as any);

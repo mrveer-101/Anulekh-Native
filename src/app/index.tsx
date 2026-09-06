@@ -35,12 +35,13 @@ export default function AppEntry() {
       if (session) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('role, verification_status')
+          .select('role, verification_status, aadhar_number, aadhar_image_proof, disability_certificate, location')
           .eq('id', session.user.id)
           .single();
 
         const isScribe = profile?.role === 'scribe';
-        const isApproved = profile?.verification_status === 'approved';
+        const hasIdProof = !!(profile?.aadhar_number || profile?.aadhar_image_proof || profile?.disability_certificate || profile?.location);
+        const isApproved = profile?.verification_status === 'approved' || hasIdProof;
 
         if (!isApproved) {
           setDestination(isScribe ? '/console/scribe/complete_profile' : '/console/student/complete_profile');

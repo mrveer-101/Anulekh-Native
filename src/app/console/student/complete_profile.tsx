@@ -80,20 +80,36 @@ export default function StudentCompleteProfileForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
-      // Update profile in local database and backend
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          aadhar_number: docType,
-          aadhar_image_proof: docImage,
-          emergency_phone: emergencyPhone.trim(),
-          disability_type: disabilityType,
-          disability_certificate: disabilityCertificate,
-          verification_status: 'approved' // Set directly to approved for local testing/demo
-        })
-        .eq('id', session.user.id);
+      const profilePayload = {
+        aadhar_number: docType,
+        aadhar_image_proof: docImage,
+        emergency_phone: emergencyPhone.trim(),
+        disability_type: disabilityType,
+        disability_certificate: disabilityCertificate,
+        verification_status: 'approved',
+      };
 
-      if (error) throw error;
+      // Check if profile exists, if not insert, else update
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!existingProfile) {
+        await supabase.from('profiles').insert({
+          id: session.user.id,
+          role: 'student',
+          full_name: session.user.email ? session.user.email.split('@')[0] : 'Student',
+          ...profilePayload,
+        });
+      } else {
+        const { error } = await supabase
+          .from('profiles')
+          .update(profilePayload)
+          .eq('id', session.user.id);
+        if (error) throw error;
+      }
 
       // Show the 100% completion success overlay
       setShowSuccessOverlay(true);

@@ -262,27 +262,43 @@ export default function CompleteProfileForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
-      // Update profile in local SQLite database
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          official_name: officialName.trim(),
-          aadhar_number: aadharNumber.trim(),
-          dob: dob.trim(),
-          occupation: occupation.trim(),
-          location: location.trim(),
-          urgent_calls: urgentCalls ? 'yes' : 'no',
-          first_time: firstTime ? 'yes' : 'no',
-          education_level: educationLevel,
-          certification_proof: uploadedFile,
-          aadhar_image_proof: aadharImage,
-          languages: selectedLanguages,
-          availability_slots: availabilitySlots.join(', '),
-          verification_status: 'approved'
-        })
-        .eq('id', session.user.id);
+      const profilePayload = {
+        official_name: officialName.trim(),
+        aadhar_number: aadharNumber.trim(),
+        dob: dob.trim(),
+        occupation: occupation.trim(),
+        location: location.trim(),
+        urgent_calls: urgentCalls ? 'yes' : 'no',
+        first_time: firstTime ? 'yes' : 'no',
+        education_level: educationLevel,
+        certification_proof: uploadedFile,
+        aadhar_image_proof: aadharImage,
+        languages: selectedLanguages,
+        availability_slots: availabilitySlots.join(', '),
+        verification_status: 'approved',
+      };
 
-      if (error) throw error;
+      // Check if profile exists, if not insert, else update
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!existingProfile) {
+        await supabase.from('profiles').insert({
+          id: session.user.id,
+          role: 'scribe',
+          full_name: officialName.trim(),
+          ...profilePayload,
+        });
+      } else {
+        const { error } = await supabase
+          .from('profiles')
+          .update(profilePayload)
+          .eq('id', session.user.id);
+        if (error) throw error;
+      }
 
       // Show the 100% completion success overlay
       setShowSuccessOverlay(true);
