@@ -203,6 +203,37 @@ export default function SharedSettingsView() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account Permanently',
+      'Are you sure you want to permanently delete your Anulekh account? All your profile data, exam requests, and chat history will be permanently wiped. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              if (user?.id) {
+                await fetch(`${supabase.auth ? (supabase as any).apiHost || 'https://anulekh-axum.onrender.com' : 'https://anulekh-axum.onrender.com'}/api/auth/delete-account`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_id: user.id })
+                });
+              }
+              await AsyncStorage.clear();
+              await supabase.auth.signOut();
+              Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
+              router.replace('/landing');
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to delete account. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#f0f4ff' }}>
@@ -814,6 +845,30 @@ export default function SharedSettingsView() {
       >
         <Feather name="log-out" size={16} color="#ffffff" style={{ marginRight: 8 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
         <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('sign_out')}</Text>
+      </TouchableOpacity>
+
+      {/* Delete Account (Apple App Store Guideline 5.1.1 compliant) */}
+      <TouchableOpacity
+        onPress={handleDeleteAccount}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel="Permanently Delete Account"
+        style={{ 
+          width: '100%', 
+          backgroundColor: 'transparent', 
+          borderWidth: 1, 
+          borderColor: '#fca5a5', 
+          paddingVertical: 14, 
+          borderRadius: 16, 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          flexDirection: 'row',
+          marginBottom: 20
+        }}
+        activeOpacity={0.7}
+      >
+        <Feather name="trash-2" size={15} color="#dc2626" style={{ marginRight: 8 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+        <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Delete Account Permanently</Text>
       </TouchableOpacity>
 
     </ScrollView>

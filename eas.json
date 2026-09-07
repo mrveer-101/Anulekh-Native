@@ -14,12 +14,18 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": true
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://anulekh-axum.onrender.com",
         "GRADLE_OPTS": "-Dorg.gradle.jvmargs=\"-Xmx4096m -XX:MaxMetaspaceSize=1024m\" -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true"
       }
     },
     "production": {
+      "ios": {
+        "resourceClass": "m-medium"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://anulekh-axum.onrender.com"
       }

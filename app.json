@@ -10,8 +10,12 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.celestialsteam.anulekh",
+      "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "Anulekh needs microphone access to record and exchange voice messages between students and scribes.",
+        "NSPhotoLibraryUsageDescription": "Anulekh needs access to your photo library to upload admit cards, disability certificates, and identity documents.",
+        "NSCameraUsageDescription": "Anulekh needs camera access to take photos of documents and profile pictures."
       }
     },
     "android": {
