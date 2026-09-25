@@ -64,50 +64,43 @@ if (Platform.OS === 'web') {
       }
       @font-face {
         font-family: 'Feather';
-        src: url('/assets/fonts/Feather.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'Ionicons';
-        src: url('/assets/fonts/Ionicons.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'MaterialIcons';
-        src: url('/assets/fonts/MaterialIcons.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'Material Icons';
-        src: url('/assets/fonts/MaterialIcons.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'MaterialCommunityIcons';
-        src: url('/assets/fonts/MaterialCommunityIcons.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'FontAwesome';
-        src: url('/assets/fonts/FontAwesome.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
       @font-face {
         font-family: 'FontAwesome5';
-        src: url('/assets/fonts/FontAwesome5_Solid.ttf') format('truetype'),
-             url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
+        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
         font-weight: normal;
         font-style: normal;
       }
@@ -159,21 +152,27 @@ import { ThemeProvider as AppThemeProvider } from '@/core/themeContext';
 import { initializeNotificationChannels } from '@/core/notifications';
 import { useEffect } from 'react';
 
+import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  const [fontsLoaded] = useFonts({
-    Roboto_300Light,
-    Roboto_400Regular,
-    Roboto_500Medium,
-    Roboto_700Bold,
-    Roboto_900Black,
-    Roboto: Roboto_400Regular,
-    'Roboto-Regular': Roboto_400Regular,
-    'Roboto-Medium': Roboto_500Medium,
-    'Roboto-Bold': Roboto_700Bold,
-    'Roboto-Black': Roboto_900Black,
-  });
+  const [fontsLoaded] = useFonts(
+    Platform.OS === 'web'
+      ? {}
+      : {
+          Roboto_300Light,
+          Roboto_400Regular,
+          Roboto_500Medium,
+          Roboto_700Bold,
+          Roboto_900Black,
+          Roboto: Roboto_400Regular,
+          'Roboto-Regular': Roboto_400Regular,
+          'Roboto-Medium': Roboto_500Medium,
+          'Roboto-Bold': Roboto_700Bold,
+          'Roboto-Black': Roboto_900Black,
+        }
+  );
 
   useEffect(() => {
     initializeNotificationChannels().catch(console.warn);
@@ -185,6 +184,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AnimatedSplashOverlay />
           <Stack screenOptions={{ headerShown: false }} />
+          <AppUpdateModal />
         </ThemeProvider>
       </AppThemeProvider>
     </GlobalErrorBoundary>

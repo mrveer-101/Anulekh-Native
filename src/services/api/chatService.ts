@@ -43,4 +43,44 @@ export const chatService = {
     if (res.error) return { data: null, error: res.error };
     return { data: res.data?.data || null, error: null };
   },
+
+  /**
+   * Send a voice note message
+   */
+  async sendVoiceNote(
+    requestId: number,
+    senderId: string,
+    mediaUrl: string,
+    durationSecs: number = 0
+  ): Promise<ApiResponse<ChatMessage>> {
+    return this.sendMessage({
+      request_id: requestId,
+      sender_id: senderId,
+      message: '🎤 Voice Note',
+      message_type: 'voice',
+      media_url: mediaUrl,
+      media_duration: durationSecs,
+      is_voice: true,
+      voice_url: mediaUrl,
+      voice_duration: durationSecs,
+    });
+  },
+
+  /**
+   * Send an image message
+   */
+  async sendImageMessage(
+    requestId: number,
+    senderId: string,
+    imageUrl: string,
+    caption?: string
+  ): Promise<ApiResponse<ChatMessage>> {
+    return this.sendMessage({
+      request_id: requestId,
+      sender_id: senderId,
+      message: caption || '📷 Photo',
+      message_type: 'image',
+      media_url: imageUrl,
+    });
+  },
 };

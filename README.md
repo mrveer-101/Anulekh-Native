@@ -11,16 +11,16 @@ To provide on-demand, reliable, and accessible scribe assistance for exams, ensu
 
 ## 🛠️ The Tech Stack
 
-Anulekh leverages a modern, decoupled three-tier architecture:
+Anulekh leverages a decoupled, high-performance architecture:
 
 | Layer | Technology | Key Responsibility |
 | :--- | :--- | :--- |
-| **Frontend** | **React Native (Expo)** | Cross-platform mobile UI, Native Accessibility APIs (VoiceOver/TalkBack), Web previews |
-| **Styling** | **NativeWind (Tailwind CSS)** | Utility-first responsive design, consistent branding, high-contrast layouts |
-| **Animations**| **React Native Reanimated** | Fluid micro-animations and transition effects for a premium native feel |
-| **Backend** | **FastAPI (Python)** | High-performance async logic, PostGIS geospatial matching, JWT verification |
-| **Database** | **Supabase (PostgreSQL)** | Persistent storage, Auth service, Row-Level Security (RLS) |
-| **GIS Extension**| **PostGIS** | Fast, index-backed geography queries to locate nearby scribes |
+| **Frontend** | **React Native (Expo)** | Cross-platform mobile UI, Native Accessibility APIs, Web previews |
+| **Styling** | **NativeWind (Tailwind CSS)** | High-contrast layouts, consistent branding, accessible typography |
+| **Animations** | **React Native Reanimated** | Fluid micro-animations and transition effects |
+| **Backend** | **Rust (Axum)** | High-performance asynchronous API, matching engine, and storage presigning |
+| **Database** | **Turso (Serverless SQLite)** | Low-latency cloud relational database powered by `libsql` |
+| **Media Storage** | **Cloudflare R2** | Zero-egress object storage for photos, certificates, and voice notes |
 
 ---
 
@@ -32,58 +32,20 @@ Anulekh leverages a modern, decoupled three-tier architecture:
           ▼
    React Native App (Expo)
           │
-          │ (HTTP POST + JWT Auth Token)
-          ▼
-    FastAPI Server ──[Verifies JWT Signature]
+          ├─► 1. Request Upload URL ──► [Rust Axum Backend]
+          │                                  │ (Signs S3 Presigned URL)
+          │◄─────────────────────────────────┘
           │
-          │ (PostGIS Geospatial 10km query)
-          ▼
-  Supabase Postgres DB ──[Returns Eligible Scribes]
+          ├─► 2. Direct Media Upload ─► [Cloudflare R2 Bucket]
+          │                                  │ (Stores images & voice notes)
           │
-          ▼
-  [Expo Push Notifications Sent to Scribes]
+          └─► 3. API & Data Queries ──► [Rust Axum Backend] ──► [Turso Database]
 ```
 
-1. **Authentication**: The user logs in via the React Native app, talking directly to Supabase Auth to retrieve a secure JWT.
-2. **Request Placement**: The student submits a "Scribe Request" with exam details, subject, language, and venue coordinates.
-3. **Verification**: FastAPI receives the request, verifies the JWT signature locally, and validates the inputs.
-4. **Matching**: FastAPI queries the Postgres database utilizing the **PostGIS** extension to find volunteers matching the language, subject, and within a **10km radius** of the venue.
-5. **Notification**: The system triggers push notifications to eligible scribes, who can accept the request.
-
----
-
-## 🗄️ Core Database Schema
-
-The database utilizes three main tables with Row-Level Security (RLS) enabled:
-
-### 1. `users` Table
-Stores extended profiles linked to Supabase Auth.
-* `id` (UUID, Primary Key - matches Supabase Auth ID)
-* `role` (String: `'STUDENT'` or `'SCRIBE'`)
-* `full_name` (String)
-* `phone_number` (String - hidden/encrypted until match confirmation)
-* `languages` (Array of Strings: `['Hindi', 'English']`)
-* `location` (Geography Point: Longitude/Latitude)
-* `expo_push_token` (String, nullable)
-
-### 2. `scribe_requests` Table
-The ticket created by the student.
-* `id` (UUID, Primary Key)
-* `student_id` (UUID, Foreign Key -> `users.id`)
-* `exam_name` (String)
-* `subject_or_course` (String)
-* `academic_level` (String)
-* `exam_date_time` (Timestamp)
-* `venue_location` (Geography Point)
-* `required_language` (String)
-* `status` (String: `'OPEN'`, `'MATCHED'`, `'COMPLETED'`, `'CANCELLED'`)
-
-### 3. `matches` Table
-Tracks the connection between student and scribe.
-* `id` (UUID, Primary Key)
-* `request_id` (UUID, Foreign Key -> `scribe_requests.id`)
-* `scribe_id` (UUID, Foreign Key -> `users.id`)
-* `status` (String: `'PENDING_SCRIBE_ACCEPTANCE'`, `'CONFIRMED'`, `'COMPLETED'`, `'CANCELLED_BY_SCRIBE'`, `'CANCELLED_BY_STUDENT'`)
+1. **Authentication**: The user signs up and logs in via the app through the Axum backend, with OTP verification.
+2. **Media & Document Uploads**: ID cards, disability certificates, and voice chat audio notes are uploaded directly to Cloudflare R2 using secure presigned URLs, keeping the database fast and lightweight.
+3. **Scribe Requests & Matching**: Students place exam scribe requests with subject, date, venue, and language requirements. Eligible volunteers are matched and notified.
+4. **Communication**: Real-time messaging and voice notes connect student and scribe once matched.
 
 ---
 
@@ -97,16 +59,20 @@ Ensure you have **Node.js** (v18+) installed.
 ### Setup Instructions
 1. Navigate to the frontend directory:
    ```bash
-   cd Native-Mobile
+   cd Anulekh-Native
    ```
 2. Install dependencies:
    ```bash
    npm install
    ```
-3. Start the dev server:
+3. Ensure `.env` is configured to point to your backend:
+   ```env
+   EXPO_PUBLIC_API_URL=http://localhost:3000
+   ```
+4. Start the dev server:
    ```bash
    npx expo start
    ```
-4. Choose preview method:
+5. Choose preview method:
    - Press **`w`** for Web Preview.
    - Scan the QR code on your phone using **Expo Go** for physical device preview.
