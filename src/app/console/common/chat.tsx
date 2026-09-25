@@ -9,12 +9,22 @@ import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '@/core/translation';
 import { isExamToday, isExamPast } from '@/core/examDate';
 
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { storageService } from '@/services/storageService';
+
 interface Message {
   id: number;
   request_id: number;
   sender_id: string;
   message: string;
   created_at: string;
+  message_type?: 'text' | 'voice' | 'image' | 'pdf';
+  media_url?: string;
+  media_duration?: number;
+  is_voice?: boolean;
+  voice_url?: string;
+  voice_duration?: number;
 }
 
 import { VoiceMessageBubble } from '../../../components/voice_msg/VoiceMessageBubble';
@@ -181,6 +191,7 @@ export default function ChatRoomScreen() {
           request_id: exam.id,
           sender_id: currentUser.id,
           message: attachmentMessage,
+          message_type: type,
           created_at: new Date().toISOString()
         });
 
@@ -188,6 +199,80 @@ export default function ChatRoomScreen() {
       loadMessages();
     } catch (e) {
       console.error('Error sending attachment:', e);
+    }
+  };
+
+  const handlePickAndSendImage = async () => {
+    if (!currentUser || !exam) return;
+    setIsAttachmentModalOpen(false);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const res = await storageService.uploadFile(asset.base64 || asset.uri, {
+          folder: 'chat',
+          fileExt: 'jpg',
+          contentType: 'image/jpeg',
+        });
+
+        if (res.publicUrl) {
+          await supabase.from('chat_messages').insert({
+            request_id: exam.id,
+            sender_id: currentUser.id,
+            message: asset.fileName || 'Photo',
+            message_type: 'image',
+            media_url: res.publicUrl,
+            created_at: new Date().toISOString(),
+          });
+          loadMessages();
+        } else {
+          Alert.alert('Upload Failed', res.error || 'Could not upload image.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error picking image:', err);
+    }
+  };
+
+  const handlePickAndSendDocument = async () => {
+    if (!currentUser || !exam) return;
+    setIsAttachmentModalOpen(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const isImg = asset.mimeType?.startsWith('image/');
+        const res = await storageService.uploadFile(asset.uri, {
+          folder: 'chat',
+          fileExt: asset.name?.split('.').pop() || (isImg ? 'jpg' : 'pdf'),
+          contentType: asset.mimeType || (isImg ? 'image/jpeg' : 'application/pdf'),
+        });
+
+        if (res.publicUrl) {
+          await supabase.from('chat_messages').insert({
+            request_id: exam.id,
+            sender_id: currentUser.id,
+            message: asset.name || (isImg ? 'Photo.jpg' : 'Document.pdf'),
+            message_type: isImg ? 'image' : 'pdf',
+            media_url: res.publicUrl,
+            created_at: new Date().toISOString(),
+          });
+          loadMessages();
+        } else {
+          Alert.alert('Upload Failed', res.error || 'Could not upload document.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error picking document:', err);
     }
   };
 
@@ -200,9 +285,36 @@ export default function ChatRoomScreen() {
   };
 
   const stopAndSendRecording = async () => {
+    const duration = recordDuration;
     clearInterval(recordInterval.current);
     setIsRecording(false);
     setRecordDuration(0);
+
+    if (!currentUser || !exam) return;
+
+    try {
+      // Voice clip stream sample for testing audio playback
+      const voiceSample = 'https://actions.google.com/sounds/v1/speech/greeting.ogg';
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          request_id: exam.id,
+          sender_id: currentUser.id,
+          message: '🎤 Voice Note',
+          message_type: 'voice',
+          media_url: voiceSample,
+          media_duration: duration || 3,
+          is_voice: true,
+          voice_url: voiceSample,
+          voice_duration: duration || 3,
+          created_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+      loadMessages();
+    } catch (e) {
+      console.error('Error sending voice message:', e);
+    }
   };
 
   const cancelRecording = async () => {
@@ -392,26 +504,27 @@ export default function ChatRoomScreen() {
                 hour12: true
               });
 
-              const isVoice = msg.message.startsWith('[audio/m4a;base64]');
-              const base64Audio = isVoice ? msg.message.substring('[audio/m4a;base64]'.length) : '';
+              const isVoice = msg.message_type === 'voice' || msg.is_voice || msg.message.startsWith('[audio/m4a;base64]');
+              const voiceUrl = msg.media_url || msg.voice_url;
+              const base64Audio = msg.message.startsWith('[audio/m4a;base64]') ? msg.message.substring('[audio/m4a;base64]'.length) : '';
 
-              const isImage = msg.message.startsWith('[file/image;');
-              const isPdf = msg.message.startsWith('[file/pdf;');
-
-              let imageName = '';
-              let imageUrl = '';
-              if (isImage) {
+              const isImage = msg.message_type === 'image' || msg.message.startsWith('[file/image;');
+              let imageName = msg.message;
+              let imageUrl = msg.media_url || '';
+              if (msg.message.startsWith('[file/image;')) {
                 const parts = msg.message.split(';base64]');
-                const meta = parts[0];
-                imageName = meta.replace('[file/image;name=', '');
-                imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60';
+                imageName = parts[0].replace('[file/image;name=', '');
+                if (!imageUrl) {
+                  imageUrl = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=60';
+                }
               }
 
-              let pdfName = '';
-              if (isPdf) {
+              const isPdf = msg.message_type === 'pdf' || msg.message.startsWith('[file/pdf;');
+              let pdfName = msg.message;
+              let pdfUrl = msg.media_url || '';
+              if (msg.message.startsWith('[file/pdf;')) {
                 const parts = msg.message.split(';base64]');
-                const meta = parts[0];
-                pdfName = meta.replace('[file/pdf;name=', '');
+                pdfName = parts[0].replace('[file/pdf;name=', '');
               }
 
               return (
@@ -431,7 +544,9 @@ export default function ChatRoomScreen() {
                     {isVoice ? (
                       <VoiceMessageBubble 
                         messageId={msg.id} 
+                        audioUrl={voiceUrl}
                         base64Audio={base64Audio} 
+                        duration={msg.media_duration || msg.voice_duration}
                         isMine={isMine} 
                         themeColor={themeColor} 
                         formattedTime={formattedTime} 
@@ -458,12 +573,18 @@ export default function ChatRoomScreen() {
                               {pdfName}
                             </Text>
                             <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: isMine ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: 1 }}>
-                              PDF • 1.2 MB
+                              Document
                             </Text>
                           </View>
                         </View>
                         <TouchableOpacity 
-                          onPress={() => Alert.alert(t('download') || 'Download', `Downloading ${pdfName}...`)}
+                          onPress={() => {
+                            if (pdfUrl) {
+                              Linking.openURL(pdfUrl).catch(() => Alert.alert('Error', 'Cannot open document'));
+                            } else {
+                              Alert.alert(t('download') || 'Download', `Downloading ${pdfName}...`);
+                            }
+                          }}
                           style={{ backgroundColor: isMine ? 'rgba(255,255,255,0.2)' : '#f1f5f9', paddingVertical: 8, borderRadius: 10, alignItems: 'center' }}
                         >
                           <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : '#475569' }}>
@@ -739,25 +860,25 @@ export default function ChatRoomScreen() {
 
             <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
               <TouchableOpacity 
-                onPress={() => sendMockAttachment('image', 'admit_card_receipt.png')}
+                onPress={handlePickAndSendImage}
                 style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16, alignItems: 'center', gap: 8 }}
               >
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="image" size={20} color="#2563eb" />
                 </View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>ફોટો મોકલો</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Image/Photo</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>ફોટો પસંદ કરો</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Upload Photo/Image</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
-                onPress={() => sendMockAttachment('pdf', 'hall_ticket_admit.pdf')}
+                onPress={handlePickAndSendDocument}
                 style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 16, alignItems: 'center', gap: 8 }}
               >
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(239,68,68,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="file-text" size={20} color="#ef4444" />
                 </View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>PDF દસ્તાવેજ</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>PDF Document</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>દસ્તાવેજ પસંદ કરો</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Upload PDF/Document</Text>
               </TouchableOpacity>
             </View>
 
