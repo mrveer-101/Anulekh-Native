@@ -90,33 +90,40 @@ export const storageService = {
     const presigned = await this.getPresignedUrl(options);
     if (presigned && presigned.storage_type === 'r2') {
       try {
-        let blob: Blob;
-
         if (Platform.OS === 'web') {
           const blobRes = await fetch(fileUriOrBase64);
-          blob = await blobRes.blob();
-        } else {
-          // Native: read as base64 and convert or upload directly
-          const base64Content = await FileSystem.readAsStringAsync(fileUriOrBase64, {
-            encoding: FileSystem.EncodingType.Base64,
+          const blob = await blobRes.blob();
+          const putRes = await fetch(presigned.upload_url, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': options.contentType || 'application/octet-stream',
+            },
+            body: blob,
           });
-          return this.uploadBase64(base64Content, options);
-        }
 
-        const putRes = await fetch(presigned.upload_url, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': options.contentType || 'application/octet-stream',
-          },
-          body: blob,
-        });
+          if (putRes.ok) {
+            return {
+              publicUrl: presigned.public_url,
+              fileKey: presigned.file_key,
+              error: null,
+            };
+          }
+        } else {
+          const uploadRes = await FileSystem.uploadAsync(presigned.upload_url, fileUriOrBase64, {
+            httpMethod: 'PUT',
+            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            headers: {
+              'Content-Type': options.contentType || 'application/octet-stream',
+            },
+          });
 
-        if (putRes.ok) {
-          return {
-            publicUrl: presigned.public_url,
-            fileKey: presigned.file_key,
-            error: null,
-          };
+          if (uploadRes.status >= 200 && uploadRes.status < 300) {
+            return {
+              publicUrl: presigned.public_url,
+              fileKey: presigned.file_key,
+              error: null,
+            };
+          }
         }
       } catch (uploadErr) {
         console.warn('Presigned PUT failed, falling back to direct upload:', uploadErr);

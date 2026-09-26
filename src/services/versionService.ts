@@ -29,7 +29,7 @@ const LAST_SEEN_VERSION_CODE_KEY = 'ANULEKH_LAST_SEEN_VERSION_CODE';
 
 export const versionService = {
   getCurrentVersion(): { version: string; versionCode: number } {
-    const version = Constants.expoConfig?.version || '1.1.0';
+    const version = Constants.expoConfig?.version || '1.0.2';
     const versionCode = Constants.expoConfig?.android?.versionCode || 3;
     return { version, versionCode };
   },
