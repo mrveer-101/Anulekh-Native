@@ -4,10 +4,7 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
-  Modal,
   Animated,
-  Dimensions,
   Platform,
   Image,
 } from 'react-native';
@@ -20,16 +17,13 @@ import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
 
-import { useThemeMode } from '@/core/themeContext';
 
 import ScribeHomeView from '@/components/scribe/ScribeHomeView';
 import ScribeExploreView from '@/components/scribe/ScribeExploreView';
 import ScribeCommitmentsView from '@/components/scribe/ScribeCommitmentsView';
-import ScribeProfileView from '@/components/scribe/ScribeProfileView';
 import SharedSettingsView from '@/components/shared/SharedSettingsView';
 import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
 import { useWindowDimensions } from 'react-native';
-import ScribePlanView from '@/components/scribe/ScribePlanView';
 import ConsoleScribePC from '@/components/pc_view/ConsoleScribePC';
 
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
@@ -44,7 +38,6 @@ const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive:
 // ── Design tokens (light theme) ────────────────────────────────
 const BG         = '#f9fafb';   // clean off-white background
 const SURFACE    = 'rgba(255,255,255,0.82)'; // glass surface
-const BORDER     = 'rgba(0,0,0,0.07)';
 const ACCENT     = '#16a34a';   // green primary
 const ACCENT_BG  = 'rgba(22,163,74,0.09)';
 const ACCENT_BD  = 'rgba(22,163,74,0.22)';
@@ -57,9 +50,7 @@ export default function ScribeDashboard() {
   // ── ALL STATE (must come before any useEffect) ──────────────────────────
   const [mounted, setMounted]       = useState(false);
   const [screenWidth, setScreenWidth] = useState(windowWidth);
-  const [layoutMode, setLayoutModeState] = useState<'auto' | 'pc' | 'mobile'>('auto');
   const { t } = useLanguage();
-  const { isDark, toggleTheme } = useThemeMode();
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
@@ -118,25 +109,11 @@ export default function ScribeDashboard() {
         setShowWelcome(true);
         await AsyncStorage.setItem('scribe_welcome_shown', 'true');
       }
-    } catch (_) {
+    } catch {
       router.replace('/landing');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out', style: 'destructive',
-        onPress: async () => {
-          await AsyncStorage.removeItem('scribe_welcome_shown');
-          await supabase.auth.signOut();
-          router.replace('/landing');
-        }
-      }
-    ]);
   };
 
   useEffect(() => { fetchSession(); }, []);

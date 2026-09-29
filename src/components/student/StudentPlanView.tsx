@@ -166,7 +166,7 @@ export default function StudentPlanView() {
       } else {
         Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
       }
-    } catch (_) {
+    } catch {
       Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
     }
   };

@@ -36,7 +36,7 @@ export function announceForAccessibility(message: string): void {
       setTimeout(() => {
         if (liveRegion) liveRegion.textContent = message;
       }, 50);
-    } catch (_) {}
+    } catch {}
   }
 }
 

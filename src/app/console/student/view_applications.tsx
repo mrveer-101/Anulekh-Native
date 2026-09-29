@@ -471,7 +471,7 @@ export default function ViewApplicationsPage() {
                           try {
                             const parsed = JSON.parse(langs);
                             if (Array.isArray(parsed)) return parsed.join(', ');
-                          } catch (_) {}
+                          } catch {}
                           return langs;
                         }
                         return 'N/A';
@@ -662,7 +662,7 @@ export default function ViewApplicationsPage() {
                         try {
                           const parsed = JSON.parse(langs);
                           if (Array.isArray(parsed)) return parsed.join(', ');
-                        } catch (_) {}
+                        } catch {}
                         return langs;
                       }
                       return 'N/A';

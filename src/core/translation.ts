@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from 'expo-router';
 
 export type LanguageType = 'English' | 'Hindi' | 'Gujarati';
 
@@ -365,7 +364,7 @@ export function useLanguage() {
   const loadLang = async () => {
     try {
       const saved = await AsyncStorage.getItem('app_language');
-      if (saved === 'English' || saved === 'Hindi') {
+      if (saved === 'English' || saved === 'Hindi' || saved === 'Gujarati') {
         setLangState(saved);
       } else {
         setLangState('English');

@@ -123,7 +123,7 @@ export default function AssignmentRequestForm() {
         const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
         const dataUri = await toDataUri(file.uri, file.mimeType);
         converted.push({ ...file, name: formattedName, dataUri });
-      } catch (e) {
+      } catch {
         console.warn('Failed to read file:', file.name);
         const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
         converted.push({ ...file, name: formattedName });

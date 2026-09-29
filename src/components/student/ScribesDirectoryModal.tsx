@@ -353,7 +353,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
                 try {
                   const parsed = JSON.parse(item.languages);
                   return Array.isArray(parsed) ? parsed.join(', ') : 'English';
-                } catch (e) {
+                } catch {
                   return item.languages || 'English';
                 }
               })();

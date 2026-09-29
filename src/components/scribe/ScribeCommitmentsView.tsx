@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -1140,7 +1140,7 @@ export default function ScribeCommitmentsView() {
                 } else {
                   Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
                 }
-              } catch (_) {
+              } catch {
                 Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
               }
             }}

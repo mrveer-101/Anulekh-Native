@@ -21,8 +21,6 @@ export default function PolicyModal({ visible, onClose, type, onAgree, showAgree
   const isGuidelines = type === 'guidelines';
 
   const accentColor = isStudent ? '#2563eb' : isScribe ? '#16a34a' : '#7c3aed';
-  const headerBg = isStudent ? 'bg-blue-50 border-blue-200' : isScribe ? 'bg-emerald-50 border-emerald-200' : 'bg-purple-50 border-purple-200';
-  const badgeColor = isStudent ? 'text-blue-700 bg-blue-100' : isScribe ? 'text-emerald-700 bg-emerald-100' : 'text-purple-700 bg-purple-100';
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>

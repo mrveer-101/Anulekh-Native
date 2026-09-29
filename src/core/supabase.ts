@@ -5,8 +5,6 @@ export const API_URL = (Platform.OS === 'web' && typeof window !== 'undefined' &
   ? 'http://localhost:3000'
   : (process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com');
 
-console.log(`🌐 Running in SERVER Mode (connecting to Axum backend at ${API_URL})`);
-
 // fetch() rejects with a generic "Network request failed" (or "Failed to fetch" on web)
 // when the backend host is unreachable — surface that as a clear connectivity message
 // instead of a confusing raw error.
@@ -113,7 +111,7 @@ class MockQueryBuilder {
       let result: any = {};
       try {
         result = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         result = { error: resText };
       }
       if (!res.ok) {
@@ -143,7 +141,7 @@ const mockAuth = {
       let data: any = {};
       try {
         data = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         data = { error: resText };
       }
       if (!res.ok) throw new Error(data.error || data.message || 'Signup failed');
@@ -177,7 +175,7 @@ const mockAuth = {
       let data: any = {};
       try {
         data = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         data = { error: resText };
       }
       if (!res.ok) throw new Error(data.error || data.message || 'Signin failed');

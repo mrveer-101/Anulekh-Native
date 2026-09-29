@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Dimensions,
   Modal,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -20,12 +18,28 @@ import { supabase, friendlyAuthError } from '@/core/supabase';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  ZoomIn,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
-const { height } = Dimensions.get('window');
+
+// Hides the browser's default focus ring on web inputs; the accent-coloured field border shows focus instead.
+// RN's types don't list outlineStyle 'none', but react-native-web passes it through to CSS.
+const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ role?: string }>();
-  const [role, setRole]               = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
+  const [role]                        = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword]       = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -73,7 +87,7 @@ export default function LoginScreen() {
       let data: any = {};
       try {
         data = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         data = { error: resText };
       }
 
@@ -119,7 +133,7 @@ export default function LoginScreen() {
       let data: any = {};
       try {
         data = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         data = { error: resText };
       }
 
@@ -153,7 +167,7 @@ export default function LoginScreen() {
       let data: any = {};
       try {
         data = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         data = { error: resText };
       }
 
@@ -175,9 +189,49 @@ export default function LoginScreen() {
     }
   };
 
-  const accentBg     = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
-  const accentBorder = isStudent ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
-  const accentShadow = isStudent ? 'rgba(37,99,235,0.25)' : 'rgba(22,163,74,0.25)';
+
+  // ── Motion & focus polish ──
+  // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+
+  // Focused input gets an accent border, white background and tinted icon.
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const fieldBorder = (field: string) => (focusedField === field ? accentColor : '#e2e8f0');
+  const fieldBg = (field: string) => (focusedField === field ? '#ffffff' : '#f8fafc');
+  const fieldIcon = (field: string) => (focusedField === field ? accentColor : '#94a3b8');
+
+  // Error banner shakes briefly and is announced to screen readers.
+  const errorShake = useSharedValue(0);
+  useEffect(() => {
+    if (!errorMessage) return;
+    announceForAccessibility(errorMessage);
+    if (reduceMotion) return;
+    errorShake.set(withSequence(
+      withTiming(-8, { duration: 50 }), withTiming(8, { duration: 50 }),
+      withTiming(-5, { duration: 50 }), withTiming(5, { duration: 50 }),
+      withTiming(0, { duration: 50 }),
+    ));
+  }, [errorMessage, reduceMotion, errorShake]);
+  const errorShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: errorShake.get() }] }));
+
+  // Primary button presses down slightly.
+  const ctaPress = useSharedValue(1);
+  const ctaPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPress.get() }] }));
+  const pressIn = () => ctaPress.set(withSpring(0.97, { damping: 15, stiffness: 300 }));
+  const pressOut = () => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }));
+
+  // Greeting hand gives a short wave once the header has appeared.
+  const waveRotate = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    waveRotate.set(withDelay(550, withSequence(
+      withTiming(16, { duration: 140 }), withTiming(-10, { duration: 140 }),
+      withTiming(16, { duration: 140 }), withTiming(-4, { duration: 140 }),
+      withTiming(0, { duration: 160 }),
+    )));
+  }, [reduceMotion, waveRotate]);
+  const waveStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${waveRotate.get()}deg` }] }));
 
   const handleLogin = async () => {
     if (!emailOrPhone.trim() || !password.trim()) {
@@ -254,6 +308,7 @@ export default function LoginScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Back & Top Action Row */}
+            <Animated.View entering={enter(FadeIn.duration(400))}>
             <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <TouchableOpacity
                 onPress={() => router.replace('/landing')}
@@ -282,10 +337,10 @@ export default function LoginScreen() {
                 accessibilityHint="Navigates to the create account registration page"
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: '#2563eb',
-                  borderWidth: 1.5, borderColor: '#1d4ed8',
+                  backgroundColor: accentColor,
+                  borderWidth: 1.5, borderColor: accentColor,
                   borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
-                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 },
+                  shadowColor: accentColor, shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
                 }}
               >
@@ -294,18 +349,32 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            </Animated.View>
+
             {/* Header */}
+            <Animated.View entering={enter(FadeInDown.delay(60).duration(450))}>
             <View style={{ paddingTop: 24, paddingBottom: 20 }}>
-              <Text style={{ fontSize: 34, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
-                Welcome back 👋
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={{ fontSize: 34, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
+                  Welcome back
+                </Text>
+                <Animated.View entering={enter(ZoomIn.delay(250).springify().damping(12))}>
+                  <Animated.View style={waveStyle}>
+                    <FontAwesome5 name="hand-paper" size={26} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  </Animated.View>
+                </Animated.View>
+              </View>
               <Text style={{ fontSize: 15, color: '#64748b', marginTop: 6, lineHeight: 22 }}>
                 Sign in to continue your journey
               </Text>
             </View>
 
+            </Animated.View>
+
             {/* Error */}
             {errorMessage ? (
+              <Animated.View entering={enter(FadeInDown.duration(300))}>
+              <Animated.View style={errorShakeStyle}>
               <View style={{
                 backgroundColor: 'rgba(239,68,68,0.07)',
                 borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
@@ -315,9 +384,12 @@ export default function LoginScreen() {
                 <Feather name="alert-circle" size={16} color="#dc2626" />
                 <Text style={{ color: '#dc2626', fontSize: 14, fontWeight: '600', flex: 1 }}>{errorMessage}</Text>
               </View>
+              </Animated.View>
+              </Animated.View>
             ) : null}
 
             {/* Auto-detected role banner */}
+            <Animated.View entering={enter(FadeInDown.delay(120).duration(450))}>
             <View style={{
               backgroundColor: '#ffffff',
               borderWidth: 1.5, borderColor: '#e2e8f0',
@@ -356,7 +428,10 @@ export default function LoginScreen() {
               </Text>
             </View>
 
+            </Animated.View>
+
             {/* Form — crisp card */}
+            <Animated.View entering={enter(FadeInDown.delay(180).duration(450))}>
             <View style={{
               backgroundColor: '#ffffff',
               borderWidth: 1.5, borderColor: '#e2e8f0',
@@ -372,17 +447,19 @@ export default function LoginScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8fafc', borderWidth: 1.5,
-                  borderColor: '#e2e8f0', borderRadius: 14,
+                  backgroundColor: fieldBg('identifier'), borderWidth: 1.5,
+                  borderColor: fieldBorder('identifier'), borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Feather name="user" size={16} color={fieldIcon('identifier')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                     placeholder="email@example.com or phone"
                     placeholderTextColor="#94a3b8"
                     value={emailOrPhone}
                     onChangeText={setEmailOrPhone}
+                    onFocus={() => setFocusedField('identifier')}
+                    onBlur={() => setFocusedField(null)}
                     editable={!loading}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -401,17 +478,19 @@ export default function LoginScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8fafc', borderWidth: 1.5,
-                  borderColor: '#e2e8f0', borderRadius: 14,
+                  backgroundColor: fieldBg('password'), borderWidth: 1.5,
+                  borderColor: fieldBorder('password'), borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Feather name="lock" size={16} color={fieldIcon('password')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                     placeholder="Enter your password"
                     placeholderTextColor="#94a3b8"
                     value={password}
                     onChangeText={setPassword}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
                     editable={!loading}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
@@ -455,9 +534,15 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            </Animated.View>
+
             {/* Login CTA */}
+            <Animated.View entering={enter(FadeInUp.delay(260).duration(450))}>
+            <Animated.View style={ctaPressStyle}>
             <TouchableOpacity
               onPress={handleLogin}
+              onPressIn={pressIn}
+              onPressOut={pressOut}
               disabled={loading}
               accessible={true}
               accessibilityRole="button"
@@ -486,6 +571,7 @@ export default function LoginScreen() {
                 </>
               )}
             </TouchableOpacity>
+            </Animated.View>
 
             <TouchableOpacity
               onPress={() => router.push(`/auth/register?role=${role}`)}
@@ -502,7 +588,10 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
 
+            </Animated.View>
+
             {/* Divider */}
+            <Animated.View entering={enter(FadeIn.delay(380).duration(450))}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
               <Text style={{ color: '#94a3b8', fontSize: 12 }}>or continue with</Text>
@@ -560,6 +649,7 @@ export default function LoginScreen() {
                 <Ionicons name="logo-apple" size={26} color="#000000" />
               </TouchableOpacity>
             </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

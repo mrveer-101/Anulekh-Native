@@ -101,7 +101,7 @@ export default function SharedSettingsView() {
         try {
           const parsedLangs = typeof profile.languages === 'string' ? JSON.parse(profile.languages) : (profile.languages || []);
           setSelectedLanguages(Array.isArray(parsedLangs) ? parsedLangs : []);
-        } catch (_) {
+        } catch {
           setSelectedLanguages(typeof profile.languages === 'string' ? [profile.languages] : []);
         }
         const slotsStr = profile.availability_slots || '';

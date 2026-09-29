@@ -82,14 +82,6 @@ export default function ProfileScreen() {
 
 
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/console/student');
-    }
-  };
-
   const isStudent = role === 'student';
   const themeColorClass = isStudent ? 'bg-blue-500 active:bg-blue-600' : 'bg-emerald-500 active:bg-emerald-600';
   const themeTextClass = isStudent ? 'text-blue-600' : 'text-emerald-600';

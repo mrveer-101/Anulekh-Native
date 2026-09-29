@@ -24,7 +24,7 @@ export default function ConsoleIndex() {
         } else {
           router.replace('/console/student');
         }
-      } catch (err) {
+      } catch {
         router.replace('/landing');
       }
     };

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -182,7 +182,7 @@ export default function StudentHomeView() {
       } else {
         Alert.alert(t('error'), t('call_unsupported'));
       }
-    } catch (_) {
+    } catch {
       Alert.alert(t('error'), t('call_error'));
     }
   };

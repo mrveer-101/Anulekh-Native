@@ -41,7 +41,7 @@ export const AppUpdateModal: React.FC = () => {
     return null;
   }
 
-  const { status, info, currentVersionCode } = result;
+  const { status, info } = result;
   const isForce = status === 'FORCE_UPDATE';
   const isWhatsNew = status === 'WHATS_NEW';
 

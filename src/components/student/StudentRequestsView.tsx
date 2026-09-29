@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -221,30 +221,6 @@ export default function StudentRequestsView() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchRequests();
-  };
-
-  const getStatusStyle = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return { bg: 'rgba(234,179,8,0.08)', border: 'rgba(234,179,8,0.2)', text: '#d97706', label: t('status_pending') };
-      case 'matched':
-        return { bg: 'rgba(5,150,105,0.08)', border: 'rgba(5,150,105,0.2)', text: '#059669', label: t('status_matched') };
-      case 'completed':
-        return { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', text: '#10b981', label: 'Completed' };
-      case 'cancelled':
-        return { bg: '#f1f5f9', border: '#e2e8f0', text: '#64748b', label: t('status_cancelled') };
-      default:
-        return { bg: 'rgba(37,99,235,0.08)', border: 'rgba(37,99,235,0.2)', text: '#2563eb', label: status };
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
   };
 
   const openRatingModal = (exam: any) => {
@@ -863,7 +839,6 @@ export default function StudentRequestsView() {
           if (activeTab === 'assignments') {
             return renderAssignmentCard(item);
           }
-          const statusStyle = getStatusStyle(item.status);
           const hasApps = item.status === 'pending' && (item.applicationCount || 0) > 0;
           const isEmergency = item.is_emergency === 'yes';
           const isMatched = item.status === 'matched';
@@ -1852,7 +1827,7 @@ export default function StudentRequestsView() {
                 } else {
                   Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
                 }
-              } catch (_) {
+              } catch {
                 Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
               }
             }}
@@ -2121,7 +2096,7 @@ export default function StudentRequestsView() {
                         try {
                           const parsed = JSON.parse(langs);
                           if (Array.isArray(parsed)) return parsed.join(', ');
-                        } catch (_) {}
+                        } catch {}
                         return langs;
                       }
                       return 'N/A';

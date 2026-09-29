@@ -46,7 +46,7 @@ if (Platform.OS === 'web') {
     }
   };
 
-  // Inject Vector Icon Fonts & Google Roboto Font for Web automatically
+  // Inject the Google Roboto text font for web. Icon fonts come from src/vector-fonts-b64.css.
   if (typeof document !== 'undefined' && !document.getElementById('expo-vector-icons-web')) {
     if (!document.getElementById('google-font-roboto')) {
       const link = document.createElement('link');
@@ -61,48 +61,6 @@ if (Platform.OS === 'web') {
 
       body, #root, [dir="auto"]:not([style*="font-family"]), input, textarea {
         font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      }
-      @font-face {
-        font-family: 'Feather';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Feather.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'Ionicons';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/Ionicons.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'MaterialIcons';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'Material Icons';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialIcons.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'MaterialCommunityIcons';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/MaterialCommunityIcons.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'FontAwesome';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      @font-face {
-        font-family: 'FontAwesome5';
-        src: url('https://cdn.jsdelivr.net/npm/react-native-vector-icons@10.2.0/Fonts/FontAwesome5_Solid.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
       }
     `;
     const styleElement = document.createElement('style');
@@ -157,7 +115,7 @@ import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 export default function RootLayout() {
   const colorScheme = useColorScheme();
 
-  const [fontsLoaded] = useFonts(
+  useFonts(
     Platform.OS === 'web'
       ? {}
       : {

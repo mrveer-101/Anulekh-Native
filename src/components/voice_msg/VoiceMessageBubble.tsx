@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useLanguage } from '@/core/translation';
 
 export interface VoiceMessageBubbleProps {
   messageId?: number;
@@ -20,7 +19,6 @@ export function VoiceMessageBubble({
   themeColor,
   duration: initialDuration,
 }: VoiceMessageBubbleProps) {
-  const { t } = useLanguage();
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [duration, setDuration] = useState(

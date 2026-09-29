@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -18,8 +17,24 @@ import { supabase, friendlyAuthError, API_URL } from '@/core/supabase';
 import { Feather, FontAwesome5 } from '@expo/vector-icons';
 import PolicyModal from '@/components/modals/PolicyModal';
 import { announceForAccessibility } from '@/core/a11y';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  ZoomIn,
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
-const { height } = Dimensions.get('window');
+
+// Hides the browser's default focus ring on web inputs; the accent-coloured field border shows focus instead.
+// RN's types don't list outlineStyle 'none', but react-native-web passes it through to CSS.
+const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
 export default function RegisterScreen() {
   const params = useLocalSearchParams<{ role?: string }>();
@@ -58,6 +73,46 @@ export default function RegisterScreen() {
   };
   const strengthColors = ['#ef4444', '#f97316', '#eab308', '#22c55e'];
   const strengthLabels = ['Too short', 'Weak', 'Fair', 'Strong'];
+
+  // ── Motion & focus polish ──
+  // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+
+  // Focused input gets an accent border, white background and tinted icon.
+  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const fieldBorder = (field: string) => (focusedField === field ? accentColor : '#e2e8f0');
+  const fieldBg = (field: string) => (focusedField === field ? '#ffffff' : '#f8fafc');
+  const fieldIcon = (field: string) => (focusedField === field ? accentColor : '#94a3b8');
+
+  // Error banner shakes briefly and is announced to screen readers.
+  const errorShake = useSharedValue(0);
+  useEffect(() => {
+    if (!errorMessage) return;
+    announceForAccessibility(errorMessage);
+    if (reduceMotion) return;
+    errorShake.set(withSequence(
+      withTiming(-8, { duration: 50 }), withTiming(8, { duration: 50 }),
+      withTiming(-5, { duration: 50 }), withTiming(5, { duration: 50 }),
+      withTiming(0, { duration: 50 }),
+    ));
+  }, [errorMessage, reduceMotion, errorShake]);
+  const errorShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: errorShake.get() }] }));
+
+  // Primary button presses down slightly.
+  const ctaPress = useSharedValue(1);
+  const ctaPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPress.get() }] }));
+  const pressIn = () => ctaPress.set(withSpring(0.97, { damping: 15, stiffness: 300 }));
+  const pressOut = () => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }));
+
+  // Top background orb glides between blue (student) and green (scribe).
+  const roleProgress = useSharedValue(isScribe ? 1 : 0);
+  useEffect(() => {
+    roleProgress.set(withTiming(isScribe ? 1 : 0, { duration: reduceMotion ? 0 : 450 }));
+  }, [isScribe, reduceMotion, roleProgress]);
+  const orbStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(roleProgress.get(), [0, 1], ['rgba(37,99,235,0.20)', 'rgba(22,163,74,0.20)']),
+  }));
 
   const handleRegister = async () => {
     if (!role) {
@@ -115,7 +170,7 @@ export default function RegisterScreen() {
       let resData: any = {};
       try {
         resData = JSON.parse(resText);
-      } catch (e) {
+      } catch {
         resData = { message: resText, error: resText };
       }
 
@@ -170,7 +225,7 @@ export default function RegisterScreen() {
       <StatusBar style="dark" />
 
       {/* Background orbs */}
-      <View style={{ position: 'absolute', top: -90, left: -70, width: 300, height: 300, borderRadius: 150, backgroundColor: isScribe ? 'rgba(22,163,74,0.20)' : 'rgba(37,99,235,0.20)' }} />
+      <Animated.View style={[{ position: 'absolute', top: -90, left: -70, width: 300, height: 300, borderRadius: 150 }, orbStyle]} />
       <View style={{ position: 'absolute', bottom: 60, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(234,88,12,0.16)' }} />
 
       <SafeAreaView style={{ flex: 1 }}>
@@ -181,6 +236,7 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Back & Top Action Row */}
+            <Animated.View entering={enter(FadeIn.duration(400))}>
             <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <TouchableOpacity
                 onPress={() => router.replace('/landing')}
@@ -209,10 +265,10 @@ export default function RegisterScreen() {
                 accessibilityHint="Navigates to the sign in login page"
                 style={{
                   flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: '#2563eb',
-                  borderWidth: 1.5, borderColor: '#1d4ed8',
+                  backgroundColor: accentColor,
+                  borderWidth: 1.5, borderColor: accentColor,
                   borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
-                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 2 },
+                  shadowColor: accentColor, shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
                 }}
               >
@@ -221,18 +277,30 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
 
+            </Animated.View>
+
             {/* Header */}
+            <Animated.View entering={enter(FadeInDown.delay(60).duration(450))}>
             <View style={{ paddingTop: 24, paddingBottom: 24 }}>
-              <Text style={{ fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
-                Create account ✨
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
+                  Create account
+                </Text>
+                <Animated.View entering={enter(ZoomIn.delay(250).springify().damping(12))}>
+                  <FontAwesome5 name="user-plus" size={24} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                </Animated.View>
+              </View>
               <Text style={{ fontSize: 15, color: '#64748b', marginTop: 6, lineHeight: 22 }}>
                 {role === 'student' ? 'Join as a student seeking a scribe' : role === 'scribe' ? 'Join as a volunteer scribe' : 'Select your account type to get started'}
               </Text>
             </View>
 
+            </Animated.View>
+
             {/* Error */}
             {errorMessage ? (
+              <Animated.View entering={enter(FadeInDown.duration(300))}>
+              <Animated.View style={errorShakeStyle}>
               <View style={{
                 backgroundColor: 'rgba(239,68,68,0.07)',
                 borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
@@ -242,9 +310,12 @@ export default function RegisterScreen() {
                 <Feather name="alert-circle" size={16} color="#dc2626" />
                 <Text style={{ color: '#dc2626', fontSize: 14, fontWeight: '600', flex: 1 }}>{errorMessage}</Text>
               </View>
+              </Animated.View>
+              </Animated.View>
             ) : null}
 
             {/* Premium Role Slider (No fill by default until explicitly selected) */}
+            <Animated.View entering={enter(FadeInDown.delay(120).duration(450))}>
             <View style={{
               backgroundColor: '#f1f5f9',
               borderWidth: 1.5, borderColor: '#cbd5e1',
@@ -282,11 +353,16 @@ export default function RegisterScreen() {
                       elevation: isSelected ? 4 : 1,
                     }}
                   >
-                    <FontAwesome5
-                      name={r === 'student' ? 'user-graduate' : 'pen-nib'}
-                      size={15}
-                      color={isSelected ? '#ffffff' : '#0f172a'}
-                    />
+                    <Animated.View
+                      key={isSelected ? 'selected' : 'idle'}
+                      entering={isSelected ? enter(ZoomIn.springify().damping(12)) : undefined}
+                    >
+                      <FontAwesome5
+                        name={r === 'student' ? 'user-graduate' : 'pen-nib'}
+                        size={15}
+                        color={isSelected ? '#ffffff' : '#0f172a'}
+                      />
+                    </Animated.View>
                     <Text style={{
                       fontSize: 14,
                       fontWeight: '800',
@@ -300,7 +376,10 @@ export default function RegisterScreen() {
               })}
             </View>
 
+            </Animated.View>
+
             {/* Form card */}
+            <Animated.View entering={enter(FadeInDown.delay(180).duration(450))}>
             <View style={{
               backgroundColor: '#ffffff',
               borderWidth: 1.5, borderColor: '#e2e8f0',
@@ -316,17 +395,19 @@ export default function RegisterScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8fafc', borderWidth: 1.5,
-                  borderColor: '#e2e8f0', borderRadius: 14,
+                  backgroundColor: fieldBg('name'), borderWidth: 1.5,
+                  borderColor: fieldBorder('name'), borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="user" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Feather name="user" size={16} color={fieldIcon('name')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                     placeholder="Enter your full name"
                     placeholderTextColor="#94a3b8"
                     value={fullName}
                     onChangeText={setFullName}
+                    onFocus={() => setFocusedField('name')}
+                    onBlur={() => setFocusedField(null)}
                     editable={!loading}
                     autoCapitalize="words"
                     autoCorrect={false}
@@ -371,17 +452,19 @@ export default function RegisterScreen() {
                 </View>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8fafc', borderWidth: 1.5,
-                  borderColor: '#e2e8f0', borderRadius: 14,
+                  backgroundColor: fieldBg('phone'), borderWidth: 1.5,
+                  borderColor: fieldBorder('phone'), borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Feather name="phone" size={16} color={fieldIcon('phone')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                     placeholder="Enter your 10-digit mobile number"
                     placeholderTextColor="#94a3b8"
                     value={phone}
                     onChangeText={setPhone}
+                    onFocus={() => setFocusedField('phone')}
+                    onBlur={() => setFocusedField(null)}
                     editable={!loading}
                     keyboardType="phone-pad"
                     accessible={true}
@@ -393,7 +476,7 @@ export default function RegisterScreen() {
 
               {/* Optional Email Field (expanded when user clicks + Add Email ID) */}
               {showEmailField && (
-                <View>
+                <Animated.View entering={enter(FadeInDown.duration(300))}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
                       Email <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
@@ -410,17 +493,19 @@ export default function RegisterScreen() {
                   </View>
                   <View style={{
                     flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8fafc', borderWidth: 1.5,
-                    borderColor: '#e2e8f0', borderRadius: 14,
+                    backgroundColor: fieldBg('email'), borderWidth: 1.5,
+                    borderColor: fieldBorder('email'), borderRadius: 14,
                     paddingHorizontal: 14,
                   }}>
-                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                    <Feather name="mail" size={16} color={fieldIcon('email')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                     <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                       placeholder="Enter your optional email"
                       placeholderTextColor="#94a3b8"
                       value={email}
                       onChangeText={setEmail}
+                      onFocus={() => setFocusedField('email')}
+                      onBlur={() => setFocusedField(null)}
                       editable={!loading}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -430,7 +515,7 @@ export default function RegisterScreen() {
                       accessibilityHint="Enter your email address"
                     />
                   </View>
-                </View>
+                </Animated.View>
               )}
 
               {/* 3. Password */}
@@ -440,17 +525,19 @@ export default function RegisterScreen() {
                 </Text>
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8fafc', borderWidth: 1.5,
-                  borderColor: '#e2e8f0', borderRadius: 14,
+                  backgroundColor: fieldBg('password'), borderWidth: 1.5,
+                  borderColor: fieldBorder('password'), borderRadius: 14,
                   paddingHorizontal: 14,
                 }}>
-                  <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Feather name="lock" size={16} color={fieldIcon('password')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14 }}
+                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
                     placeholder="Create a strong password"
                     placeholderTextColor="#94a3b8"
                     value={password}
                     onChangeText={setPassword}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
                     editable={!loading}
                     secureTextEntry={!showPass}
                     autoCapitalize="none"
@@ -474,6 +561,7 @@ export default function RegisterScreen() {
 
               {/* Password strength */}
               {password.length > 0 && (
+                <Animated.View entering={enter(FadeIn.duration(250))}>
                 <View
                   accessible={true}
                   accessibilityLabel={`Password strength: ${strength > 0 ? strengthLabels[strength - 1] : 'Weak'}`}
@@ -496,10 +584,14 @@ export default function RegisterScreen() {
                     {strength > 0 ? strengthLabels[strength - 1] : ''}
                   </Text>
                 </View>
+                </Animated.View>
               )}
             </View>
 
+            </Animated.View>
+
             {/* Terms and Conditions Checkbox */}
+            <Animated.View entering={enter(FadeInDown.delay(240).duration(450))}>
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -528,7 +620,11 @@ export default function RegisterScreen() {
                   justifyContent: 'center',
                 }}
               >
-                {agreedToTerms && <Feather name="check" size={14} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />}
+                {agreedToTerms && (
+                  <Animated.View entering={enter(ZoomIn.springify().damping(12))}>
+                    <Feather name="check" size={14} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  </Animated.View>
+                )}
               </TouchableOpacity>
               
               <Text style={{ flex: 1, fontSize: 13, color: '#475569', lineHeight: 18 }}>
@@ -545,9 +641,15 @@ export default function RegisterScreen() {
               </Text>
             </View>
 
+            </Animated.View>
+
             {/* CTA */}
+            <Animated.View entering={enter(FadeInUp.delay(300).duration(450))}>
+            <Animated.View style={ctaPressStyle}>
             <TouchableOpacity
               onPress={handleRegister}
+              onPressIn={pressIn}
+              onPressOut={pressOut}
               disabled={loading}
               accessible={true}
               accessibilityRole="button"
@@ -575,6 +677,7 @@ export default function RegisterScreen() {
                 </>
               )}
             </TouchableOpacity>
+            </Animated.View>
 
             <TouchableOpacity
               onPress={() => router.push(`/auth/login?role=${role}`)}
@@ -589,6 +692,7 @@ export default function RegisterScreen() {
                 <Text style={{ color: accentColor, fontWeight: '800' }}>Sign In</Text>
               </Text>
             </TouchableOpacity>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>

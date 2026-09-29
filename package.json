@@ -24,8 +24,6 @@
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
     "expo-system-ui": "~56.0.5",
-    "expo-web-browser": "~56.0.6",
-    "lucide-react-native": "^1.31.0",
     "nativewind": "^4.2.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -50,21 +48,12 @@
   },
   "scripts": {
     "start": "expo start",
-    "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "expo export -p web",
+    "build:fonts": "node ./scripts/build-fonts.js",
     "lint": "expo lint"
-  },
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "expo-av"
-        ]
-      }
-    }
   },
   "private": true
 }

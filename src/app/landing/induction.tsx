@@ -1,10 +1,27 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, ScrollView, Image as RNImage, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, FontAwesome5 } from '@expo/vector-icons';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  SlideInDown,
+  ZoomIn,
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import { useLanguage } from '@/core/translation';
 
 // Translation dictionary for English, Hindi, and Gujarati
 const TRANSLATIONS: Record<string, {
@@ -100,6 +117,23 @@ const TRANSLATIONS: Record<string, {
   }
 };
 
+// Soft background tints that shift with each step so every slide feels distinct.
+const ORB_TOP_COLORS = ['rgba(37,99,235,0.18)', 'rgba(79,70,229,0.18)', 'rgba(16,185,129,0.18)', 'rgba(249,115,22,0.14)'];
+const ORB_BOTTOM_COLORS = ['rgba(16,185,129,0.12)', 'rgba(37,99,235,0.12)', 'rgba(234,179,8,0.14)', 'rgba(37,99,235,0.12)'];
+
+/** Progress pill that smoothly stretches and recolours when it becomes the active step. */
+function ProgressDot({ active, reduceMotion }: { active: boolean; reduceMotion: boolean }) {
+  const progress = useSharedValue(active ? 1 : 0);
+  useEffect(() => {
+    progress.set(withTiming(active ? 1 : 0, { duration: reduceMotion ? 0 : 300, easing: Easing.out(Easing.cubic) }));
+  }, [active, reduceMotion, progress]);
+  const style = useAnimatedStyle(() => ({
+    width: 8 + progress.get() * 24,
+    backgroundColor: interpolateColor(progress.get(), [0, 1], ['#cbd5e1', '#2563eb']),
+  }));
+  return <Animated.View style={[{ height: 8, borderRadius: 4 }, style]} />;
+}
+
 /**
  * OnboardingCarousel Component (Light Theme + Localized Demo + Floating Header Buttons)
  * 
@@ -113,7 +147,45 @@ export default function OnboardingCarousel() {
 
   // Language selection states
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  const [appLanguage, setAppLanguage] = useState<'English' | 'Hindi' | 'Gujarati'>('English');
+  // Shared app language: the choice made here carries into registration and the rest of the app.
+  const { lang: appLanguage, changeLanguage } = useLanguage();
+
+  // Open the language picker as soon as the intro starts, so language is the first choice the user makes.
+  useEffect(() => {
+    const timer = setTimeout(() => setShowLanguageModal(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Animation state: slide direction (1 = forward, -1 = back) and the OS "Reduce Motion" preference.
+  const [direction, setDirection] = useState<1 | -1>(1);
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+
+  // Background orbs drift between per-slide tints.
+  const stepProgress = useSharedValue(0);
+  useEffect(() => {
+    stepProgress.set(withTiming(currentStep, { duration: reduceMotion ? 0 : 600 }));
+  }, [currentStep, reduceMotion, stepProgress]);
+  const orbTopStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(stepProgress.get(), [0, 1, 2, 3], ORB_TOP_COLORS),
+  }));
+  const orbBottomStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(stepProgress.get(), [0, 1, 2, 3], ORB_BOTTOM_COLORS),
+  }));
+
+  // Slide icons float gently up and down.
+  const floatY = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    floatY.set(withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+        withTiming(0, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
+      ),
+      -1,
+    ));
+  }, [reduceMotion, floatY]);
+  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
 
   // Fetch active translation strings
   const t = TRANSLATIONS[appLanguage];
@@ -121,6 +193,7 @@ export default function OnboardingCarousel() {
   // Handler to advance to the next slide
   const handleNext = () => {
     if (currentStep < totalSteps - 1) {
+      setDirection(1);
       setCurrentStep(currentStep + 1);
     }
   };
@@ -128,6 +201,7 @@ export default function OnboardingCarousel() {
   // Handler to return to the previous slide
   const handleBack = () => {
     if (currentStep > 0) {
+      setDirection(-1);
       setCurrentStep(currentStep - 1);
     }
   };
@@ -148,16 +222,14 @@ export default function OnboardingCarousel() {
       <StatusBar style="dark" />
 
       {/* Soft background pastel orbs */}
-      <View style={{
+      <Animated.View style={[{
         position: 'absolute', top: -100, left: -80,
         width: 320, height: 320, borderRadius: 160,
-        backgroundColor: 'rgba(37,99,235,0.18)',
-      }} />
-      <View style={{
+      }, orbTopStyle]} />
+      <Animated.View style={[{
         position: 'absolute', bottom: -80, right: -60,
         width: 280, height: 280, borderRadius: 140,
-        backgroundColor: 'rgba(16,185,129,0.12)',
-      }} />
+      }, orbBottomStyle]} />
 
       <SafeAreaView style={{ flex: 1 }}>
       
@@ -205,9 +277,11 @@ export default function OnboardingCarousel() {
             accessibilityLabel={`Select Language. Current: ${appLanguage}. Button`}
             accessibilityHint="Opens language selection sheet"
           >
+            <Feather name="globe" size={14} color="#2563eb" style={{ marginRight: 6 }} />
             <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>
-              🌐 {appLanguage === 'Hindi' ? 'हिन्दी' : appLanguage === 'Gujarati' ? 'ગુજરાતી' : 'EN'}
+              {appLanguage === 'Hindi' ? 'हिन्दी' : appLanguage === 'Gujarati' ? 'ગુજરાતી' : 'EN'}
             </Text>
+            <Feather name="chevron-down" size={14} color="#2563eb" style={{ marginLeft: 4 }} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
@@ -232,6 +306,7 @@ export default function OnboardingCarousel() {
             accessibilityLabel={`${t.back}, button`}
             accessibilityHint="Goes back to the previous onboarding slide"
           >
+            <Feather name="chevron-left" size={16} color="#2563eb" style={{ marginLeft: -4, marginRight: 2 }} />
             <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>{t.back}</Text>
           </TouchableOpacity>
         )}
@@ -239,15 +314,7 @@ export default function OnboardingCarousel() {
         {/* Progress indicators (Dots / Pills) */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           {Array.from({ length: totalSteps }).map((_, index) => (
-            <View 
-              key={index}
-              style={{
-                height: 8,
-                borderRadius: 4,
-                width: index === currentStep ? 32 : 8,
-                backgroundColor: index === currentStep ? '#2563eb' : '#cbd5e1',
-              }}
-            />
+            <ProgressDot key={index} active={index === currentStep} reduceMotion={reduceMotion} />
           ))}
         </View>
 
@@ -258,7 +325,7 @@ export default function OnboardingCarousel() {
         */}
         {currentStep < totalSteps - 1 ? (
           <TouchableOpacity 
-            onPress={() => setCurrentStep(totalSteps - 1)}
+            onPress={() => { setDirection(1); setCurrentStep(totalSteps - 1); }}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
@@ -294,6 +361,10 @@ export default function OnboardingCarousel() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} 
         className="px-6 py-4"
       >
+        <Animated.View
+          key={currentStep}
+          entering={enter(direction === 1 ? FadeInRight.duration(380) : FadeInLeft.duration(380))}
+        >
         
         {/* SLIDE 1: Primary Branding Introduction */}
         {currentStep === 0 && (
@@ -306,7 +377,9 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Clean rounded container for the logo */}
+            {/* Clean rounded container for the logo — pops in, then floats */}
+            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
+            <Animated.View style={floatStyle}>
             <View style={{
               width: 110,
               height: 110,
@@ -336,8 +409,11 @@ export default function OnboardingCarousel() {
                 accessibilityLabel="Anulekh Logo"
               />
             </View>
+            </Animated.View>
+            </Animated.View>
 
-            <Text 
+            <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
+            <Text
               className="text-2xl font-black text-slate-900 text-center tracking-tight px-2"
               accessible={true}
               accessibilityRole="header"
@@ -349,6 +425,7 @@ export default function OnboardingCarousel() {
             <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
               {t.slides[0].desc}
             </Text>
+            </Animated.View>
           </View>
         )}
 
@@ -363,8 +440,10 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Minimalist Book-open outline icon */}
-            <View 
+            {/* Minimalist Book-open outline icon — pops in, then floats */}
+            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
+            <Animated.View style={floatStyle}>
+            <View  
               style={{
                 width: 96, height: 96,
                 backgroundColor: 'rgba(37,99,235,0.08)',
@@ -378,8 +457,11 @@ export default function OnboardingCarousel() {
             >
               <Feather name="book-open" size={42} color="#2563eb" />
             </View>
+            </Animated.View>
+            </Animated.View>
 
-            <Text 
+            <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
+            <Text
               className="text-2xl font-black text-slate-900 text-center px-2"
               accessible={true}
               accessibilityRole="header"
@@ -391,6 +473,7 @@ export default function OnboardingCarousel() {
             <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
               {t.slides[1].desc}
             </Text>
+            </Animated.View>
           </View>
         )}
 
@@ -405,8 +488,10 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Minimalist Users outline icon representing community connection */}
-            <View 
+            {/* Minimalist Users outline icon representing community connection — pops in, then floats */}
+            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
+            <Animated.View style={floatStyle}>
+            <View  
               style={{
                 width: 96, height: 96,
                 backgroundColor: 'rgba(16,185,129,0.08)',
@@ -420,8 +505,11 @@ export default function OnboardingCarousel() {
             >
               <Feather name="users" size={42} color="#10b981" />
             </View>
+            </Animated.View>
+            </Animated.View>
 
-            <Text 
+            <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
+            <Text
               className="text-2xl font-black text-slate-900 text-center px-2"
               accessible={true}
               accessibilityRole="header"
@@ -433,6 +521,7 @@ export default function OnboardingCarousel() {
             <Text className="text-slate-600 text-center mt-5 text-sm leading-relaxed max-w-xs">
               {t.slides[2].desc}
             </Text>
+            </Animated.View>
           </View>
         )}
 
@@ -447,7 +536,8 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 450, justifyContent: 'center',
           }}>
-            {/* White rounded corner square container for the logo */}
+            {/* White rounded corner square container for the logo — pops in */}
+            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
             <View style={{
               width: 100,
               height: 100,
@@ -477,6 +567,7 @@ export default function OnboardingCarousel() {
                 accessibilityLabel="Anulekh Logo"
               />
             </View>
+            </Animated.View>
             
             <Text 
               className="text-2xl font-black text-slate-900 text-center px-2"
@@ -493,7 +584,8 @@ export default function OnboardingCarousel() {
 
             <View className="space-y-4 w-full">
               {/* Student CTA Button (Solid Brand Blue 500 + Shadow Glow) */}
-              <TouchableOpacity 
+              <Animated.View entering={enter(FadeInDown.delay(200).duration(420))}>
+              <TouchableOpacity  
                 onPress={handleNavigateToStudent}
                 className="w-full bg-blue-500 active:bg-blue-600 py-4 px-6 rounded-xl items-center justify-center shadow-lg shadow-blue-500/25"
                 accessible={true}
@@ -502,13 +594,18 @@ export default function OnboardingCarousel() {
                 accessibilityHint="Double tap to register or log in as a student in need of a scribe"
                 activeOpacity={0.85}
               >
-                <Text className="text-white text-base font-bold">
-                  {t.studentBtn}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <FontAwesome5 name="user-graduate" size={16} color="#ffffff" />
+                  <Text className="text-white text-base font-bold" style={{ flexShrink: 1 }}>
+                    {t.studentBtn}
+                  </Text>
+                </View>
               </TouchableOpacity>
+              </Animated.View>
 
               {/* Scribe CTA Button (Solid Volunteer Emerald 500 + Shadow Glow) */}
-              <TouchableOpacity 
+              <Animated.View entering={enter(FadeInDown.delay(300).duration(420))}>
+              <TouchableOpacity  
                 onPress={handleNavigateToScribe}
                 className="w-full bg-emerald-500 active:bg-emerald-600 py-4 px-6 rounded-xl items-center justify-center mt-4 shadow-lg shadow-emerald-500/25"
                 accessible={true}
@@ -517,13 +614,18 @@ export default function OnboardingCarousel() {
                 accessibilityHint="Double tap to register or log in as a volunteer scribe"
                 activeOpacity={0.85}
               >
-                <Text className="text-white text-base font-bold">
-                  {t.scribeBtn}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <FontAwesome5 name="pen-nib" size={16} color="#ffffff" />
+                  <Text className="text-white text-base font-bold" style={{ flexShrink: 1 }}>
+                    {t.scribeBtn}
+                  </Text>
+                </View>
               </TouchableOpacity>
+              </Animated.View>
             </View>
           </View>
         )}
+        </Animated.View>
       </ScrollView>
 
       {/* 
@@ -553,7 +655,10 @@ export default function OnboardingCarousel() {
             accessibilityHint="Goes to the next onboarding screen"
             activeOpacity={0.85}
           >
-            <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '800' }}>{t.next}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '800' }}>{t.next}</Text>
+              <Feather name="arrow-right" size={18} color="#ffffff" />
+            </View>
           </TouchableOpacity>
         </View>
       )}
@@ -563,8 +668,12 @@ export default function OnboardingCarousel() {
       */}
       {showLanguageModal && (
         <View className="absolute inset-0 z-50 flex-col justify-end">
-          {/* Dimming Backdrop Overlay */}
-          <TouchableOpacity 
+          {/* Dimming Backdrop Overlay (fades in) */}
+          <Animated.View
+            entering={enter(FadeIn.duration(200))}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          >
+          <TouchableOpacity  
             activeOpacity={1} 
             onPress={() => setShowLanguageModal(false)} 
             className="absolute inset-0 bg-black/45"
@@ -572,8 +681,10 @@ export default function OnboardingCarousel() {
             accessibilityLabel="Close language selector backdrop, button"
             accessibilityHint="Tap anywhere outside to close the language modal"
           />
+          </Animated.View>
           
-          {/* Modal Container */}
+          {/* Modal Container (slides up) */}
+          <Animated.View entering={enter(SlideInDown.duration(320))}>
           <View className="bg-white rounded-t-3xl p-6 border-t border-slate-100 shadow-2xl z-50">
             <View className="items-center mb-6">
               {/* Decorative handle bar */}
@@ -598,8 +709,9 @@ export default function OnboardingCarousel() {
                   <TouchableOpacity
                     key={lang}
                     onPress={() => {
-                      setAppLanguage(lang as 'English' | 'Hindi' | 'Gujarati');
-                      setShowLanguageModal(false);
+                      changeLanguage(lang as 'English' | 'Hindi' | 'Gujarati');
+                      // Brief pause so the user sees their pick confirmed before the sheet closes.
+                      setTimeout(() => setShowLanguageModal(false), reduceMotion ? 0 : 280);
                     }}
                     className={`w-full py-4 px-5 rounded-xl border flex-row items-center justify-between mt-3 ${
                       isSelected 
@@ -607,7 +719,7 @@ export default function OnboardingCarousel() {
                         : 'bg-slate-50 border-slate-200'
                     }`}
                     accessible={true}
-                    accessibilityRole="checkbox"
+                    accessibilityRole="radio"
                     accessibilityLabel={localizedNames[lang]}
                     accessibilityState={{ checked: isSelected }}
                   >
@@ -615,7 +727,9 @@ export default function OnboardingCarousel() {
                       {localizedNames[lang]}
                     </Text>
                     {isSelected && (
-                      <Text className="text-blue-500 font-bold text-lg">✓</Text>
+                      <Animated.View entering={enter(ZoomIn.springify().damping(12))}>
+                        <Feather name="check-circle" size={20} color="#3b82f6" />
+                      </Animated.View>
                     )}
                   </TouchableOpacity>
                 );
@@ -633,6 +747,7 @@ export default function OnboardingCarousel() {
               <Text className="text-white font-bold text-base">{t.closeBtn}</Text>
             </TouchableOpacity>
           </View>
+          </Animated.View>
         </View>
       )}
 

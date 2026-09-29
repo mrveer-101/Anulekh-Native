@@ -1,131 +1,94 @@
-import { Image } from 'expo-image';
-import { useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import Animated, { Easing, Keyframe, runOnJS } from 'react-native-reanimated';
+import { useEffect, useState } from 'react';
+import { Image, Platform, StyleSheet } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
-const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
-const DURATION = 600;
+import { SPLASH_PAPER, SplashBackground, SplashLogo, SplashTitle } from './BrandSplash';
 
-const splashKeyframe = new Keyframe({
-  0: {
-    transform: [{ scale: INITIAL_SCALE_FACTOR }],
-    opacity: 1,
-  },
-  20: {
-    opacity: 1,
-  },
-  70: {
-    opacity: 0,
-    easing: Easing.elastic(0.7),
-  },
-  100: {
-    opacity: 0,
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(0.7),
-  },
-});
+// Timeline (ms) once the native splash hides.
+const CLOUDS_IN = 200;
+const HOLD = 1400;
+const FADE_OUT = 350;
 
+// iOS shows this full-screen image as its native splash (app.json → expo-splash-screen → ios).
+const IOS_FULL_SPLASH = Platform.OS === 'ios';
+
+/**
+ * Continues the native splash with the colourful paper-and-clouds screen, then fades away to reveal the app.
+ * - iOS: the native splash is already the full picture, so the same image is shown here — no visible change.
+ * - Android: the native splash can only be the paper colour + logo tile, so the clouds and title appear
+ *   around the logo almost immediately.
+ */
 export function AnimatedSplashOverlay() {
+  const reduceMotion = useReducedMotion();
   const [visible, setVisible] = useState(true);
+  const clouds = useSharedValue(IOS_FULL_SPLASH || reduceMotion ? 1 : 0);
+  const layer = useSharedValue(1);
+
+  useEffect(() => {
+    const hold = reduceMotion ? 800 : HOLD;
+    const fade = reduceMotion ? 200 : FADE_OUT;
+    clouds.set(withTiming(1, { duration: reduceMotion ? 0 : CLOUDS_IN, easing: Easing.out(Easing.quad) }));
+    layer.set(withDelay(hold, withTiming(0, { duration: fade, easing: Easing.in(Easing.quad) })));
+    const timer = setTimeout(() => setVisible(false), hold + fade + 50);
+    return () => clearTimeout(timer);
+  }, [reduceMotion, clouds, layer]);
+
+  const layerStyle = useAnimatedStyle(() => ({ opacity: layer.get() }));
+  const cloudStyle = useAnimatedStyle(() => ({ opacity: clouds.get() }));
 
   if (!visible) return null;
 
-  return (
-    <Animated.View
-      entering={splashKeyframe.duration(DURATION).withCallback((finished) => {
-        'worklet';
-        if (finished) {
-          runOnJS(setVisible)(false);
-        }
-      })}
-      style={styles.backgroundSolidColor}
-    />
-  );
-}
-
-const keyframe = new Keyframe({
-  0: {
-    transform: [{ scale: INITIAL_SCALE_FACTOR }],
-  },
-  100: {
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(0.7),
-  },
-});
-
-const logoKeyframe = new Keyframe({
-  0: {
-    transform: [{ scale: 1.3 }],
-    opacity: 0,
-  },
-  40: {
-    transform: [{ scale: 1.3 }],
-    opacity: 0,
-    easing: Easing.elastic(0.7),
-  },
-  100: {
-    opacity: 1,
-    transform: [{ scale: 1 }],
-    easing: Easing.elastic(0.7),
-  },
-});
-
-const glowKeyframe = new Keyframe({
-  0: {
-    transform: [{ rotateZ: '0deg' }],
-  },
-  100: {
-    transform: [{ rotateZ: '7200deg' }],
-  },
-});
-
-export function AnimatedIcon() {
-  return (
-    <View style={styles.iconContainer}>
-      <Animated.View entering={glowKeyframe.duration(60 * 1000 * 4)} style={styles.glow}>
-        <Image style={styles.glow} source={require('@/assets/images/logo-glow.png')} />
+  if (IOS_FULL_SPLASH) {
+    return (
+      <Animated.View style={[styles.overlay, layerStyle]} pointerEvents="none">
+        <Image
+          source={require('@/assets/images/splash-full.png')}
+          style={styles.fullImage}
+          resizeMode="cover"
+          accessibilityLabel="Anulekh — A Scribe for every Voice"
+        />
       </Animated.View>
+    );
+  }
 
-      <Animated.View entering={keyframe.duration(DURATION)} style={styles.background} />
-      <Animated.View style={styles.imageContainer} entering={logoKeyframe.duration(DURATION)}>
-        <Image style={styles.image} source={require('@/assets/images/Pen_Logo.jpg')} />
+  return (
+    <Animated.View style={[styles.overlay, layerStyle]} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFill, cloudStyle]}>
+        <SplashBackground />
       </Animated.View>
-    </View>
+      <SplashLogo />
+      <Animated.View
+        entering={reduceMotion ? undefined : FadeIn.duration(CLOUDS_IN)}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      >
+        <SplashTitle />
+      </Animated.View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  imageContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  glow: {
-    width: 201,
-    height: 201,
-    position: 'absolute',
-  },
-  iconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 128,
-    height: 128,
-    zIndex: 100,
-  },
-  image: {
-    position: 'absolute',
-    width: 76,
-    height: 71,
-  },
-  background: {
-    borderRadius: 40,
-    experimental_backgroundImage: `linear-gradient(180deg, #3C9FFE, #0274DF)`,
-    width: 128,
-    height: 128,
-    position: 'absolute',
-  },
-  backgroundSolidColor: {
+  overlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
+    backgroundColor: SPLASH_PAPER,
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 1000,
+  },
+  fullImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
   },
 });

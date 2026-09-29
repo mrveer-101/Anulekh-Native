@@ -50,7 +50,7 @@ export default function ConsoleStudentPC({
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (_) {}
+    } catch {}
     router.replace('/auth/login');
   };
 

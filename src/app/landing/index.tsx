@@ -1,31 +1,62 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  Animated,
-  Dimensions,
+  Pressable,
   ScrollView,
   Image,
+  useWindowDimensions,
 } from 'react-native';
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  ZoomIn,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
-import { useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import LandingPC from '@/components/pc_view/LandingPC';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+// Entrance timeline (ms). Cards start while the logo is still settling so the screen flows as one motion.
+const CARD_START = 250;
+const CARD_STAGGER = 120;
+const CTA_DELAY = 700;
+const FOOTER_DELAY = 950;
+const CTA_PULSE_DELAY = 1400;
 
 export default function LandingScreen() {
   const { width, height } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-  const scaleLogo = useRef(new Animated.Value(0.85)).current;
-  const card1Anim = useRef(new Animated.Value(50)).current;
-  const card2Anim = useRef(new Animated.Value(50)).current;
-  const card3Anim = useRef(new Animated.Value(50)).current;
+  // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+
+  // Logo tile grows from 85% to full size while the header fades in.
+  const logoScale = useSharedValue(reduceMotion ? 1 : 0.85);
+  const logoStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: logoScale.get() }],
+  }));
+
+  const ctaPulse = useSharedValue(1);
+  const ctaPress = useSharedValue(1);
+  const ctaStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: ctaPulse.get() * ctaPress.get() }],
+  }));
 
   const checkExistingSession = async () => {
     try {
@@ -34,29 +65,25 @@ export default function LandingScreen() {
       const { data: profile } = await supabase
         .from('profiles').select('role').eq('id', session.user.id).single();
       router.replace((profile?.role === 'scribe' ? '/console/scribe' : '/console/student') as any);
-    } catch (_) {}
-  };
-
-  const runEntryAnimations = () => {
-    Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.spring(scaleLogo, { toValue: 1, friction: 6, tension: 50, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
-    ]).start(() => {
-      Animated.stagger(100, [
-        Animated.spring(card1Anim, { toValue: 0, friction: 7, tension: 60, useNativeDriver: true }),
-        Animated.spring(card2Anim, { toValue: 0, friction: 7, tension: 60, useNativeDriver: true }),
-        Animated.spring(card3Anim, { toValue: 0, friction: 7, tension: 60, useNativeDriver: true }),
-      ]).start();
-    });
+    } catch {}
   };
 
   useEffect(() => {
     checkExistingSession();
-    if (!isDesktop) {
-      runEntryAnimations();
-    }
   }, [isDesktop]);
+
+  // Entrance: logo springs to full size, then Get Started "breathes" once to draw the eye to it.
+  useEffect(() => {
+    if (isDesktop || reduceMotion) return;
+    logoScale.set(withSpring(1, { damping: 12, stiffness: 90 }));
+    ctaPulse.set(withDelay(
+      CTA_PULSE_DELAY,
+      withSequence(
+        withTiming(1.04, { duration: 260, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 340, easing: Easing.inOut(Easing.quad) }),
+      ),
+    ));
+  }, [isDesktop, reduceMotion, ctaPulse, logoScale]);
 
   if (isDesktop) {
     return <LandingPC />;
@@ -77,7 +104,7 @@ export default function LandingScreen() {
       shadowColor: '#2563eb',
       title: 'Smart Matching',
       desc: 'Find scribes within 10 km by language & subject',
-      anim: card1Anim,
+      delay: CARD_START,
     },
     {
       icon: 'shield' as const,
@@ -87,7 +114,7 @@ export default function LandingScreen() {
       shadowColor: '#16a34a',
       title: 'Verified Volunteers',
       desc: 'Every scribe is reviewed and approved before joining',
-      anim: card2Anim,
+      delay: CARD_START + CARD_STAGGER,
     },
     {
       icon: 'message-circle' as const,
@@ -97,7 +124,7 @@ export default function LandingScreen() {
       shadowColor: '#ea580c',
       title: 'Easy Coordination',
       desc: 'Built-in chat, calling & digital declaration form',
-      anim: card3Anim,
+      delay: CARD_START + CARD_STAGGER * 2,
     },
   ];
 
@@ -129,19 +156,20 @@ export default function LandingScreen() {
       }} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        <Animated.ScrollView
+        <ScrollView
           contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 36 }}
           showsVerticalScrollIndicator={false}
-          style={{ opacity: fadeAnim }}
         >
           {/* ── Logo + tagline ── */}
-          <Animated.View style={{
-            alignItems: 'center',
-            paddingTop: 44,
-            paddingBottom: 32,
-            transform: [{ scale: scaleLogo }],
-          }}>
-             <View style={{
+          <Animated.View
+            entering={enter(FadeIn.duration(700))}
+            style={{
+              alignItems: 'center',
+              paddingTop: 44,
+              paddingBottom: 32,
+            }}
+          >
+             <Animated.View style={[{
               width: 84, height: 84, borderRadius: 26,
               backgroundColor: 'rgba(255,255,255,0.75)',
               borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
@@ -151,13 +179,13 @@ export default function LandingScreen() {
               shadowOffset: { width: 0, height: 10 },
               shadowOpacity: 0.2, shadowRadius: 24, elevation: 12,
               overflow: 'hidden',
-            }}>
+            }, logoStyle]}>
               <Image 
                 source={require('../../../assets/images/custom/Pen_Logo.jpg')} 
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="cover"
               />
-            </View>
+            </Animated.View>
 
             <Text style={{
               fontSize: 40, fontWeight: '900',
@@ -174,9 +202,12 @@ export default function LandingScreen() {
           </Animated.View>
 
           {/* ── Feature cards (glass) ── */}
-          <Animated.View style={{ gap: 12, marginBottom: 32, transform: [{ translateY: slideAnim }] }}>
+          <View style={{ gap: 12, marginBottom: 32 }}>
             {features.map((f) => (
-              <Animated.View key={f.title} style={{ transform: [{ translateY: f.anim }] }}>
+              <Animated.View
+                key={f.title}
+                entering={enter(FadeInDown.delay(f.delay).duration(550).springify().damping(18))}
+              >
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
                   backgroundColor: 'rgba(255,255,255,0.85)',
@@ -193,7 +224,9 @@ export default function LandingScreen() {
                     alignItems: 'center', justifyContent: 'center',
                     marginRight: 16,
                   }}>
-                    <Feather name={f.icon} size={22} color={f.color} />
+                    <Animated.View entering={enter(ZoomIn.delay(f.delay + 220).springify().damping(10))}>
+                      <Feather name={f.icon} size={22} color={f.color} />
+                    </Animated.View>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 3 }}>
@@ -206,29 +239,38 @@ export default function LandingScreen() {
                 </View>
               </Animated.View>
             ))}
-          </Animated.View>
+          </View>
 
           {/* ── CTA Buttons ── */}
-          <View style={{ gap: 12, marginBottom: 28 }}>
-            {/* Primary CTA */}
-            <TouchableOpacity
+          <Animated.View
+            entering={enter(FadeInUp.delay(CTA_DELAY).duration(500))}
+            style={{ gap: 12, marginBottom: 28 }}
+          >
+            {/* Primary CTA — presses down slightly, and "breathes" once after the entrance */}
+            <AnimatedPressable
               onPress={handleGetStarted}
-              activeOpacity={0.85}
-              style={{
-                backgroundColor: '#2563eb',
-                borderRadius: 18, paddingVertical: 18,
-                flexDirection: 'row', alignItems: 'center',
-                justifyContent: 'center', gap: 8,
-                shadowColor: '#2563eb',
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.35, shadowRadius: 20, elevation: 10,
-              }}
+              onPressIn={() => ctaPress.set(withSpring(0.96, { damping: 15, stiffness: 300 }))}
+              onPressOut={() => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }))}
+              accessibilityRole="button"
+              accessibilityLabel="Get Started"
+              style={[
+                {
+                  backgroundColor: '#2563eb',
+                  borderRadius: 18, paddingVertical: 18,
+                  flexDirection: 'row', alignItems: 'center',
+                  justifyContent: 'center', gap: 8,
+                  shadowColor: '#2563eb',
+                  shadowOffset: { width: 0, height: 10 },
+                  shadowOpacity: 0.35, shadowRadius: 20, elevation: 10,
+                },
+                ctaStyle,
+              ]}
             >
               <Text style={{ color: '#ffffff', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 }}>
                 Get Started
               </Text>
               <Feather name="arrow-right" size={18} color="#ffffff" />
-            </TouchableOpacity>
+            </AnimatedPressable>
 
             {/* Secondary CTA */}
             <TouchableOpacity
@@ -245,18 +287,21 @@ export default function LandingScreen() {
                 <Text style={{ color: '#2563eb', fontWeight: '800' }}>Log In</Text>
               </Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
 
           {/* Footer */}
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(255,255,255,0.8)',
-            borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
-            borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16,
-            alignSelf: 'center', marginTop: 4,
-            shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-          }}>
+          <Animated.View
+            entering={enter(FadeIn.delay(FOOTER_DELAY).duration(500))}
+            style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+              backgroundColor: 'rgba(255,255,255,0.8)',
+              borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)',
+              borderRadius: 16, paddingVertical: 8, paddingHorizontal: 16,
+              alignSelf: 'center', marginTop: 4,
+              shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+            }}
+          >
             <Text style={{
               fontFamily: 'Roboto',
               fontSize: 13,
@@ -265,8 +310,8 @@ export default function LandingScreen() {
             }}>
               Made with <Text style={{ color: '#ef4444' }}>❤️</Text> to help students
             </Text>
-          </View>
-        </Animated.ScrollView>
+          </Animated.View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );

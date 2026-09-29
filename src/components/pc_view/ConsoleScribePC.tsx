@@ -51,7 +51,7 @@ export default function ConsoleScribePC({
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (_) {}
+    } catch {}
     router.replace('/auth/login');
   };
 

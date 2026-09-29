@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
-import * as FileSystem from 'expo-file-system';
 import { useLanguage } from '@/core/translation';
 import { isExamToday, isExamPast } from '@/core/examDate';
 
@@ -175,30 +174,6 @@ export default function ChatRoomScreen() {
       loadMessages();
     } catch (e) {
       console.error('Error sending message:', e);
-    }
-  };
-
-  const sendMockAttachment = async (type: 'image' | 'pdf', name: string) => {
-    if (!currentUser || !exam) return;
-    setIsAttachmentModalOpen(false);
-
-    const attachmentMessage = `[file/${type};name=${name};base64]mock_data`;
-
-    try {
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          request_id: exam.id,
-          sender_id: currentUser.id,
-          message: attachmentMessage,
-          message_type: type,
-          created_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-      loadMessages();
-    } catch (e) {
-      console.error('Error sending attachment:', e);
     }
   };
 

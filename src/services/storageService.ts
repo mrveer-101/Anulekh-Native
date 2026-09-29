@@ -111,7 +111,7 @@ export const storageService = {
         } else {
           const uploadRes = await FileSystem.uploadAsync(presigned.upload_url, fileUriOrBase64, {
             httpMethod: 'PUT',
-            uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+            uploadType: (FileSystem.UploadType?.BINARY_CONTENT ?? 0) as any,
             headers: {
               'Content-Type': options.contentType || 'application/octet-stream',
             },

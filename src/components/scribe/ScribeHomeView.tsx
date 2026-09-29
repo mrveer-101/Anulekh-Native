@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import PolicyModal from '@/components/modals/PolicyModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, {
+  Easing,
+  FadeInDown,
+  ZoomIn,
+  interpolateColor,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
   if (!fullName) return defaultVal;
@@ -13,6 +25,22 @@ const getFirstName = (fullName: string | null | undefined, defaultVal: string) =
   if (!first) return defaultVal;
   return first.charAt(0).toUpperCase() + first.slice(1);
 };
+
+// Scribe accent palette for this screen. Change ACCENT to compare colours (e.g. ACCENT_PALETTES.green).
+// `contrast` is the Applications stat colour, chosen so it never matches the accent.
+const ACCENT_PALETTES = {
+  green: {
+    main: '#059669', bright: '#10b981', dark: '#047857', soft: '#ecfdf5', border: '#a7f3d0',
+    tint08: 'rgba(5,150,105,0.08)', tint12: 'rgba(16,185,129,0.12)', tint22: 'rgba(5,150,105,0.22)', tint25: 'rgba(16,185,129,0.25)',
+    contrast: '#ea580c',
+  },
+  orange: {
+    main: '#ea580c', bright: '#f97316', dark: '#c2410c', soft: '#fff7ed', border: '#fed7aa',
+    tint08: 'rgba(234,88,12,0.08)', tint12: 'rgba(249,115,22,0.12)', tint22: 'rgba(234,88,12,0.22)', tint25: 'rgba(249,115,22,0.25)',
+    contrast: '#059669',
+  },
+} as const;
+const ACCENT = ACCENT_PALETTES.orange;
 
 export default function ScribeHomeView() {
   const { t } = useLanguage();
@@ -25,8 +53,6 @@ export default function ScribeHomeView() {
   const [pendingApplicationsCount, setPendingApplicationsCount] = useState(0);
   const [completedExamsCount, setCompletedExamsCount] = useState(0);
   const [reviews, setReviews] = useState<any[]>([]);
-  const [showRatingDetails, setShowRatingDetails] = useState(false);
-  const [isRatingsExpanded, setIsRatingsExpanded] = useState(false);
   const [expandedMatchIds, setExpandedMatchIds] = useState<Set<number>>(new Set());
   const [isSosRegistered, setIsSosRegistered] = useState(true);
   const [togglingSos, setTogglingSos] = useState(false);
@@ -84,6 +110,48 @@ export default function ScribeHomeView() {
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [pendingTargetAction, setPendingTargetAction] = useState<{ exam: any; isInvite: boolean } | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+
+  // ── Motion polish ──
+  // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+  // Staggered section entrance: each block rises in slightly after the previous one.
+  const rise = (index: number) => enter(FadeInDown.delay(index * 70).duration(420));
+
+  // Avatar tile floats gently.
+  const floatY = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    floatY.set(withRepeat(withSequence(
+      withTiming(-3, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+      withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
+    ), -1));
+  }, [reduceMotion, floatY]);
+  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
+
+  // SOS switch: knob slides and track recolours instead of jumping.
+  const sosProgress = useSharedValue(isSosRegistered ? 1 : 0);
+  useEffect(() => {
+    sosProgress.set(withTiming(isSosRegistered ? 1 : 0, { duration: reduceMotion ? 0 : 220, easing: Easing.out(Easing.cubic) }));
+  }, [isSosRegistered, reduceMotion, sosProgress]);
+  const sosTrackStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(sosProgress.get(), [0, 1], ['#cbd5e1', '#ef4444']),
+  }));
+  const sosKnobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sosProgress.get() * 20 }] }));
+
+  // While on standby, the SOS bolt pulses softly.
+  const sosPulse = useSharedValue(1);
+  useEffect(() => {
+    if (reduceMotion || !isSosRegistered) {
+      sosPulse.set(withTiming(1, { duration: 150 }));
+      return;
+    }
+    sosPulse.set(withRepeat(withSequence(
+      withTiming(1.18, { duration: 700, easing: Easing.inOut(Easing.quad) }),
+      withTiming(1, { duration: 700, easing: Easing.inOut(Easing.quad) }),
+    ), -1));
+  }, [isSosRegistered, reduceMotion, sosPulse]);
+  const sosPulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: sosPulse.get() }] }));
 
   const openCallSheet = (exam: any) => {
     if (!exam) return;
@@ -459,60 +527,10 @@ export default function ScribeHomeView() {
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#f8fafc' }}>
-        <ActivityIndicator size="large" color="#059669" />
+        <ActivityIndicator size="large" color={ACCENT.main} />
       </View>
     );
   }
-
-  // Compute rating stats
-  let finalRating = 0;
-  let avgPunctuality = 0;
-  let avgCommunication = 0;
-  let avgSpeed = 0;
-  let avgBehavior = 0;
-  let avgOverall = 0;
-
-  if (reviews && reviews.length > 0) {
-    let sumExamAverages = 0;
-    let sumPunctuality = 0;
-    let sumCommunication = 0;
-    let sumSpeed = 0;
-    let sumBehavior = 0;
-    let sumOverall = 0;
-
-    reviews.forEach(r => {
-      const punctuality = r.rating_punctuality || 0;
-      const communication = r.rating_communication || 0;
-      const speed = r.rating_speed || 0;
-      const behavior = r.rating_behavior || 0;
-      const overall = r.rating_overall || 0;
-
-      const examAvg = (punctuality + communication + speed + behavior + overall) / 5.0;
-      sumExamAverages += examAvg;
-
-      sumPunctuality += punctuality;
-      sumCommunication += communication;
-      sumSpeed += speed;
-      sumBehavior += behavior;
-      sumOverall += overall;
-    });
-
-    finalRating = sumExamAverages / reviews.length;
-    avgPunctuality = sumPunctuality / reviews.length;
-    avgCommunication = sumCommunication / reviews.length;
-    avgSpeed = sumSpeed / reviews.length;
-    avgBehavior = sumBehavior / reviews.length;
-    avgOverall = sumOverall / reviews.length;
-  }
-
-  const getScribeBadge = (reviewCount: number) => {
-    if (reviewCount === 0) return { name: 'Novice', bg: '#f1f5f9', border: '#e2e8f0', text: '#64748b' };
-    if (reviewCount >= 1 && reviewCount < 10) return { name: 'Apprentice', bg: 'rgba(37,99,235,0.06)', border: 'rgba(37,99,235,0.18)', text: '#2563eb' };
-    if (reviewCount >= 10 && reviewCount < 25) return { name: 'Bronze', bg: 'rgba(180,83,9,0.06)', border: 'rgba(180,83,9,0.18)', text: '#b45309' };
-    if (reviewCount >= 25 && reviewCount < 50) return { name: 'Silver', bg: 'rgba(100,116,139,0.06)', border: 'rgba(100,116,139,0.18)', text: '#64748b' };
-    if (reviewCount >= 50 && reviewCount < 100) return { name: 'Gold', bg: 'rgba(234,179,8,0.06)', border: 'rgba(234,179,8,0.18)', text: '#ca8a04' };
-    return { name: 'Diamond', bg: 'rgba(6,182,212,0.06)', border: 'rgba(6,182,212,0.18)', text: '#0891b2' };
-  };
 
   const isVerified = profile?.verification_status === 'approved';
   const isPending = profile?.verification_status === 'pending';
@@ -522,14 +540,12 @@ export default function ScribeHomeView() {
   const MUTED = '#64748b';
   const BLUE = '#2563eb';
   const BLUE_BG_LIGHT = 'rgba(37,99,235,0.08)';
-  const GREEN = '#059669';
-  const GREEN_BG_LIGHT = 'rgba(5,150,105,0.08)';
-  const GREEN_BD = 'rgba(5,150,105,0.22)';
 
   return (
     <>
       <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Welcome & Profile Header Section */}
+      <Animated.View entering={rise(0)}>
       <View style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -558,8 +574,8 @@ export default function ScribeHomeView() {
           </Text>
         </View>
 
-        {/* Scribe Avatar & Badge Container */}
-        <View style={{ position: 'relative' }}>
+        {/* Scribe Avatar & Badge Container (floats gently) */}
+        <Animated.View style={[{ position: 'relative' }, floatStyle]}>
           <View style={{
             width: 48,
             height: 48,
@@ -567,25 +583,25 @@ export default function ScribeHomeView() {
             borderTopRightRadius: 10,
             borderBottomLeftRadius: 14,
             borderBottomRightRadius: 22,
-            backgroundColor: 'rgba(16,185,129,0.12)',
+            backgroundColor: ACCENT.tint12,
             borderWidth: 2,
-            borderColor: 'rgba(16,185,129,0.25)',
+            borderColor: ACCENT.tint25,
             alignItems: 'center',
             justifyContent: 'center',
-            shadowColor: '#10b981',
+            shadowColor: ACCENT.bright,
             shadowOffset: { width: 0, height: 4 },
             shadowOpacity: 0.15,
             shadowRadius: 8,
             elevation: 3,
           }}>
-            <FontAwesome5 name="pen-nib" size={20} color="#059669" />
+            <FontAwesome5 name="pen-nib" size={20} color={ACCENT.main} />
           </View>
           {isVerified && (
-            <View style={{
+            <Animated.View entering={enter(ZoomIn.delay(450).springify().damping(12))} style={{
               position: 'absolute',
               bottom: -4,
               right: -4,
-              backgroundColor: '#10b981',
+              backgroundColor: ACCENT.bright,
               width: 20,
               height: 20,
               borderRadius: 10,
@@ -595,12 +611,15 @@ export default function ScribeHomeView() {
               justifyContent: 'center',
             }}>
               <Ionicons name="checkmark" size={12} color="#fff" />
-            </View>
+            </Animated.View>
           )}
-        </View>
+        </Animated.View>
       </View>
 
+      </Animated.View>
+
       {/* 1. Complete Profile Onboarding Card */}
+      <Animated.View entering={rise(1)}>
       {isUnverified && (
         <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#fef3c7', padding: 20, borderRadius: 24, shadowColor: '#d97706', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, marginBottom: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, paddingRight: 16 }}>
@@ -618,7 +637,10 @@ export default function ScribeHomeView() {
         </View>
       )}
 
+      </Animated.View>
+
       {/* 2. Verification Pending Card with Simulation Tool */}
+      <Animated.View entering={rise(1)}>
       {isPending && (
         <View style={{ backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbeafe', padding: 20, borderRadius: 24, shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2, marginBottom: 20 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
@@ -631,32 +653,41 @@ export default function ScribeHomeView() {
         </View>
       )}
 
+      </Animated.View>
+
       {/* 3. Verified Badge (Vibrant soft banner) */}
+      <Animated.View entering={rise(1)}>
       {isVerified && (
         <View style={{
-          backgroundColor: '#ecfdf5',
-          borderWidth: 1, borderColor: '#a7f3d0',
+          backgroundColor: ACCENT.soft,
+          borderWidth: 1, borderColor: ACCENT.border,
           paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16,
           flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10,
         }}>
           <View style={{
-            width: 24, height: 24, borderRadius: 12, backgroundColor: '#10b981',
+            width: 24, height: 24, borderRadius: 12, backgroundColor: ACCENT.bright,
             alignItems: 'center', justifyContent: 'center',
           }}>
             <Ionicons name="shield-checkmark" size={13} color="#fff" />
           </View>
-          <Text style={{ fontFamily: 'Roboto', color: '#047857', fontSize: 12, fontWeight: '800' }}>
+          <Text style={{ fontFamily: 'Roboto', color: ACCENT.dark, fontSize: 12, fontWeight: '800' }}>
             Verified Scribe Volunteer Profile
           </Text>
         </View>
       )}
 
+      </Animated.View>
+
       {/* Incoming Invitations List */}
+      <Animated.View entering={rise(2)}>
       {incomingInvitations.length > 0 && (
         <View style={{ marginBottom: 20 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#db2777', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
-            💌 Incoming Invitations ({incomingInvitations.length})
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <Feather name="mail" size={13} color="#db2777" />
+            <Text style={{ fontFamily: 'Roboto', color: '#db2777', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Incoming Invitations ({incomingInvitations.length})
+            </Text>
+          </View>
           {incomingInvitations.map((invite) => {
             const isAssign = invite.type === 'assignment';
             const details = invite.details || {};
@@ -705,9 +736,12 @@ export default function ScribeHomeView() {
                   </View>
 
                   <View style={{ paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.18)', marginRight: 4 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>
-                      {isAssign ? '📝 Assignment' : '📅 Scribe'}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Feather name={isAssign ? 'edit-3' : 'calendar'} size={9} color="#db2777" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>
+                        {isAssign ? 'Assignment' : 'Scribe'}
+                      </Text>
+                    </View>
                   </View>
 
                   <Feather
@@ -718,6 +752,7 @@ export default function ScribeHomeView() {
 
                 {/* ── Expanded Detail Panel ── */}
                 {isExpanded && (
+                  <Animated.View entering={enter(FadeInDown.duration(260))}>
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
                     <View style={{ gap: 6 }}>
                       <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
@@ -777,6 +812,7 @@ export default function ScribeHomeView() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  </Animated.View>
                 )}
               </View>
             );
@@ -784,7 +820,10 @@ export default function ScribeHomeView() {
         </View>
       )}
 
+      </Animated.View>
+
       {/* Scribe Stats Summary (One block, color coded Blue, Orange, Green) */}
+      <Animated.View entering={rise(3)}>
       <View style={{
         backgroundColor: '#ffffff',
         borderRadius: 24,
@@ -804,7 +843,9 @@ export default function ScribeHomeView() {
             <FontAwesome5 name="award" size={12} color="#2563eb" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Contributions</Text>
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{scribeCommitments.length}</Text>
+          <Animated.View key={`stat-${scribeCommitments.length}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{scribeCommitments.length}</Text>
+          </Animated.View>
         </View>
 
         <View style={{ width: 1, height: 28, backgroundColor: '#e2e8f0' }} />
@@ -812,10 +853,12 @@ export default function ScribeHomeView() {
         {/* Applications Stats (Orange) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <FontAwesome5 name="file-alt" size={12} color="#ea580c" />
+            <FontAwesome5 name="file-alt" size={12} color={ACCENT.contrast} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Applications</Text>
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#ea580c' }}>{pendingApplicationsCount}</Text>
+          <Animated.View key={`stat-${pendingApplicationsCount}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.contrast }}>{pendingApplicationsCount}</Text>
+          </Animated.View>
         </View>
 
         <View style={{ width: 1, height: 28, backgroundColor: '#e2e8f0' }} />
@@ -823,23 +866,28 @@ export default function ScribeHomeView() {
         {/* Available Stats (Green) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <Ionicons name="search" size={13} color="#10b981" />
+            <Ionicons name="search" size={13} color={ACCENT.bright} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Available</Text>
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#10b981' }}>{availableExams.length}</Text>
+          <Animated.View key={`stat-${availableExams.length}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.bright }}>{availableExams.length}</Text>
+          </Animated.View>
         </View>
       </View>
 
+      </Animated.View>
+
       {/* My Contributions Block */}
+      <Animated.View entering={rise(4)}>
       <View style={{ marginBottom: 24 }}>
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Contributions</Text>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Card 1: Hours Contributed */}
           <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <Feather name="clock" size={16} color="#059669" />
-              <View style={{ backgroundColor: 'rgba(5,150,105,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#059669' }}>HOURS</Text>
+              <Feather name="clock" size={16} color={ACCENT.main} />
+              <View style={{ backgroundColor: ACCENT.tint08, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: ACCENT.main }}>HOURS</Text>
               </View>
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>{completedExamsCount * 3} Hours</Text>
@@ -858,182 +906,10 @@ export default function ScribeHomeView() {
         </View>
       </View>
 
-      {/* 
-      ========================================================================
-      MY RATINGS SECTION (Commented out - preserved for future use)
-      ========================================================================
-      <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Ratings</Text>
-        
-        <TouchableOpacity 
-          onPress={() => setIsRatingsExpanded(!isRatingsExpanded)}
-          activeOpacity={0.85}
-          style={{ 
-            backgroundColor: '#ffffff',
-            borderRadius: 24,
-            borderWidth: 1.5,
-            borderColor: '#e2e8f0',
-            padding: 16,
-            shadowColor: '#64748b',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.04,
-            shadowRadius: 12,
-            elevation: 2
-          }}
-        >
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', position: 'relative' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <View style={{ 
-                backgroundColor: 'rgba(37,99,235,0.06)', 
-                borderWidth: 1, 
-                borderColor: 'rgba(37,99,235,0.18)', 
-                paddingHorizontal: 9, 
-                paddingVertical: 3.5, 
-                borderRadius: 7,
-              }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>
-                  {reviews.length} {reviews.length === 1 ? 'REVIEW' : 'REVIEWS'}
-                </Text>
-              </View>
-            </View>
-
-            <View 
-              style={{ 
-                position: 'absolute', 
-                left: 0, 
-                right: 0, 
-                top: 0, 
-                bottom: 0, 
-                justifyContent: 'center', 
-                alignItems: 'center',
-                zIndex: -1
-              }}
-              pointerEvents="none"
-            >
-              <View style={{ flexDirection: 'row', gap: 3 }}>
-                {[1, 2, 3, 4, 5].map((star) => {
-                  const ratingVal = finalRating;
-                  const hasNoReviews = reviews.length === 0;
-                  
-                  let starName: "star" | "star-outline" = "star-outline";
-                  let starColor = "#cbd5e1";
-                  
-                  if (hasNoReviews) {
-                    starName = "star";
-                    starColor = "#cbd5e1";
-                  } else {
-                    const isFilled = ratingVal > 0 && star <= Math.round(ratingVal);
-                    starName = isFilled ? "star" : "star-outline";
-                    starColor = isFilled ? "#eab308" : "#cbd5e1";
-                  }
-                  return (
-                    <Ionicons 
-                      key={star} 
-                      name={starName} 
-                      size={22} 
-                      color={starColor} 
-                    />
-                  );
-                })}
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {(() => {
-                const badge = getScribeBadge(reviews.length);
-                return (
-                  <View style={{ 
-                    backgroundColor: badge.bg, 
-                    borderWidth: 1, 
-                    borderColor: badge.border, 
-                    paddingHorizontal: 9, 
-                    paddingVertical: 3.5, 
-                    borderRadius: 7,
-                  }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: badge.text }}>
-                      {badge.name}
-                    </Text>
-                  </View>
-                );
-              })()}
-              <Feather name={isRatingsExpanded ? "chevron-up" : "chevron-down"} size={18} color="#64748b" />
-            </View>
-          </View>
-
-          {isRatingsExpanded && (
-            <View style={{ marginTop: 16, borderTopWidth: 1, borderColor: '#f1f5f9', paddingTop: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 36, fontWeight: '900', color: TEXT }}>
-                    {finalRating.toFixed(1)}
-                  </Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '700', color: '#64748b' }}>/5.0</Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 16 }}>
-                  <View style={{ flexDirection: 'row', gap: 3, marginBottom: 2 }}>
-                    {[1, 2, 3, 4, 5].map((star) => {
-                      const ratingVal = finalRating;
-                      const hasNoReviews = reviews.length === 0;
-                      
-                      let starName: "star" | "star-outline" = "star-outline";
-                      let starColor = "#cbd5e1";
-                      
-                      if (hasNoReviews) {
-                        starName = "star";
-                        starColor = "#cbd5e1";
-                      } else {
-                        const isFilled = ratingVal > 0 && star <= Math.round(ratingVal);
-                        starName = isFilled ? "star" : "star-outline";
-                        starColor = isFilled ? "#eab308" : "#cbd5e1";
-                      }
-                      return (
-                        <Ionicons 
-                          key={star} 
-                          name={starName} 
-                          size={22} 
-                          color={starColor} 
-                        />
-                      );
-                    })}
-                  </View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>
-                    Overall rating from students
-                  </Text>
-                </View>
-              </View>
-
-              <View style={{ gap: 8 }}>
-                {[
-                  { label: 'Punctuality', val: avgPunctuality, icon: 'time-outline' },
-                  { label: 'Communication', val: avgCommunication, icon: 'chatbubble-ellipses-outline' },
-                  { label: 'Writing Speed', val: avgSpeed, icon: 'speedometer-outline' },
-                  { label: 'Behavior & Conduct', val: avgBehavior, icon: 'shield-checkmark-outline' },
-                  { label: 'Overall Experience', val: avgOverall, icon: 'star-outline' }
-                ].map((metric) => (
-                  <View key={metric.label} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '38%', gap: 6 }}>
-                      <Ionicons name={metric.icon as any} size={13} color="#64748b" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#64748b' }} numberOfLines={1}>
-                        {metric.label}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, height: 6, backgroundColor: '#f1f5f9', borderRadius: 3, marginHorizontal: 12, overflow: 'hidden' }}>
-                      <View style={{ height: '100%', width: `${(metric.val / 5) * 100}%`, backgroundColor: '#10b981', borderRadius: 3 }} />
-                    </View>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: TEXT, width: '12%', textAlign: 'right' }}>
-                      {metric.val.toFixed(1)}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-      ========================================================================
-      */}
+      </Animated.View>
 
       {/* 🚨 Separate Thin Line Row Block for SOS Standby Duty Toggle */}
+      <Animated.View entering={rise(5)}>
       <View style={{
         backgroundColor: '#ffffff',
         borderRadius: 18,
@@ -1060,7 +936,9 @@ export default function ScribeHomeView() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
+            <Animated.View style={sosPulseStyle}>
+              <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
+            </Animated.View>
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Opt SOS Standby Duty</Text>
         </View>
@@ -1069,22 +947,29 @@ export default function ScribeHomeView() {
           onPress={handleToggleSos}
           disabled={togglingSos}
           activeOpacity={0.8}
-          style={{
+          accessibilityRole="switch"
+          accessibilityLabel="Opt SOS Standby Duty"
+          aria-checked={isSosRegistered}
+          aria-disabled={togglingSos}
+          style={{ marginLeft: 10 }}
+        >
+          <Animated.View style={[{
             width: 44,
             height: 24,
             borderRadius: 12,
-            backgroundColor: isSosRegistered ? '#ef4444' : '#cbd5e1',
             padding: 3,
-            alignItems: isSosRegistered ? 'flex-end' : 'flex-start',
+            alignItems: 'flex-start',
             justifyContent: 'center',
-            marginLeft: 10
-          }}
-        >
-          <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }} />
+          }, sosTrackStyle]}>
+            <Animated.View style={[{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#ffffff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 }, sosKnobStyle]} />
+          </Animated.View>
         </TouchableOpacity>
       </View>
 
+      </Animated.View>
+
       {/* Upcoming Confirmed Exams (My Plans) */}
+      <Animated.View entering={rise(6)}>
       <View style={{ marginBottom: 24 }}>
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Plans</Text>
 
@@ -1157,6 +1042,7 @@ export default function ScribeHomeView() {
 
                 {/* ── Expanded Detail Panel ── */}
                 {isExpanded && (
+                  <Animated.View entering={enter(FadeInDown.duration(260))}>
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
                     {/* Remaining details stacked */}
                     <View style={{ gap: 6 }}>
@@ -1222,6 +1108,7 @@ export default function ScribeHomeView() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  </Animated.View>
                 )}
               </View>
             );
@@ -1235,7 +1122,10 @@ export default function ScribeHomeView() {
         )}
       </View>
 
+      </Animated.View>
+
       {/* 🏆 My Achievements Block */}
+      <Animated.View entering={rise(7)}>
       <View style={{ marginBottom: 24 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14 }}>My Achievements</Text>
@@ -1284,7 +1174,10 @@ export default function ScribeHomeView() {
         </View>
       </View>
 
+      </Animated.View>
+
       {/* Available Opportunities List */}
+      <Animated.View entering={rise(8)}>
       <View>
         <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('available_opportunities')}</Text>
 
@@ -1354,7 +1247,10 @@ export default function ScribeHomeView() {
                   <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
                     {isEmergency && (
                       <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>🚨 SOS</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="flash" size={8} color="#b91c1c" />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>SOS</Text>
+                        </View>
                       </View>
                     )}
                     {!!exam.private_scribe_id && (
@@ -1373,6 +1269,7 @@ export default function ScribeHomeView() {
 
                 {/* ── Expanded Detail Panel ── */}
                 {isExpanded && (
+                  <Animated.View entering={enter(FadeInDown.duration(260))}>
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
                     {/* Remaining details stacked */}
                     <View style={{ gap: 6 }}>
@@ -1437,7 +1334,7 @@ export default function ScribeHomeView() {
                       }}
                       style={{ 
                         width: '100%', 
-                        backgroundColor: exam.private_scribe_id ? '#db2777' : 'rgba(5,150,105,0.08)', 
+                        backgroundColor: exam.private_scribe_id ? '#db2777' : ACCENT.tint08, 
                         paddingVertical: 11, 
                         borderRadius: 12, 
                         alignItems: 'center', 
@@ -1445,13 +1342,13 @@ export default function ScribeHomeView() {
                         flexDirection: 'row', 
                         gap: 6,
                         borderWidth: exam.private_scribe_id ? 0 : 1,
-                        borderColor: 'rgba(5,150,105,0.22)'
+                        borderColor: ACCENT.tint22
                       }}
                     >
-                      <Feather name={exam.private_scribe_id ? "check-circle" : "file-text"} size={12} color={exam.private_scribe_id ? "#fff" : "#059669"} />
+                      <Feather name={exam.private_scribe_id ? "check-circle" : "file-text"} size={12} color={exam.private_scribe_id ? "#fff" : ACCENT.main} />
                       <Text style={{ 
                         fontFamily: 'Roboto', 
-                        color: exam.private_scribe_id ? '#fff' : '#047857', 
+                        color: exam.private_scribe_id ? '#fff' : ACCENT.dark, 
                         fontWeight: '800', 
                         fontSize: 12 
                       }}>
@@ -1459,6 +1356,7 @@ export default function ScribeHomeView() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+                  </Animated.View>
                 )}
               </View>
             );
@@ -1466,7 +1364,10 @@ export default function ScribeHomeView() {
         )}
       </View>
 
+      </Animated.View>
+
       {/* Need Help? Contact Support Card */}
+      <Animated.View entering={rise(9)}>
       <TouchableOpacity 
         onPress={() => router.push('/console/common/support' as any)}
         style={{
@@ -1492,11 +1393,11 @@ export default function ScribeHomeView() {
             width: 44,
             height: 44,
             borderRadius: 14,
-            backgroundColor: '#ecfdf5',
+            backgroundColor: ACCENT.soft,
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Feather name="life-buoy" size={20} color="#059669" />
+            <Feather name="life-buoy" size={20} color={ACCENT.main} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
@@ -1510,6 +1411,8 @@ export default function ScribeHomeView() {
         <Feather name="chevron-right" size={18} color="#64748b" />
       </TouchableOpacity>
 
+      </Animated.View>
+
       {/* Call Modal Sheet */}
       <Modal
         animationType="slide"
@@ -1520,8 +1423,8 @@ export default function ScribeHomeView() {
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 15 }}>
             <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                <Feather name="phone-call" size={20} color="#059669" />
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: ACCENT.tint08, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Feather name="phone-call" size={20} color={ACCENT.main} />
               </View>
               <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{t('call_detail')}</Text>
               <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>Direct Contact Verification Active</Text>
@@ -1529,22 +1432,22 @@ export default function ScribeHomeView() {
 
             <View style={{ gap: 14, marginBottom: 20 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#059669' }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: ACCENT.tint08, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: ACCENT.main }}>
                     {callExam?.student_name?.charAt(0).toUpperCase()}
                   </Text>
                 </View>
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a' }}>{callExam?.student_name}</Text>
-                  <View style={{ marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)' }}>
-                    <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
+                  <View style={{ marginTop: 4, backgroundColor: ACCENT.tint08, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', borderWidth: 1, borderColor: ACCENT.tint22 }}>
+                    <Text style={{ fontFamily: 'Roboto', color: ACCENT.main, fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
                   </View>
                 </View>
               </View>
 
               {showMaskedNumber ? (
-                <View style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)' }}>
-                  <Feather name="phone" size={18} color="#059669" />
+                <View style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: ACCENT.tint22 }}>
+                  <Feather name="phone" size={18} color={ACCENT.main} />
                   <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: 1.5 }}>
                     {callExam?.phone || '9876543210'}
                   </Text>
@@ -1552,10 +1455,10 @@ export default function ScribeHomeView() {
               ) : (
                 <TouchableOpacity
                   onPress={() => setShowMaskedNumber(true)}
-                  style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)', borderStyle: 'dashed' }}
+                  style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: ACCENT.tint22, borderStyle: 'dashed' }}
                 >
-                  <Feather name="eye" size={16} color="#059669" />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: '#059669' }}>{t('view_number')}</Text>
+                  <Feather name="eye" size={16} color={ACCENT.main} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: ACCENT.main }}>{t('view_number')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -1574,11 +1477,11 @@ export default function ScribeHomeView() {
                   } else {
                     Alert.alert(t('error'), 'Calling is not supported on this device.');
                   }
-                } catch (_) {
+                } catch {
                   Alert.alert(t('error'), 'Error starting call.');
                 }
               }}
-              style={{ backgroundColor: '#059669', borderRadius: 18, paddingVertical: 16, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#059669', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}
+              style={{ backgroundColor: ACCENT.main, borderRadius: 18, paddingVertical: 16, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: ACCENT.main, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}
               activeOpacity={0.85}
             >
               <Feather name="phone-call" size={20} color="#fff" />

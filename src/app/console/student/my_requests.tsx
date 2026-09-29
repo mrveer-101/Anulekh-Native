@@ -27,14 +27,6 @@ export default function MyRequests() {
   const [role, setRole] = useState<'student' | 'scribe'>('student');
   const [fullName, setFullName] = useState('');
 
-  const handleBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/console/student');
-    }
-  };
-
   const fetchRequests = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();

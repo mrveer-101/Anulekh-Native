@@ -5,21 +5,6 @@ import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 
-interface ExamRequest {
-  id: number;
-  subject: string;
-  exam_type: string;
-  exam_date: string;
-  exam_venue: string;
-  exam_language: string;
-  student_name: string;
-  education_grade: string;
-  phone?: string;
-  id_proof?: string;
-  is_emergency?: string;
-  status?: string;
-}
-
 export default function ScribePlanView() {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
@@ -140,15 +125,6 @@ export default function ScribePlanView() {
     const date = String(day.getDate()).padStart(2, '0');
     const dateStr = `${year}-${month}-${date}`;
     return plans.some(p => p.exam_date && p.exam_date.startsWith(dateStr));
-  };
-
-  const getPlansOnDate = (day: Date) => {
-    if (!day) return [];
-    const year = day.getFullYear();
-    const month = String(day.getMonth() + 1).padStart(2, '0');
-    const date = String(day.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${date}`;
-    return plans.filter(p => p.exam_date && p.exam_date.startsWith(dateStr));
   };
 
   // Sort and filter logic
@@ -719,7 +695,7 @@ export default function ScribePlanView() {
                 } else {
                   Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
                 }
-              } catch (_) {
+              } catch {
                 Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
               }
             }}

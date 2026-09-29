@@ -27,7 +27,6 @@ export default function CompleteProfileForm() {
   
   // Form State
   const [officialName, setOfficialName] = useState('');
-  const [phone, setPhone] = useState('');
   const [dob, setDob] = useState('');
   const [occupation, setOccupation] = useState('');
   const [location, setLocation] = useState('');

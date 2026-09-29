@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList, Platform, Animated, Image, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, Platform, Animated, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import { StatusBar } from 'expo-status-bar';
@@ -28,7 +28,6 @@ const SUB_TOPICS: { [key: string]: string[] } = {
 // Old requests stored "College" before it was renamed to "University" — treat them as equivalent everywhere.
 const normalizeExamTypeLabel = (type: string) => (type === 'College' ? 'University' : type);
 
-const YEARS = Array.from({ length: 5 }, (_, i) => (new Date().getFullYear() + i).toString()); // Next 5 years
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
@@ -445,7 +444,6 @@ export default function ScribeRequestForm() {
     const finalAdmitCard = overrides?.admitCardImage ?? admitCardImage;
 
     // Admit card upload is optional
-    const admitCardMissing = false;
 
     if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || examLanguages.length === 0) {
       Alert.alert(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -305,7 +305,6 @@ export default function ScribeExploreView() {
     fetchSession();
   };
 
-  const isVerified = scribeProfile?.verification_status === 'approved';
 
   // Derive the time-of-day slot from a free-text exam_date like "24/07/2026 | 12:00 PM".
   // Returns 'Morning' | 'Afternoon' | 'Evening' or null when no time can be parsed.
