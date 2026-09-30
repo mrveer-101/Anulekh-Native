@@ -121,15 +121,15 @@ export default function ConsoleScribePC({
             <View style={{
               width: 38, height: 38, borderRadius: 12,
               backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
-              padding: 5,
+              padding: 1,
               overflow: 'hidden',
               shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.2, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0',
             }}>
               <Image
                 source={require('../../../assets/images/custom/Pen_Logo.jpg')}
-                style={{ width: '100%', height: '100%', borderRadius: 6 }}
-                resizeMode="contain"
+                style={{ width: '100%', height: '100%', borderRadius: 9 }}
+                resizeMode="cover"
               />
             </View>
             {!isCollapsed && (

@@ -37,13 +37,13 @@ export default function FooterPC({ onNavigateSection }: FooterPCProps) {
                 width: 38, height: 38, borderRadius: 12,
                 backgroundColor: '#ffffff',
                 alignItems: 'center', justifyContent: 'center',
-                padding: 5,
+                padding: 1,
                 overflow: 'hidden',
               }}>
                 <Image
                   source={require('../../../assets/images/custom/Pen_Logo.jpg')}
-                  style={{ width: '100%', height: '100%', borderRadius: 6 }}
-                  resizeMode="contain"
+                  style={{ width: '100%', height: '100%', borderRadius: 9 }}
+                  resizeMode="cover"
                 />
               </View>
               <Text style={{ fontSize: 22, fontWeight: '900', color: '#ffffff', letterSpacing: -0.5 }}>

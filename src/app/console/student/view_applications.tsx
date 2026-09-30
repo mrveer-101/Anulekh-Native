@@ -337,13 +337,13 @@ export default function ViewApplicationsPage() {
               width: 44, height: 44, borderRadius: 12,
               backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
               alignItems: 'center', justifyContent: 'center',
-              padding: 6,
+              padding: 1,
               overflow: 'hidden',
             }}>
               <Image 
                 source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%', borderRadius: 6 }}
-                resizeMode="contain"
+                style={{ width: '100%', height: '100%', borderRadius: 9 }}
+                resizeMode="cover"
               />
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 }}>Anulekh</Text>

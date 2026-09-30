@@ -44,15 +44,15 @@ export default function HeaderPC({ activeTab = 'home', onNavigateSection }: Head
           backgroundColor: '#ffffff',
           borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
           alignItems: 'center', justifyContent: 'center',
-          padding: 6,
+          padding: 1,
           shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.15, shadowRadius: 10, elevation: 3,
           overflow: 'hidden',
         }}>
           <Image
             source={require('../../../assets/images/custom/Pen_Logo.jpg')}
-            style={{ width: '100%', height: '100%', borderRadius: 6 }}
-            resizeMode="contain"
+            style={{ width: '100%', height: '100%', borderRadius: 11 }}
+            resizeMode="cover"
           />
         </View>
 
