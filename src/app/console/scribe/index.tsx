@@ -188,14 +188,15 @@ export default function ScribeDashboard() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{
               width: 44, height: 44, borderRadius: 14,
-              backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
+              backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: ACCENT_BD,
               alignItems: 'center', justifyContent: 'center',
+              padding: 6,
               overflow: 'hidden',
             }}>
               <Image 
                 source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
+                style={{ width: '100%', height: '100%', borderRadius: 8 }}
+                resizeMode="contain"
               />
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>

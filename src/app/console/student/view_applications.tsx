@@ -335,14 +335,15 @@ export default function ViewApplicationsPage() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <View style={{
               width: 44, height: 44, borderRadius: 12,
-              backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+              backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
               alignItems: 'center', justifyContent: 'center',
+              padding: 6,
               overflow: 'hidden',
             }}>
               <Image 
                 source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
+                style={{ width: '100%', height: '100%', borderRadius: 6 }}
+                resizeMode="contain"
               />
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 }}>Anulekh</Text>
