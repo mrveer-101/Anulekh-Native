@@ -58,5 +58,6 @@ gcloud run deploy anulekh-web \
   --quiet
 
 step "Deployment Complete!"
+echo "🌟 Custom Domain URL:    https://anulekh.green-era.org"
 echo "🇮🇳 Permanent Mumbai URL: https://anulekh-web-127496140633.asia-south1.run.app"
 echo "🌐 Permanent US URL:     https://anulekh-web-us-127496140633.us-central1.run.app"
