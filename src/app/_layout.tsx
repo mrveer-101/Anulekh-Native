@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { DarkTheme, DefaultTheme, ThemeProvider, Stack } from 'expo-router';
-import { useColorScheme, Alert, Platform, View, Text, TextInput, ScrollView, LogBox } from 'react-native';
+import { DefaultTheme, ThemeProvider, Stack } from 'expo-router';
+import { Alert, Platform, View, Text, TextInput, ScrollView, LogBox } from 'react-native';
 import {
   useFonts,
   Roboto_300Light,
@@ -106,14 +106,12 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
   }
 }
 
-import { ThemeProvider as AppThemeProvider } from '@/core/themeContext';
 import { initializeNotificationChannels } from '@/core/notifications';
 import { useEffect } from 'react';
 
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
 
   useFonts(
     Platform.OS === 'web'
@@ -138,13 +136,11 @@ export default function RootLayout() {
 
   return (
     <GlobalErrorBoundary>
-      <AppThemeProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <AnimatedSplashOverlay />
-          <Stack screenOptions={{ headerShown: false }} />
-          <AppUpdateModal />
-        </ThemeProvider>
-      </AppThemeProvider>
+      <ThemeProvider value={DefaultTheme}>
+        <AnimatedSplashOverlay />
+        <Stack screenOptions={{ headerShown: false }} />
+        <AppUpdateModal />
+      </ThemeProvider>
     </GlobalErrorBoundary>
   );
 }

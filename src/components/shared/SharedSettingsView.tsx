@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -9,80 +9,9 @@ import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 import { triggerTestNotification } from '@/core/notifications';
 import { announceForAccessibility } from '@/core/a11y';
-
-// ── Role themes ──────────────────────────────────────────────────────────────
-// Student matches the blue student portal; scribe matches the green scribe portal (header + tab bar).
-// `solid` is used wherever white text sits on the colour, so it always meets contrast guidelines.
-interface Theme {
-  primary: string;       // icons, borders, accents
-  accentText: string;    // coloured text on white
-  solid: string;         // filled chips / small buttons with white text
-  soft: string;          // tinted backgrounds
-  softBorder: string;    // tinted borders
-  cardBorder: string;
-  shadow: string;
-  page: string;          // fallback colour when gradients aren't available
-  pageGradient: string;
-  orb: string;
-  hero: string;
-  heroGradient: string;
-  buttonGradient: string;
-  roleLabel: string;
-  roleIcon: 'user-graduate' | 'pen-nib';
-}
-
-const THEMES: Record<'student' | 'scribeGreen' | 'scribeOrange', Theme> = {
-  student: {
-    primary: '#2563eb', accentText: '#1d4ed8', solid: '#2563eb',
-    soft: 'rgba(37,99,235,0.08)', softBorder: 'rgba(37,99,235,0.20)', cardBorder: 'rgba(37,99,235,0.12)', shadow: '#2563eb',
-    page: '#F3F6FF', pageGradient: 'linear-gradient(180deg, #E4EDFF 0%, #EFEBFF 40%, #F7F9FF 72%, #FFFFFF 100%)',
-    orb: 'rgba(99,102,241,0.10)',
-    hero: '#E0EAFF', heroGradient: 'linear-gradient(135deg, #DCE8FF 0%, #E8E2FF 100%)',
-    buttonGradient: 'linear-gradient(90deg, #2563eb 0%, #4f46e5 100%)',
-    roleLabel: 'Student', roleIcon: 'user-graduate',
-  },
-  scribeGreen: {
-    primary: '#16a34a', accentText: '#15803d', solid: '#15803d',
-    soft: 'rgba(22,163,74,0.08)', softBorder: 'rgba(22,163,74,0.22)', cardBorder: 'rgba(22,163,74,0.14)', shadow: '#16a34a',
-    page: '#F1FAF4', pageGradient: 'linear-gradient(180deg, #DDF4E6 0%, #ECF8EE 40%, #F6FBF7 72%, #FFFFFF 100%)',
-    orb: 'rgba(20,184,166,0.10)',
-    hero: '#DCF3E5', heroGradient: 'linear-gradient(135deg, #D6F2E0 0%, #E7F6DD 100%)',
-    buttonGradient: 'linear-gradient(90deg, #166534 0%, #15803d 100%)',
-    roleLabel: 'Scribe', roleIcon: 'pen-nib',
-  },
-  scribeOrange: {
-    primary: '#ea580c', accentText: '#c2410c', solid: '#c2410c',
-    soft: 'rgba(234,88,12,0.08)', softBorder: 'rgba(234,88,12,0.22)', cardBorder: 'rgba(234,88,12,0.14)', shadow: '#ea580c',
-    page: '#FFF6EE', pageGradient: 'linear-gradient(180deg, #FFE9D8 0%, #FFF3E6 40%, #FFFAF4 72%, #FFFFFF 100%)',
-    orb: 'rgba(245,158,11,0.12)',
-    hero: '#FFE8D6', heroGradient: 'linear-gradient(135deg, #FFE2C9 0%, #FFF0D4 100%)',
-    buttonGradient: 'linear-gradient(90deg, #b8390b 0%, #c2410c 100%)',
-    roleLabel: 'Scribe', roleIcon: 'pen-nib',
-  },
-};
-// Scribe side uses the portal's green; switch to THEMES.scribeOrange to match the orange scribe-home test.
-const SCRIBE_THEME = THEMES.scribeGreen;
-
-// CSS gradient on every platform: web passes `backgroundImage` straight to CSS, native uses RN's
-// experimental_backgroundImage. Callers always set a solid backgroundColor as the fallback.
-const gradient = (css: string) =>
-  (Platform.OS === 'web' ? { backgroundImage: css } : { experimental_backgroundImage: css }) as object;
+import { gradient, portalCardStyle, PortalTheme, SCRIBE_THEME, STUDENT_THEME } from '@/core/portalTheme';
 
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
-
-const cardStyle = (theme: Theme) => ({
-  backgroundColor: '#ffffff',
-  borderRadius: 22,
-  padding: 18,
-  borderWidth: 1,
-  borderColor: theme.cardBorder,
-  shadowColor: theme.shadow,
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.08,
-  shadowRadius: 16,
-  elevation: 3,
-  marginBottom: 16,
-});
 
 const inputStyle = (editable = true) => ({
   backgroundColor: editable ? '#f8fafc' : '#f1f5f9',
@@ -97,7 +26,7 @@ const inputStyle = (editable = true) => ({
 });
 
 /** Card title row: tinted icon badge + uppercase title, with an optional element on the right. */
-function SectionHeader({ theme, icon, title, right }: { theme: Theme; icon: FeatherName; title: string; right?: React.ReactNode }) {
+function SectionHeader({ theme, icon, title, right }: { theme: PortalTheme; icon: FeatherName; title: string; right?: React.ReactNode }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
@@ -122,7 +51,7 @@ function SectionHeader({ theme, icon, title, right }: { theme: Theme; icon: Feat
 }
 
 /** Small label above an input, with a tinted icon. */
-function FieldLabel({ theme, label, icon, ionicon }: { theme: Theme; label: string; icon?: FeatherName; ionicon?: React.ComponentProps<typeof Ionicons>['name'] }) {
+function FieldLabel({ theme, label, icon, ionicon }: { theme: PortalTheme; label: string; icon?: FeatherName; ionicon?: React.ComponentProps<typeof Ionicons>['name'] }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
       {ionicon
@@ -134,7 +63,7 @@ function FieldLabel({ theme, label, icon, ionicon }: { theme: Theme; label: stri
 }
 
 /** Selectable pill used for scribe languages, availability slots and yes/no choices. */
-function Chip({ theme, label, selected, onPress }: { theme: Theme; label: string; selected: boolean; onPress: () => void }) {
+function Chip({ theme, label, selected, onPress }: { theme: PortalTheme; label: string; selected: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -185,7 +114,7 @@ export default function SharedSettingsView() {
   const [notifStatusText, setNotifStatusText] = useState<string | null>(null);
 
   // Visual theme follows the account's role; cards rise in one after another (off with Reduce Motion).
-  const theme = role === 'scribe' ? SCRIBE_THEME : THEMES.student;
+  const theme = role === 'scribe' ? SCRIBE_THEME : STUDENT_THEME;
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(index * 70).duration(420));
 
@@ -489,7 +418,7 @@ export default function SharedSettingsView() {
       </Animated.View>
 
       {/* Editable Account Information Card */}
-      <Animated.View entering={rise(1)} style={cardStyle(theme)}>
+      <Animated.View entering={rise(1)} style={portalCardStyle(theme)}>
         <SectionHeader
           theme={theme}
           icon="user"
@@ -724,7 +653,7 @@ export default function SharedSettingsView() {
       </Animated.View>
 
       {/* App Settings Card (Language Toggle Display) */}
-      <Animated.View entering={rise(2)} style={cardStyle(theme)}>
+      <Animated.View entering={rise(2)} style={portalCardStyle(theme)}>
         <SectionHeader theme={theme} icon="globe" title={t('language_display')} />
         <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12, marginTop: -6 }}>{t('select_language_desc')}</Text>
 
@@ -772,7 +701,7 @@ export default function SharedSettingsView() {
       </Animated.View>
 
       {/* System Notifications & Alerts Card (Demo Testing) */}
-      <Animated.View entering={rise(3)} style={cardStyle(theme)}>
+      <Animated.View entering={rise(3)} style={portalCardStyle(theme)}>
         <SectionHeader
           theme={theme}
           icon="bell"

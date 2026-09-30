@@ -4,8 +4,9 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
-import { useThemeMode } from '@/core/themeContext';
 import { parseExamDate, isExamPast } from '@/core/examDate';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { gradient, STUDENT_THEME as THEME } from '@/core/portalTheme';
 
 interface ExamRequest {
   id: number;
@@ -244,15 +245,17 @@ export default function StudentPlanView() {
 
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
-  const { isDark } = useThemeMode();
+  // Blocks and plan cards rise in one after another (off with Reduce Motion).
+  const reduceMotion = useReducedMotion();
+  const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
 
   const renderCalendarBlock = () => (
     <View style={{
-      backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      backgroundColor: '#ffffff',
       padding: 18,
       borderRadius: 24,
       borderWidth: 1.5,
-      borderColor: isDark ? '#334155' : '#e2e8f0',
+      borderColor: THEME.cardBorder,
       shadowColor: '#2563eb',
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.08,
@@ -322,7 +325,7 @@ export default function StudentPlanView() {
               const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
               let cellBg = 'transparent';
-              let cellTextColor = isDark ? '#cbd5e1' : '#334155';
+              let cellTextColor = '#334155';
               let cellBorder = {};
               let dotColor = '#94a3b8';
 
@@ -345,7 +348,7 @@ export default function StudentPlanView() {
                   dotColor = '#f97316';
                 }
               } else if (isToday) {
-                cellBg = isDark ? 'rgba(37,99,235,0.2)' : '#eff6ff';
+                cellBg = '#eff6ff';
                 cellTextColor = '#2563eb';
                 cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
               }
@@ -399,12 +402,12 @@ export default function StudentPlanView() {
   const renderFilterBlock = () => (
     <View style={{
       flexDirection: 'row',
-      backgroundColor: isDark ? '#1e293b' : '#f1f5f9',
+      backgroundColor: '#ffffff',
       padding: 5,
       borderRadius: 18,
       borderWidth: 1.5,
-      borderColor: isDark ? '#334155' : '#cbd5e1',
-      shadowColor: '#475569',
+      borderColor: THEME.cardBorder,
+      shadowColor: THEME.shadow,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: 0.08,
       shadowRadius: 10,
@@ -426,6 +429,7 @@ export default function StudentPlanView() {
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: isActive ? '#2563eb' : 'transparent',
+              ...(isActive ? gradient(THEME.buttonGradient) : {}),
               shadowColor: isActive ? '#2563eb' : 'transparent',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: isActive ? 0.35 : 0,
@@ -438,7 +442,7 @@ export default function StudentPlanView() {
               fontSize: 11,
               fontWeight: '900',
               textTransform: 'uppercase',
-              color: isActive ? '#ffffff' : (isDark ? '#94a3b8' : '#64748b'),
+              color: isActive ? '#ffffff' : '#64748b',
               letterSpacing: 0.5
             }}>
               {filterLabel}
@@ -450,18 +454,18 @@ export default function StudentPlanView() {
   );
 
   const renderEmptyState = () => (
-    <View style={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: isDark ? '#334155' : '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
-      <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)' }}>
+    <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
+      <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(37,99,235,0.08)', ...gradient(THEME.heroGradient), alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)' }}>
         <Feather name="calendar" size={26} color="#2563eb" />
       </View>
-      <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: isDark ? '#f8fafc' : '#0f172a' }}>{t('no_confirmed_plans')}</Text>
-      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: isDark ? '#94a3b8' : '#64748b', marginTop: 6, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 }}>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{t('no_confirmed_plans')}</Text>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 6, textAlign: 'center', lineHeight: 18, paddingHorizontal: 16 }}>
         {t('scribe_confirmed_plans_desc')}
       </Text>
     </View>
   );
 
-  const renderPlanCard = (item: ExamRequest) => {
+  const renderPlanCard = (item: ExamRequest, index = 0) => {
     const itemKey = `${item.requestType || 'exam'}-${item.id}`;
     const isEmergency = item.is_emergency === 'yes';
     const isConfirmed = item.status === 'matched' || !!item.scribe_id;
@@ -476,26 +480,26 @@ export default function StudentPlanView() {
       });
     };
 
-    let borderColor = isDark ? '#1e3a8a' : '#bfdbfe';
+    let borderColor = '#bfdbfe';
     let shadowColor = '#2563eb';
     let borderWidth = 1.5;
     let shadowOpacity = 0.12;
 
     if (isEmergency) {
-      borderColor = isDark ? '#991b1b' : '#fca5a5';
+      borderColor = '#fca5a5';
       shadowColor = '#dc2626';
       borderWidth = 2;
       shadowOpacity = 0.15;
     } else if (isConfirmed) {
-      borderColor = isDark ? '#065f46' : '#a7f3d0';
+      borderColor = '#a7f3d0';
       shadowColor = '#059669';
       borderWidth = 1.5;
       shadowOpacity = 0.12;
     }
 
     return (
-      <View key={itemKey} style={{
-        backgroundColor: isDark ? '#1e293b' : '#ffffff',
+      <Animated.View key={itemKey} entering={rise(index + 2)} style={{
+        backgroundColor: '#ffffff',
         padding: 16,
         borderRadius: 24,
         borderWidth,
@@ -507,11 +511,14 @@ export default function StudentPlanView() {
         elevation: 4,
         marginBottom: 14
       }}>
+        {/* Status accent strip: red = emergency, green = confirmed, blue = pending */}
+        <View style={{ position: 'absolute', left: 0, top: 18, bottom: 18, width: 4, borderTopRightRadius: 4, borderBottomRightRadius: 4, backgroundColor: isEmergency ? '#dc2626' : isConfirmed ? '#059669' : THEME.primary }} />
+
         {/* Card Header */}
         <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, marginRight: 8 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: isDark ? '#94a3b8' : '#64748b', marginTop: 2 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
               Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
             </Text>
           </View>
@@ -522,26 +529,29 @@ export default function StudentPlanView() {
             borderWidth: 1,
             borderColor: isEmergency ? '#fca5a5' : 'rgba(5,150,105,0.2)'
           }}>
-            <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9.5, fontWeight: '800' }}>
-              {isEmergency ? '🚨 EMERGENCY SOS' : t('status_matched')}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Feather name={isEmergency ? 'alert-triangle' : 'check-circle'} size={10} color={isEmergency ? '#dc2626' : '#059669'} />
+              <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#059669', fontSize: 9.5, fontWeight: '800' }}>
+                {isEmergency ? 'EMERGENCY SOS' : t('status_matched')}
+              </Text>
+            </View>
           </View>
         </TouchableOpacity>
 
         {/* Collapsed Preview Summary Bar */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
             {!isEmergency && item.scribeProfile?.full_name && (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
                   {item.scribeProfile.full_name}
                 </Text>
               </View>
             )}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: isDark ? '#cbd5e1' : '#475569', fontWeight: '600' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#475569', fontWeight: '600' }}>
                 {item.exam_date ? item.exam_date.split(' ')[0] : 'Scheduled'}
               </Text>
             </View>
@@ -553,25 +563,25 @@ export default function StudentPlanView() {
             style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : (isDark ? '#334155' : '#f8fafc'),
+              backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : '#f8fafc',
               borderWidth: 1,
-              borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : (isDark ? '#475569' : '#e2e8f0'),
+              borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : '#e2e8f0',
               paddingHorizontal: 10,
               paddingVertical: 4,
               borderRadius: 10,
               gap: 4
             }}
           >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : (isDark ? '#cbd5e1' : '#64748b') }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : '#64748b' }}>
               {isExpanded ? 'Collapse' : 'Details'}
             </Text>
-            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : (isDark ? "#cbd5e1" : "#64748b")} />
+            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : "#64748b"} />
           </TouchableOpacity>
         </View>
 
         {/* Expanded Detailed View */}
         {isExpanded && (
-          <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+          <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
             {isEmergency && (
               <View style={{ 
                 backgroundColor: '#fef2f2', 
@@ -591,33 +601,33 @@ export default function StudentPlanView() {
               {!isEmergency && (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="user" size={13} color="#059669" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
-                    {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: isDark ? '#f8fafc' : '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
+                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
+                    {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
                   </Text>
                 </View>
               )}
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
                   {t('exam_date')}: {item.exam_date || t('date_not_specified')}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="map-pin" size={13} color="#2563eb" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }} numberOfLines={1}>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
                   {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="globe" size={13} color="#64748b" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: isDark ? '#cbd5e1' : '#475569', fontSize: 12 }}>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
                   {t('exam_language')}: {item.exam_language}
                 </Text>
               </View>
             </View>
 
             {/* Controls */}
-            <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: isDark ? '#334155' : '#f1f5f9' }}>
+            <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
               {isEmergency ? (
                 <TouchableOpacity
                   onPress={() => router.push('/console/student/view_applications' as any)}
@@ -687,6 +697,7 @@ export default function StudentPlanView() {
                     style={{
                       width: '100%',
                       backgroundColor: '#2563eb',
+                      ...gradient(THEME.buttonGradient),
                       paddingVertical: 12,
                       borderRadius: 14,
                       alignItems: 'center',
@@ -708,20 +719,21 @@ export default function StudentPlanView() {
             </View>
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: isDark ? '#0f172a' : '#f9fafb' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: isDark ? '#0f172a' : '#f9fafb' }}>
+    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
       {isDesktop ? (
         <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
           <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
@@ -731,7 +743,7 @@ export default function StudentPlanView() {
               {filteredPlans.length === 0 ? (
                 renderEmptyState()
               ) : (
-                filteredPlans.map(item => renderPlanCard(item))
+                filteredPlans.map((item, i) => renderPlanCard(item, i))
               )}
             </View>
 
@@ -751,13 +763,13 @@ export default function StudentPlanView() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
           }
           ListHeaderComponent={
-            <View style={{ marginBottom: 12 }}>
+            <Animated.View entering={rise(0)} style={{ marginBottom: 12 }}>
               {renderCalendarBlock()}
               {renderFilterBlock()}
-            </View>
+            </Animated.View>
           }
           ListEmptyComponent={renderEmptyState()}
-          renderItem={({ item }) => renderPlanCard(item)}
+          renderItem={({ item, index }) => renderPlanCard(item, index)}
         />
       )}
 

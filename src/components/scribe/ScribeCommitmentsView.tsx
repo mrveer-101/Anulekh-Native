@@ -5,6 +5,8 @@ import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { canScribeWithdraw } from '@/core/examDate';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 
 interface Application {
   id: number;
@@ -34,6 +36,9 @@ interface EnrichedApplication extends Application {
 
 export default function ScribeCommitmentsView() {
   const { t } = useLanguage();
+  // Blocks and cards rise in one after another (off with Reduce Motion).
+  const reduceMotion = useReducedMotion();
+  const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [applications, setApplications] = useState<EnrichedApplication[]>([]);
@@ -358,7 +363,7 @@ export default function ScribeCommitmentsView() {
     visibleApps = visibleApps.filter(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(selectedDate));
   }
 
-  const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed') => {
+  const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed', index = 0) => {
     const exam = app.examDetails;
     if (!exam) return null;
 
@@ -389,14 +394,15 @@ export default function ScribeCommitmentsView() {
     const isEmergency = exam.is_emergency === 'yes';
 
     return (
-      <View 
-        key={app.id} 
-        style={{ 
-          backgroundColor: '#ffffff', 
-          borderRadius: 20, 
-          borderWidth: isEmergency ? 2 : 1.5, 
-          borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
-          shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+      <Animated.View
+        key={app.id}
+        entering={rise(index + 2)}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 20,
+          borderWidth: isEmergency ? 2 : 1.5,
+          borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
+          shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
           shadowOffset: { width: 0, height: 6 }, 
           shadowOpacity: isEmergency ? 0.12 : 0.07, 
           shadowRadius: 16, 
@@ -405,6 +411,9 @@ export default function ScribeCommitmentsView() {
           overflow: 'hidden'
         }}
       >
+        {/* Status accent strip (colour matches the status pill) */}
+        <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: isEmergency ? '#dc2626' : badgeText }} />
+
         {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
           onPress={() => toggleExpanded(app.id)}
@@ -417,13 +426,13 @@ export default function ScribeCommitmentsView() {
           {/* Subject icon */}
           <View style={{
             width: 38, height: 38, borderRadius: 11,
-            backgroundColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.08)',
+            backgroundColor: isEmergency ? '#fee2e2' : THEME.soft,
             alignItems: 'center', justifyContent: 'center',
             borderWidth: 1,
-            borderColor: isEmergency ? '#fca5a5' : 'rgba(37,99,235,0.18)',
+            borderColor: isEmergency ? '#fca5a5' : THEME.softBorder,
           }}>
             <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
-              color={isEmergency ? '#dc2626' : '#2563eb'} />
+              color={isEmergency ? '#dc2626' : THEME.accentText} />
           </View>
 
           {/* Subject Name */}
@@ -503,20 +512,20 @@ export default function ScribeCommitmentsView() {
                   {app.type !== 'assignment' && (
                     <TouchableOpacity 
                       onPress={() => openCallSheet(exam)}
-                      style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                      style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                     >
-                      <Feather name="phone" size={12} color="#334155" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                      <Feather name="phone" size={13} color={THEME.accentText} />
+                      <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                     </TouchableOpacity>
                   )}
 
                   {/* Chat */}
                   <TouchableOpacity 
                     onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
-                    style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                    style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                   >
-                    <Feather name="message-square" size={12} color="#334155" />
-                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                    <Feather name="message-square" size={13} color={THEME.accentText} />
+                    <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -527,7 +536,7 @@ export default function ScribeCommitmentsView() {
                       setSelectedExam(exam);
                       setIsDeclarationOpen(true);
                     }}
-                    style={{ width: '100%', backgroundColor: '#059669', paddingVertical: 11, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
+                    style={{ width: '100%', backgroundColor: THEME.solid, ...gradient(THEME.buttonGradient), paddingVertical: 11, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
                   >
                     <Feather name="file-text" size={12} color="white" />
                     <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
@@ -665,12 +674,14 @@ export default function ScribeCommitmentsView() {
             )}
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+      {/* Soft colour orb for depth behind the cards */}
+      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -680,13 +691,13 @@ export default function ScribeCommitmentsView() {
         }
       >
         {/* Interactive Calendar Card (First) */}
-        <View style={{
+        <Animated.View entering={rise(0)} style={{
           backgroundColor: '#ffffff',
           borderRadius: 24,
           padding: 16,
           borderWidth: 1.5,
-          borderColor: '#e2e8f0',
-          shadowColor: '#2563eb',
+          borderColor: THEME.cardBorder,
+          shadowColor: THEME.shadow,
           shadowOffset: { width: 0, height: 6 },
           shadowOpacity: 0.08,
           shadowRadius: 16,
@@ -837,17 +848,17 @@ export default function ScribeCommitmentsView() {
               </TouchableOpacity>
             </View>
           )}
-        </View>
+        </Animated.View>
 
         {/* ── FILTER SELECTION BLOCK (Slider Track) ── */}
-        <View style={{
+        <Animated.View entering={rise(1)} style={{
           flexDirection: 'row',
-          backgroundColor: '#f1f5f9',
+          backgroundColor: '#ffffff',
           padding: 5,
           borderRadius: 18,
           borderWidth: 1.5,
-          borderColor: '#cbd5e1',
-          shadowColor: '#475569',
+          borderColor: THEME.cardBorder,
+          shadowColor: THEME.shadow,
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.08,
           shadowRadius: 10,
@@ -867,8 +878,9 @@ export default function ScribeCommitmentsView() {
                   borderRadius: 14,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: isActive ? '#059669' : 'transparent',
-                  shadowColor: isActive ? '#059669' : 'transparent',
+                  backgroundColor: isActive ? THEME.solid : 'transparent',
+                  ...(isActive ? gradient(THEME.buttonGradient) : {}),
+                  shadowColor: isActive ? THEME.shadow : 'transparent',
                   shadowOffset: { width: 0, height: 4 },
                   shadowOpacity: isActive ? 0.35 : 0,
                   shadowRadius: 10,
@@ -888,21 +900,23 @@ export default function ScribeCommitmentsView() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </Animated.View>
         {visibleApps.length === 0 ? (
-          <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
-            <Feather name="inbox" size={28} color="#94a3b8" />
+          <Animated.View entering={rise(2)} style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="inbox" size={26} color={THEME.accentText} />
+            </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>
               {selectedFilter === 'All' ? 'No applications yet' : `No ${selectedFilter.toLowerCase()} applications`}
             </Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
               {selectedFilter === 'All'
-                ? 'Apply to exams from the Explore tab to see them here.'
+                ? 'Apply to exams from the Search tab to see them here.'
                 : 'Try selecting a different filter above.'}
             </Text>
-          </View>
+          </Animated.View>
         ) : (
-          visibleApps.map(app => renderCard(app, getAppType(app) as 'pending' | 'confirmed' | 'rejected' | 'completed'))
+          visibleApps.map((app, i) => renderCard(app, getAppType(app) as 'pending' | 'confirmed' | 'rejected' | 'completed', i))
         )}
       </ScrollView>
 

@@ -3,7 +3,6 @@ import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
-import { useThemeMode } from '@/core/themeContext';
 
 import ScribeHomeView from '../scribe/ScribeHomeView';
 import ScribeExploreView from '../scribe/ScribeExploreView';
@@ -36,7 +35,6 @@ export default function ConsoleScribePC({
   layoutMode: _layoutMode,
   onChangeLayoutMode: _onChangeLayoutMode,
 }: ConsoleScribePCProps) {
-  const { isDark, toggleTheme } = useThemeMode();
   const [internalActiveTab, setInternalActiveTab] = useState('home');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -65,23 +63,21 @@ export default function ConsoleScribePC({
   ];
 
   // Dynamic Theme Colors (Ultra-Glassmorphic System)
-  const headerBg = isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.65)';
-  const headerBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.85)';
-  const sidebarBg = isDark ? 'rgba(15, 23, 42, 0.72)' : 'rgba(255, 255, 255, 0.62)';
-  const sidebarBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.85)';
-  const mainBg = isDark ? '#090d16' : '#f0fdf4';
-  const textPrimary = isDark ? '#ffffff' : '#0f172a';
-  const textSecondary = isDark ? '#94a3b8' : '#64748b';
-  const pillBg = isDark ? 'rgba(30, 41, 59, 0.72)' : 'rgba(255, 255, 255, 0.82)';
-  const pillBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.95)';
+  const headerBg = 'rgba(255, 255, 255, 0.65)';
+  const headerBorder = 'rgba(255, 255, 255, 0.85)';
+  const sidebarBg = 'rgba(255, 255, 255, 0.62)';
+  const sidebarBorder = 'rgba(255, 255, 255, 0.85)';
+  const mainBg = '#f0fdf4';
+  const textPrimary = '#0f172a';
+  const textSecondary = '#64748b';
+  const pillBg = 'rgba(255, 255, 255, 0.82)';
+  const pillBorder = 'rgba(255, 255, 255, 0.95)';
 
   return (
     <View style={{
       flex: 1,
       backgroundColor: mainBg,
-      backgroundImage: isDark
-        ? 'radial-gradient(at 15% 15%, rgba(22, 163, 74, 0.18) 0px, transparent 50%), radial-gradient(at 85% 85%, rgba(37, 99, 235, 0.15) 0px, transparent 50%)'
-        : 'radial-gradient(at 10% 10%, rgba(22, 163, 74, 0.12) 0px, transparent 50%), radial-gradient(at 90% 90%, rgba(37, 99, 235, 0.09) 0px, transparent 50%), radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%)',
+      backgroundImage: 'radial-gradient(at 10% 10%, rgba(22, 163, 74, 0.12) 0px, transparent 50%), radial-gradient(at 90% 90%, rgba(37, 99, 235, 0.09) 0px, transparent 50%), radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%)',
     } as any}>
       {/* ═══════════════════════════════════════════
            TOP FULL-WIDTH ULTRA-GLASSMOPHIC HEADER BAR
@@ -96,9 +92,7 @@ export default function ConsoleScribePC({
         flexDirection: 'row',
         alignItems: 'center',
         zIndex: 100,
-        boxShadow: isDark
-          ? '0 4px 20px 0 rgba(0, 0, 0, 0.4), inset 0 -1px 0 0 rgba(255, 255, 255, 0.1)'
-          : '0 4px 24px -2px rgba(22, 163, 74, 0.07), inset 0 -1px 0 0 rgba(255, 255, 255, 0.85)',
+        boxShadow: '0 4px 24px -2px rgba(22, 163, 74, 0.07), inset 0 -1px 0 0 rgba(255, 255, 255, 0.85)',
       } as any}>
         {/* Top Left Branding Box: Aligned with Sidebar (260px / 84px) */}
         <View style={{
@@ -141,7 +135,7 @@ export default function ConsoleScribePC({
         </View>
 
         {/* Floating Vertical Separator (Inset 26px line, does not touch top/bottom edges) */}
-        <View style={{ width: 1, height: 26, backgroundColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#cbd5e1' }} />
+        <View style={{ width: 1, height: 26, backgroundColor: '#cbd5e1' }} />
 
         {/* Top Right Main Header Area (Shifted slightly left with paddingLeft: 16) */}
         <View style={{
@@ -172,28 +166,14 @@ export default function ConsoleScribePC({
         {/* Top Right: Theme Toggle + Notifications + User Profile Pill */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, position: 'relative' }}>
 
-          {/* 2. Theme Toggle Button */}
-          <Pressable
-            onPress={toggleTheme}
-            style={({ hovered }: any) => ({
-              width: 42, height: 42, borderRadius: 12,
-              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
-              borderWidth: 1, borderColor: pillBorder,
-              alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer' as any,
-              backdropFilter: 'blur(10px)',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4,
-            })}
-          >
-            <Feather name={isDark ? "sun" : "moon"} size={19} color={isDark ? "#fbbf24" : "#475569"} />
-          </Pressable>
+          
 
           {/* 2. Notification Bell Icon */}
           <Pressable
             onPress={() => setActiveTab('notifications')}
             style={({ hovered }: any) => ({
               width: 42, height: 42, borderRadius: 12,
-              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : pillBg,
+              backgroundColor: hovered ? ('#e2e8f0') : pillBg,
               borderWidth: 1, borderColor: pillBorder,
               alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer' as any,
@@ -201,7 +181,7 @@ export default function ConsoleScribePC({
               shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 4,
             })}
           >
-            <Feather name="bell" size={19} color={isDark ? "#94a3b8" : "#475569"} />
+            <Feather name="bell" size={19} color={"#475569"} />
             <View style={{
               position: 'absolute', top: 8, right: 8,
               width: 8, height: 8, borderRadius: 4,
@@ -213,7 +193,7 @@ export default function ConsoleScribePC({
           <Pressable
             onPress={() => setShowProfileDropdown(!showProfileDropdown)}
             style={({ hovered }: any) => ({
-              backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)') : pillBg,
+              backgroundColor: hovered ? ('rgba(255, 255, 255, 0.95)') : pillBg,
               borderWidth: 1,
               borderColor: hovered ? '#16a34a' : pillBorder,
               borderRadius: 24,
@@ -249,9 +229,9 @@ export default function ConsoleScribePC({
               top: 54,
               right: 0,
               width: 220,
-              backgroundColor: isDark ? '#0f172a' : 'rgba(255, 255, 255, 0.95)',
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
               borderWidth: 1,
-              borderColor: isDark ? 'rgba(51, 65, 85, 0.9)' : '#e2e8f0',
+              borderColor: '#e2e8f0',
               borderRadius: 16,
               padding: 8,
               backdropFilter: 'blur(20px)',
@@ -263,7 +243,7 @@ export default function ConsoleScribePC({
                 style={({ hovered }: any) => ({
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
-                  backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9') : 'transparent',
+                  backgroundColor: hovered ? ('#f1f5f9') : 'transparent',
                   cursor: 'pointer' as any,
                 })}
               >
@@ -276,7 +256,7 @@ export default function ConsoleScribePC({
                 style={({ hovered }: any) => ({
                   flexDirection: 'row', alignItems: 'center', gap: 10,
                   paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10,
-                  backgroundColor: hovered ? (isDark ? 'rgba(30, 41, 59, 0.8)' : '#f1f5f9') : 'transparent',
+                  backgroundColor: hovered ? ('#f1f5f9') : 'transparent',
                   cursor: 'pointer' as any,
                 })}
               >
@@ -284,7 +264,7 @@ export default function ConsoleScribePC({
                 <Text style={{ fontSize: 13, fontWeight: '700', color: textPrimary }}>Account Settings</Text>
               </Pressable>
 
-              <View style={{ height: 1, backgroundColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#e2e8f0', marginVertical: 6 }} />
+              <View style={{ height: 1, backgroundColor: '#e2e8f0', marginVertical: 6 }} />
 
               <Pressable
                 onPress={handleLogout}
@@ -319,9 +299,7 @@ export default function ConsoleScribePC({
           paddingVertical: 28,
           paddingHorizontal: isCollapsed ? 12 : 18,
           justifyContent: 'space-between',
-          boxShadow: isDark
-            ? '4px 0 24px 0 rgba(0, 0, 0, 0.35)'
-            : '4px 0 24px 0 rgba(22, 163, 74, 0.05)',
+          boxShadow: '4px 0 24px 0 rgba(22, 163, 74, 0.05)',
         } as any}>
           {/* Sidebar Navigation Options */}
           <View style={{ gap: 8 }}>
@@ -337,8 +315,8 @@ export default function ConsoleScribePC({
                     justifyContent: isCollapsed ? 'center' : 'flex-start',
                     gap: 12,
                     backgroundColor: active
-                      ? (isDark ? 'rgba(22, 163, 74, 0.22)' : 'rgba(22, 163, 74, 0.12)')
-                      : (hovered ? (isDark ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.85)') : 'transparent'),
+                      ? ('rgba(22, 163, 74, 0.12)')
+                      : (hovered ? ('rgba(255, 255, 255, 0.85)') : 'transparent'),
                     borderWidth: 1,
                     borderColor: active
                       ? 'rgba(22, 163, 74, 0.35)'
@@ -403,7 +381,7 @@ export default function ConsoleScribePC({
               alignItems: 'center',
               justifyContent: isCollapsed ? 'center' : 'flex-start',
               gap: 10,
-              backgroundColor: hovered ? (isDark ? 'rgba(51, 65, 85, 0.8)' : '#e2e8f0') : (isDark ? 'rgba(30, 41, 59, 0.6)' : 'rgba(241, 245, 249, 0.8)'),
+              backgroundColor: hovered ? ('#e2e8f0') : ('rgba(241, 245, 249, 0.8)'),
               borderWidth: 1,
               borderColor: pillBorder,
               paddingHorizontal: isCollapsed ? 12 : 16,
@@ -431,7 +409,7 @@ export default function ConsoleScribePC({
               {activeTab !== 'profile' && (
                 <View style={{
                   flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                  marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: isDark ? 'rgba(51, 65, 85, 0.6)' : '#cbd5e1'
+                  marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#cbd5e1'
                 }}>
                   <Text style={{ fontSize: 26, fontWeight: '900', color: textPrimary, letterSpacing: -0.5 }}>
                     {activeTab === 'home' && 'Scribe Dashboard'}
