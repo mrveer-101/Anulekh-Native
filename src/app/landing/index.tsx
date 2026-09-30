@@ -171,19 +171,20 @@ export default function LandingScreen() {
           >
              <Animated.View style={[{
               width: 84, height: 84, borderRadius: 26,
-              backgroundColor: 'rgba(255,255,255,0.75)',
+              backgroundColor: '#ffffff',
               borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.25)',
               alignItems: 'center', justifyContent: 'center',
+              padding: 11, // inner space so the rounded corners never clip the logo
               marginBottom: 20,
               shadowColor: '#2563eb',
               shadowOffset: { width: 0, height: 10 },
               shadowOpacity: 0.2, shadowRadius: 24, elevation: 12,
               overflow: 'hidden',
             }, logoStyle]}>
-              <Image 
-                source={require('../../../assets/images/custom/Pen_Logo.jpg')} 
+              <Image
+                source={require('../../../assets/images/custom/Pen_Logo.jpg')}
                 style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </Animated.View>
 

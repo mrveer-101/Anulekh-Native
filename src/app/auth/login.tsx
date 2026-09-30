@@ -388,50 +388,8 @@ export default function LoginScreen() {
               </Animated.View>
             ) : null}
 
-            {/* Auto-detected role banner */}
-            <Animated.View entering={enter(FadeInDown.delay(120).duration(450))}>
-            <View style={{
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5, borderColor: '#e2e8f0',
-              borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 24,
-              shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.08, shadowRadius: 12, elevation: 3,
-            }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 4,
-                  backgroundColor: 'rgba(37,99,235,0.08)',
-                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 10,
-                  borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)',
-                }}>
-                  <FontAwesome5 name="user-graduate" size={13} color="#2563eb" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563eb' }}>Student</Text>
-                </View>
-
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#94a3b8' }}>&</Text>
-
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 4,
-                  backgroundColor: 'rgba(22,163,74,0.08)',
-                  paddingVertical: 5, paddingHorizontal: 10, borderRadius: 10,
-                  borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)',
-                }}>
-                  <FontAwesome5 name="pen-nib" size={13} color="#16a34a" />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a' }}>Scribe</Text>
-                </View>
-              </View>
-
-              <Text style={{ fontSize: 12, color: '#64748b', fontWeight: '600' }}>
-                Auto-Detected
-              </Text>
-            </View>
-
-            </Animated.View>
-
             {/* Form — crisp card */}
-            <Animated.View entering={enter(FadeInDown.delay(180).duration(450))}>
+            <Animated.View entering={enter(FadeInDown.delay(120).duration(450))}>
             <View style={{
               backgroundColor: '#ffffff',
               borderWidth: 1.5, borderColor: '#e2e8f0',
@@ -537,7 +495,7 @@ export default function LoginScreen() {
             </Animated.View>
 
             {/* Login CTA */}
-            <Animated.View entering={enter(FadeInUp.delay(260).duration(450))}>
+            <Animated.View entering={enter(FadeInUp.delay(200).duration(450))}>
             <Animated.View style={ctaPressStyle}>
             <TouchableOpacity
               onPress={handleLogin}
@@ -591,7 +549,7 @@ export default function LoginScreen() {
             </Animated.View>
 
             {/* Divider */}
-            <Animated.View entering={enter(FadeIn.delay(380).duration(450))}>
+            <Animated.View entering={enter(FadeIn.delay(320).duration(450))}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
               <Text style={{ color: '#94a3b8', fontSize: 12 }}>or continue with</Text>

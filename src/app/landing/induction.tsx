@@ -117,6 +117,27 @@ const TRANSLATIONS: Record<string, {
   }
 };
 
+// Header buttons: ~44px touch targets with light brand tints (blue = language/back, orange = skip).
+// Solid tints rather than translucent ones, so Android elevation shadows render cleanly.
+const HEADER_BUTTON = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 5,
+  paddingVertical: 11,
+  paddingHorizontal: 14,
+  borderRadius: 14,
+  borderWidth: 1.5,
+  shadowOffset: { width: 0, height: 3 },
+  shadowOpacity: 0.14,
+  shadowRadius: 8,
+  elevation: 3,
+} as const;
+const HEADER_BUTTON_BLUE = { ...HEADER_BUTTON, backgroundColor: '#EAF1FF', borderColor: '#BFD3FB', shadowColor: '#2563eb' };
+const HEADER_BUTTON_ORANGE = { ...HEADER_BUTTON, backgroundColor: '#FFF1E5', borderColor: '#FDC9A3', shadowColor: '#ea580c' };
+const HEADER_BUTTON_TEXT = { fontWeight: '800', fontSize: 15 } as const;
+const HEADER_BLUE_TEXT = '#1d4ed8';
+const HEADER_ORANGE_TEXT = '#c2410c';
+
 // Soft background tints that shift with each step so every slide feels distinct.
 const ORB_TOP_COLORS = ['rgba(37,99,235,0.18)', 'rgba(79,70,229,0.18)', 'rgba(16,185,129,0.18)', 'rgba(249,115,22,0.14)'];
 const ORB_BOTTOM_COLORS = ['rgba(16,185,129,0.12)', 'rgba(37,99,235,0.12)', 'rgba(234,179,8,0.14)', 'rgba(37,99,235,0.12)'];
@@ -251,63 +272,37 @@ export default function OnboardingCarousel() {
       >
         {/* 
           LEFT SLOT: 
-          - Slide 1: Renders the Language selection button with floating white bg + shadow.
-          - Slides 2, 3, 4: Renders the Back button with floating white bg + shadow.
+          - Slide 1: Language selection button (light blue).
+          - Slides 2, 3, 4: Back button (light blue).
         */}
         {currentStep === 0 ? (
           <TouchableOpacity
             onPress={() => setShowLanguageModal(true)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: '#e2e8f0',
-              borderRadius: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 6,
-              elevation: 2,
-            }}
+            activeOpacity={0.75}
+            style={HEADER_BUTTON_BLUE}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`Select Language. Current: ${appLanguage}. Button`}
             accessibilityHint="Opens language selection sheet"
           >
-            <Feather name="globe" size={14} color="#2563eb" style={{ marginRight: 6 }} />
-            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>
+            <Feather name="globe" size={16} color={HEADER_BLUE_TEXT} />
+            <Text style={[HEADER_BUTTON_TEXT, { color: HEADER_BLUE_TEXT }]}>
               {appLanguage === 'Hindi' ? 'हिन्दी' : appLanguage === 'Gujarati' ? 'ગુજરાતી' : 'EN'}
             </Text>
-            <Feather name="chevron-down" size={14} color="#2563eb" style={{ marginLeft: 4 }} />
+            <Feather name="chevron-down" size={15} color={HEADER_BLUE_TEXT} style={{ marginLeft: -2 }} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity 
-            onPress={handleBack} 
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: '#e2e8f0',
-              borderRadius: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 6,
-              elevation: 2,
-            }}
+            onPress={handleBack}
+            activeOpacity={0.75}
+            style={HEADER_BUTTON_BLUE}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`${t.back}, button`}
             accessibilityHint="Goes back to the previous onboarding slide"
           >
-            <Feather name="chevron-left" size={16} color="#2563eb" style={{ marginLeft: -4, marginRight: 2 }} />
-            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>{t.back}</Text>
+            <Feather name="chevron-left" size={18} color={HEADER_BLUE_TEXT} style={{ marginLeft: -5, marginRight: -2 }} />
+            <Text style={[HEADER_BUTTON_TEXT, { color: HEADER_BLUE_TEXT }]}>{t.back}</Text>
           </TouchableOpacity>
         )}
 
@@ -320,36 +315,24 @@ export default function OnboardingCarousel() {
 
         {/* 
           RIGHT SLOT: 
-          - Slides 1, 2, 3: Renders the Skip button with floating white bg + shadow.
+          - Slides 1, 2, 3: Skip button (light orange).
           - Slide 4: Renders an empty placeholder to keep the header aligned.
         */}
         {currentStep < totalSteps - 1 ? (
           <TouchableOpacity 
             onPress={() => { setDirection(1); setCurrentStep(totalSteps - 1); }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: 8,
-              paddingHorizontal: 14,
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: '#e2e8f0',
-              borderRadius: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.06,
-              shadowRadius: 6,
-              elevation: 2,
-            }}
+            activeOpacity={0.75}
+            style={HEADER_BUTTON_ORANGE}
             accessible={true}
             accessibilityRole="button"
             accessibilityLabel={`${t.skip}, button`}
             accessibilityHint="Skips straight to selecting student or volunteer role"
           >
-            <Text style={{ color: '#2563eb', fontWeight: '800', fontSize: 13 }}>{t.skip}</Text>
+            <Text style={[HEADER_BUTTON_TEXT, { color: HEADER_ORANGE_TEXT }]}>{t.skip}</Text>
+            <Feather name="chevrons-right" size={16} color={HEADER_ORANGE_TEXT} style={{ marginRight: -3 }} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 64 }} />
+          <View style={{ width: 88 }} />
         )}
       </View>
 
