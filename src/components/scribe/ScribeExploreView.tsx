@@ -1,11 +1,16 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { parseExamDate } from '@/core/examDate';
 import MiniCalendar from '@/components/modals/MiniCalendar';
+import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
+
+// Hides the browser's default focus ring on web; the search box's border shows focus instead.
+const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
 interface ExamRequest {
   id: number;
@@ -117,6 +122,10 @@ function parseSearchQueryForDates(query: string): { start: Date | null; end: Dat
 
 export default function ScribeExploreView() {
   const { t } = useLanguage();
+  // Blocks and cards rise in one after another (off with Reduce Motion).
+  const reduceMotion = useReducedMotion();
+  const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
+  const [searchFocused, setSearchFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSegment, setActiveSegment] = useState<'exams' | 'assignments'>('exams');
@@ -448,24 +457,26 @@ export default function ScribeExploreView() {
     onSelect: (value: string) => void
   ) => (
     <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>{label}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {options.map((opt) => {
           const active = selected === opt;
           return (
             <TouchableOpacity
               key={opt}
               onPress={() => onSelect(opt)}
+              accessibilityRole="button"
+              aria-selected={active}
               style={{
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                borderRadius: 10,
-                backgroundColor: active ? '#059669' : '#f1f5f9',
-                borderWidth: 1,
-                borderColor: active ? '#059669' : '#e2e8f0'
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: active ? THEME.solid : '#ffffff',
+                borderWidth: 1.5,
+                borderColor: active ? THEME.solid : '#e2e8f0'
               }}
             >
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: active ? '#ffffff' : '#475569' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : '#475569' }}>
                 {opt}
               </Text>
             </TouchableOpacity>
@@ -475,21 +486,22 @@ export default function ScribeExploreView() {
     </View>
   );
 
-  const renderExamCard = (exam: ExamRequest) => {
+  const renderExamCard = (exam: ExamRequest, index = 0) => {
     const examStatus = appMap.get(`${exam.id}_exam`);
     const isExpanded = expandedExamIds.has(exam.id);
     const isEmergency = exam.is_emergency === 'yes';
     const isVerified = scribeProfile?.verification_status === 'approved';
 
     return (
-      <View 
-        key={exam.id} 
-        style={{ 
-          backgroundColor: '#ffffff', 
-          borderRadius: 20, 
-          borderWidth: isEmergency ? 2 : (exam.private_scribe_id ? 2 : 1.5), 
-          borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : '#e2e8f0'), 
-          shadowColor: isEmergency ? '#dc2626' : (exam.private_scribe_id ? '#db2777' : '#64748b'), 
+      <Animated.View
+        key={exam.id}
+        entering={rise(index + 3)}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 20,
+          borderWidth: isEmergency ? 2 : (exam.private_scribe_id ? 2 : 1.5),
+          borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : THEME.cardBorder),
+          shadowColor: isEmergency ? '#dc2626' : (exam.private_scribe_id ? '#db2777' : THEME.shadow), 
           shadowOffset: { width: 0, height: 6 }, 
           shadowOpacity: isEmergency ? 0.12 : 0.07, 
           shadowRadius: 16, 
@@ -498,12 +510,21 @@ export default function ScribeExploreView() {
           overflow: 'hidden'
         }}
       >
+        {/* Status accent strip: red = SOS, pink = private/invited, amber = applied, green = open */}
+        <View style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1,
+          backgroundColor: isEmergency ? '#dc2626'
+            : (exam.private_scribe_id || examStatus === 'invited') ? '#db2777'
+            : examStatus === 'pending' ? '#d97706'
+            : THEME.primary,
+        }} />
+
         {/* Top Banner for Private Invitations */}
         {!!exam.private_scribe_id && (
           <View style={{ backgroundColor: '#fdf2f8', paddingVertical: 6, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#fbcfe8', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="lock" size={12} color="#db2777" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '900', color: '#db2777', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              🔒 PRIVATE INVITATION FOR YOU
+              PRIVATE INVITATION FOR YOU
             </Text>
           </View>
         )}
@@ -519,13 +540,13 @@ export default function ScribeExploreView() {
           {/* Subject icon */}
           <View style={{
             width: 38, height: 38, borderRadius: 11,
-            backgroundColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.08)',
+            backgroundColor: isEmergency ? '#fee2e2' : THEME.soft,
             alignItems: 'center', justifyContent: 'center',
             borderWidth: 1,
-            borderColor: isEmergency ? '#fca5a5' : 'rgba(37,99,235,0.18)',
+            borderColor: isEmergency ? '#fca5a5' : THEME.softBorder,
           }}>
             <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
-              color={isEmergency ? '#dc2626' : '#2563eb'} />
+              color={isEmergency ? '#dc2626' : THEME.accentText} />
           </View>
 
           {/* Subject Name */}
@@ -539,7 +560,10 @@ export default function ScribeExploreView() {
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
             {isEmergency && (
               <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>🚨 SOS</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                  <Ionicons name="flash" size={8} color="#b91c1c" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>SOS</Text>
+                </View>
               </View>
             )}
             {!!exam.private_scribe_id && (
@@ -631,42 +655,47 @@ export default function ScribeExploreView() {
                   Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
                 }
               }}
-              style={{ 
-                width: '100%', 
-                backgroundColor: 'rgba(22,163,74,0.08)', 
-                paddingVertical: 11, 
-                borderRadius: 12, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                flexDirection: 'row', 
+              style={{
+                width: '100%',
+                backgroundColor: THEME.solid,
+                ...gradient(THEME.buttonGradient),
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
                 gap: 6,
-                borderWidth: 1,
-                borderColor: 'rgba(22,163,74,0.22)'
+                shadowColor: THEME.shadow,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 2,
               }}
             >
-              <Feather name="file-text" size={12} color="#16a34a" />
-              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '800', fontSize: 12 }}>{t('view_details_apply')}</Text>
+              <Feather name="file-text" size={13} color="#ffffff" />
+              <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '800', fontSize: 12.5 }}>{t('view_details_apply')}</Text>
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 
-  const renderAssignmentCard = (assign: any) => {
+  const renderAssignmentCard = (assign: any, index = 0) => {
     const assignStatus = appMap.get(`${assign.id}_assignment`);
     const isExpanded = expandedAssignmentIds.has(assign.id);
     const isVerified = scribeProfile?.verification_status === 'approved';
 
     return (
-      <View 
-        key={assign.id} 
-        style={{ 
-          backgroundColor: '#ffffff', 
-          borderRadius: 20, 
-          borderWidth: 1.5, 
-          borderColor: '#e2e8f0', 
-          shadowColor: '#64748b', 
+      <Animated.View
+        key={assign.id}
+        entering={rise(index + 3)}
+        style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 20,
+          borderWidth: 1.5,
+          borderColor: THEME.cardBorder,
+          shadowColor: THEME.shadow, 
           shadowOffset: { width: 0, height: 6 }, 
           shadowOpacity: 0.07, 
           shadowRadius: 16, 
@@ -675,6 +704,12 @@ export default function ScribeExploreView() {
           overflow: 'hidden'
         }}
       >
+        {/* Status accent strip: pink = invited, amber = applied, green = open */}
+        <View style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1,
+          backgroundColor: assignStatus === 'invited' ? '#db2777' : assignStatus === 'pending' ? '#d97706' : THEME.primary,
+        }} />
+
         {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
           onPress={() => toggleAssignmentCard(assign.id)}
@@ -775,25 +810,29 @@ export default function ScribeExploreView() {
                   Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
                 }
               }}
-              style={{ 
-                width: '100%', 
-                backgroundColor: 'rgba(22,163,74,0.08)', 
-                paddingVertical: 11, 
-                borderRadius: 12, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                flexDirection: 'row', 
+              style={{
+                width: '100%',
+                backgroundColor: THEME.solid,
+                ...gradient(THEME.buttonGradient),
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'row',
                 gap: 6,
-                borderWidth: 1,
-                borderColor: 'rgba(22,163,74,0.22)'
+                shadowColor: THEME.shadow,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 2,
               }}
             >
-              <Feather name="file-text" size={12} color="#16a34a" />
-              <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '800', fontSize: 12 }}>{t('view_details_apply')}</Text>
+              <Feather name="file-text" size={13} color="#ffffff" />
+              <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '800', fontSize: 12.5 }}>{t('view_details_apply')}</Text>
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </Animated.View>
     );
   };
 
@@ -836,16 +875,19 @@ export default function ScribeExploreView() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      
+    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+      {/* Soft colour orb for depth behind the cards */}
+      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
+
       {/* Segment Switcher: Available Exams vs Available Assignments */}
-      <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', marginHorizontal: 20, marginTop: 16, padding: 4, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0' }}>
+      <Animated.View entering={rise(0)} style={{ flexDirection: 'row', backgroundColor: '#ffffff', marginHorizontal: 24, marginTop: 16, padding: 4, borderRadius: 16, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3 }}>
         <TouchableOpacity
           onPress={() => setActiveSegment('exams')}
           style={{
             flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6,
-            backgroundColor: activeSegment === 'exams' ? '#2563eb' : 'transparent',
-            shadowColor: activeSegment === 'exams' ? '#2563eb' : undefined, shadowOpacity: activeSegment === 'exams' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'exams' ? 3 : 0
+            backgroundColor: activeSegment === 'exams' ? THEME.solid : 'transparent',
+            ...(activeSegment === 'exams' ? gradient(THEME.buttonGradient) : {}),
+            shadowColor: activeSegment === 'exams' ? THEME.shadow : undefined, shadowOpacity: activeSegment === 'exams' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'exams' ? 3 : 0
           }}
           activeOpacity={0.85}
         >
@@ -859,8 +901,9 @@ export default function ScribeExploreView() {
           onPress={() => setActiveSegment('assignments')}
           style={{
             flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6,
-            backgroundColor: activeSegment === 'assignments' ? '#059669' : 'transparent',
-            shadowColor: activeSegment === 'assignments' ? '#059669' : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'assignments' ? 3 : 0
+            backgroundColor: activeSegment === 'assignments' ? THEME.solid : 'transparent',
+            ...(activeSegment === 'assignments' ? gradient(THEME.buttonGradient) : {}),
+            shadowColor: activeSegment === 'assignments' ? THEME.shadow : undefined, shadowOpacity: activeSegment === 'assignments' ? 0.2 : 0, shadowRadius: 8, elevation: activeSegment === 'assignments' ? 3 : 0
           }}
           activeOpacity={0.85}
         >
@@ -869,10 +912,10 @@ export default function ScribeExploreView() {
             Assignments ({filteredAssignments.length})
           </Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
-      {/* 🚨 SOS Emergency Reserve Duty Banner */}
-      <View style={{ marginHorizontal: 24, marginTop: 12 }}>
+      {/* SOS Emergency Reserve Duty Banner */}
+      <Animated.View entering={rise(1)} style={{ marginHorizontal: 24, marginTop: 12 }}>
         <View style={{
           backgroundColor: 'rgba(239,68,68,0.06)',
           borderWidth: 1.5,
@@ -888,26 +931,29 @@ export default function ScribeExploreView() {
             <Ionicons name="flash" size={16} color="#ef4444" />
           </View>
           <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: '#991b1b' }}>🚨 SOS Standby Duty Active</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: '#991b1b' }}>SOS Standby Duty Active</Text>
             <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>RESERVE 10</Text>
             </View>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
       {/* Search Header Bar */}
-      <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
+      <Animated.View entering={rise(2)} style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
         
         {/* Search Input */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 12, height: 46 }}>
-          <Feather name="search" size={16} color="#94a3b8" style={{ marginRight: 8 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: searchFocused ? THEME.primary : THEME.cardBorder, paddingHorizontal: 14, height: 48, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: searchFocused ? 0.14 : 0.06, shadowRadius: 10, elevation: 2 }}>
+          <Feather name="search" size={17} color={searchFocused ? THEME.accentText : '#94a3b8'} style={{ marginRight: 8 }} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={activeSegment === 'exams' ? "Search subject or venue..." : "Search subject or title..."}
             placeholderTextColor="#94a3b8"
-            style={{ flex: 1, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            accessibilityLabel={activeSegment === 'exams' ? 'Search exams by subject or venue' : 'Search assignments by subject or title'}
+            style={{ flex: 1, fontSize: 13.5, color: '#0f172a', fontWeight: '600', ...WEB_NO_OUTLINE }}
           />
           {searchQuery ? (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -915,7 +961,7 @@ export default function ScribeExploreView() {
             </TouchableOpacity>
           ) : null}
         </View>
-      </View>
+      </Animated.View>
 
       {/* Main Opportunities List & Scrollable Filters */}
       <ScrollView
@@ -926,7 +972,7 @@ export default function ScribeExploreView() {
         }
       >
         {/* Collapsible Filter Block */}
-        <View style={{ backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.06)', overflow: 'hidden', marginBottom: 14 }}>
+        <View style={{ backgroundColor: '#fff', borderRadius: 18, borderWidth: 1.5, borderColor: THEME.cardBorder, overflow: 'hidden', marginBottom: 14 }}>
           {/* Toggle bar */}
           <TouchableOpacity
             activeOpacity={0.7}
@@ -934,10 +980,12 @@ export default function ScribeExploreView() {
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Feather name="sliders" size={15} color="#16a34a" />
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
+              <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="sliders" size={14} color={THEME.accentText} />
+              </View>
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
               {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
-                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: THEME.solid, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}</Text>
                 </View>
               )}
@@ -1027,14 +1075,14 @@ export default function ScribeExploreView() {
         
         {/* Scribe's Preferred Availability Windows */}
         {activeSegment === 'exams' && scribeProfile?.availability_slots ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
-            <Feather name="clock" size={13} color="#16a34a" style={{ marginRight: 2 }} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: THEME.soft, borderRadius: 16, borderWidth: 1, borderColor: THEME.softBorder, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
+            <Feather name="clock" size={13} color={THEME.accentText} style={{ marginRight: 2 }} />
             <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
               Your Slots:
             </Text>
             {String(scribeProfile.availability_slots).split(',').map((slot: string) => slot.trim()).filter(Boolean).map((slot: string) => (
-              <View key={slot} style={{ paddingVertical: 3, paddingHorizontal: 9, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.18)' }}>
-                <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a' }}>{slot}</Text>
+              <View key={slot} style={{ paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#ffffff', borderWidth: 1, borderColor: THEME.softBorder }}>
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: THEME.accentText }}>{slot}</Text>
               </View>
             ))}
           </View>
@@ -1062,8 +1110,10 @@ export default function ScribeExploreView() {
               </Text>
               
               {filteredExams.length === 0 ? (
-                <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
-                  <Feather name="search" size={26} color="#94a3b8" />
+                <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="search" size={24} color={THEME.accentText} />
+                  </View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching exams</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
                     Try adjusting your search query or filter selections.
@@ -1081,8 +1131,10 @@ export default function ScribeExploreView() {
             </Text>
             
             {filteredAssignments.length === 0 ? (
-              <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}>
-                <Feather name="search" size={26} color="#94a3b8" />
+              <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="search" size={24} color={THEME.accentText} />
+                </View>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching assignments</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
                   Try adjusting your search query or filter selections.
