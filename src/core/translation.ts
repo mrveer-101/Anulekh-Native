@@ -1,9 +1,30 @@
+/**
+ * core/translation — in-app UI translations (English / Hindi / Gujarati) and the `useLanguage` hook.
+ *
+ * Structure:
+ *  - `dictionary`: one flat key -> string map per language. English is the reference set; its keys
+ *    define the allowed `t()` keys, and any key missing in another language falls back to English.
+ *    Strings may contain `{name}`-style placeholders filled by `t(key, { name: ... })`.
+ *  - `useLanguage()`: hook used by portal screens/components to read the current language, translate
+ *    keys and switch language.
+ *  - A module-level listener set so a change made in one component re-renders every other mounted
+ *    `useLanguage` consumer immediately.
+ *
+ * Persistence: the choice is stored on-device in AsyncStorage under `app_language` (no backend
+ * table involved), defaulting to English on first launch.
+ */
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+/** The supported UI languages; also the top-level keys of `dictionary`. */
 export type LanguageType = 'English' | 'Hindi' | 'Gujarati';
 
+/**
+ * Translation table: `dictionary[language][key]`. To add a string, add the key to English first
+ * (that is what types `t()`), then to Hindi and Gujarati.
+ */
 export const dictionary = {
+  // English: reference/fallback language.
   English: {
     welcome_scribe_portal: "🤝 VOLUNTEER SCRIBE PORTAL",
     welcome_student_portal: "🎓 CANDIDATE STUDENT PORTAL",
@@ -118,6 +139,7 @@ export const dictionary = {
     verify_first_error: "Please complete your profile verification first before managing exams.",
     scribe_profile_approved_desc: "Your profile has been successfully approved! Now you can accept exams.",
   },
+  // Hindi (Devanagari script).
   Hindi: {
     welcome_scribe_portal: "🤝 स्वयंसेवक लेखक पोर्टल (VOLUNTEER SCRIBE PORTAL)",
     welcome_student_portal: "🎓 उम्मीदवार छात्र पोर्टल (CANDIDATE PORTAL)",
@@ -232,6 +254,7 @@ export const dictionary = {
     verify_first_error: "कृपया परीक्षा का प्रबंधन करने से पहले अपनी प्रोफ़ाइल सत्यापन पूरा करें।",
     scribe_profile_approved_desc: "आपकी प्रोफ़ाइल सफलतापूर्वक स्वीकृत हो गई है! अब आप परीक्षाएं स्वीकार कर सकते हैं।",
   },
+  // Gujarati (Gujarati script).
   Gujarati: {
     welcome_scribe_portal: "🤝 સ્વયંસેવક લખિયા પોર્ટલ (VOLUNTEER SCRIBE PORTAL)",
     welcome_student_portal: "🎓 ઉમેદવાર વિદ્યાર્થી પોર્ટલ (CANDIDATE PORTAL)",
@@ -348,9 +371,15 @@ export const dictionary = {
   }
 };
 
+/** Called with the new language whenever `changeLanguage` runs. */
 type LanguageCallback = (newLang: LanguageType) => void;
+/** Module-wide registry of subscribers (one per mounted `useLanguage` instance, plus any manual ones). */
 const listeners = new Set<LanguageCallback>();
 
+/**
+ * Registers a callback for language changes.
+ * @returns An unsubscribe function (suitable as a useEffect cleanup).
+ */
 export function subscribeLanguageChange(cb: LanguageCallback) {
   listeners.add(cb);
   return () => {
@@ -358,9 +387,20 @@ export function subscribeLanguageChange(cb: LanguageCallback) {
   };
 }
 
+/**
+ * Language hook for UI text.
+ *
+ * @returns `{ lang, changeLanguage, t }`
+ *  - `lang`: current LanguageType (starts as 'English' until the stored value loads, so the first
+ *    paint may briefly be English).
+ *  - `changeLanguage(newLang)`: updates this component, persists to AsyncStorage and notifies all
+ *    other mounted consumers.
+ *  - `t(key, variables?)`: translated string for `key`, falling back to English, then ''.
+ */
 export function useLanguage() {
   const [lang, setLangState] = useState<LanguageType>('English');
 
+  /** Reads `app_language` from storage; unknown/missing values reset it to English. */
   const loadLang = async () => {
     try {
       const saved = await AsyncStorage.getItem('app_language');
@@ -375,6 +415,7 @@ export function useLanguage() {
     }
   };
 
+  // On mount: load the saved language and follow changes made by other components.
   useEffect(() => {
     loadLang();
     const unsubscribe = subscribeLanguageChange((newLang) => {
@@ -383,6 +424,7 @@ export function useLanguage() {
     return unsubscribe;
   }, []);
 
+  /** Switches the app language. Note: listeners also include this instance, so it sets state twice (harmless). */
   const changeLanguage = async (newLang: LanguageType) => {
     try {
       setLangState(newLang);
@@ -396,7 +438,14 @@ export function useLanguage() {
     }
   };
 
+  /**
+   * Translates `key` into the current language.
+   * @param key       Any key of the English dictionary (type-checked).
+   * @param variables Optional placeholder values, e.g. `{ name: 'Asha' }` for "Hi, {name}".
+   *                  Only the first occurrence of each placeholder is replaced.
+   */
   const t = (key: keyof typeof dictionary.English, variables?: Record<string, string>) => {
+    // Current language first, then English, then empty string.
     let text = dictionary[lang]?.[key] || dictionary.English[key] || '';
     if (variables) {
       Object.keys(variables).forEach(varKey => {
@@ -409,6 +458,11 @@ export function useLanguage() {
   return { lang, changeLanguage, t };
 }
 
+/**
+ * Placeholder default export that renders nothing; not used by the app. As its name suggests, it
+ * exists so the module also satisfies Expo Router's "default export a component" rule if it is
+ * ever picked up as a route file.
+ */
 export default function TranslationNonRoute() {
   return null;
 }

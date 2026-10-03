@@ -1,3 +1,19 @@
+/**
+ * BrandSplash — shared building blocks for Anulekh's launch screen.
+ *
+ * Exports the splash colour/size constants, the static pieces (background,
+ * full image, logo tile, title) and the animated `SplashOverlay` that runs
+ * after the OS native splash hides.
+ *
+ * Used by:
+ * - components/ui/animated-icon.tsx (`AnimatedSplashOverlay`, the start-up overlay)
+ * - app/index.tsx (static splash shown while the entry route decides where to redirect)
+ * - app/dev/splash-preview.tsx (developer preview of the splash hand-off)
+ *
+ * No data loading. Accessibility: the decorative background is hidden from
+ * screen readers, the logo / full image carry labels, and animations respect
+ * the OS "reduce motion" setting. The overlay never captures touches.
+ */
 import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -73,12 +89,20 @@ const FADE_OUT = 350;
  * - 'full-image' (iOS): the native splash is already the full picture, so the same image is shown — no visible change.
  * - 'bloom' (Android): the native splash can only be the paper colour + logo tile, so the clouds and title
  *   appear around the logo almost immediately.
+ *
+ * @param variant which of the two looks above to render (callers pick by Platform.OS).
+ * @param onDone called once, shortly after the fade-out finishes, so the parent can unmount the
+ *   overlay. Pass a stable callback: a new identity restarts the timer effect.
  */
 export function SplashOverlay({ variant, onDone }: { variant: 'full-image' | 'bloom'; onDone: () => void }) {
+  // Animation state: `clouds` = opacity of the cloud background (starts visible when there is
+  // nothing to animate in), `layer` = opacity of the whole overlay (fades to 0 at the end).
   const reduceMotion = useReducedMotion();
   const clouds = useSharedValue(variant === 'full-image' || reduceMotion ? 1 : 0);
   const layer = useSharedValue(1);
 
+  // Run the timeline: clouds fade in, overlay holds, then fades out; a timer fires onDone just
+  // after the fade completes. Reduce-motion shortens the hold and fade and skips the cloud fade.
   useEffect(() => {
     const hold = reduceMotion ? 800 : HOLD;
     const fade = reduceMotion ? 200 : FADE_OUT;
@@ -97,10 +121,13 @@ export function SplashOverlay({ variant, onDone }: { variant: 'full-image' | 'bl
         <SplashFullImage />
       ) : (
         <>
+          {/* Cloud background fading in behind the logo */}
           <Animated.View style={[StyleSheet.absoluteFill, cloudStyle]}>
             <SplashBackground />
           </Animated.View>
+          {/* Logo tile stays centred, matching the native splash position */}
           <SplashLogo />
+          {/* Title + tagline fade in below the logo */}
           <Animated.View
             entering={reduceMotion ? undefined : FadeIn.duration(CLOUDS_IN)}
             style={StyleSheet.absoluteFill}
@@ -114,6 +141,11 @@ export function SplashOverlay({ variant, onDone }: { variant: 'full-image' | 'bl
   );
 }
 
+/**
+ * Styles for the splash pieces. `overlay` covers the whole screen above the app (zIndex 1000) on
+ * the paper colour; `titleWrap` is anchored at the vertical centre and pushed down by half the
+ * logo height so adding the title never moves the logo.
+ */
 const styles = StyleSheet.create({
   // Explicit size: on web an absolutely-positioned Image otherwise keeps its natural pixel size.
   fill: {

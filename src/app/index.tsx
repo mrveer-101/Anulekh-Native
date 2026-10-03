@@ -1,3 +1,19 @@
+/**
+ * Root route ("/") — the start-up router.
+ *
+ * Expo Router opens this screen first. It never shows real content: while it
+ * checks the stored session it renders the branded splash (paper background,
+ * clouds, logo, title) so start-up looks continuous with the native splash, and
+ * then issues a <Redirect> to the right place:
+ *   - no session (or any error)        -> /landing
+ *   - profile not yet verified          -> /console/{scribe|student}/complete_profile
+ *   - verified scribe                   -> /console/scribe
+ *   - verified student (default role)   -> /console/student
+ *
+ * Data: reads the session via `supabase.auth.getSession()` and one row of the
+ * `profiles` table. Note `supabase` here is the app's own shim (core/supabase.ts)
+ * that talks to the Rust/Axum backend, not the real Supabase SDK.
+ */
 import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -13,23 +29,34 @@ import { SPLASH_PAPER, SplashBackground, SplashLogo, SplashTitle } from '@/compo
  * If no session, routes to the Landing screen.
  */
 export default function AppEntry() {
+  // `checked` flips to true once the session lookup finishes (success or failure);
+  // `destination` is the route we will redirect to.
   const [checked, setChecked] = React.useState(false);
   const [destination, setDestination] = React.useState<string | null>(null);
 
+  // Run the session check once on mount.
   useEffect(() => {
     checkSession();
   }, []);
 
+  /**
+   * Looks up the stored session and the user's profile, then picks the redirect
+   * destination. Any failure (e.g. backend unreachable) falls back to /landing.
+   */
   const checkSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // Fetch only the fields needed to decide role and verification state.
         const { data: profile } = await supabase
           .from('profiles')
           .select('role, verification_status, aadhar_number, aadhar_image_proof, disability_certificate, location')
           .eq('id', session.user.id)
           .single();
 
+        // A user counts as "approved" if the backend says so OR they have already submitted any
+        // ID/profile detail (Aadhaar number/image, disability certificate or location). Anyone else
+        // must finish onboarding on the complete_profile screen for their role.
         const isScribe = profile?.role === 'scribe';
         const hasIdProof = !!(profile?.aadhar_number || profile?.aadhar_image_proof || profile?.disability_certificate || profile?.location);
         const isApproved = profile?.verification_status === 'approved' || hasIdProof;
@@ -63,5 +90,6 @@ export default function AppEntry() {
     );
   }
 
+  // Check finished: hand off to the chosen route (cast because the path is computed at runtime).
   return <Redirect href={destination as any} />;
 }

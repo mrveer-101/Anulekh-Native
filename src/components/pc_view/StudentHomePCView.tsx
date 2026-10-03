@@ -1,3 +1,22 @@
+/**
+ * StudentHomePCView — "Home" tab of the desktop/web student console.
+ *
+ * Rendered by `components/pc_view/ConsoleStudentPC.tsx` inside the home
+ * `TabPane` (the desktop counterpart of `components/student/StudentHomeView`).
+ * Shows a welcome hero with the verification pill, four quick-stat cards and
+ * the list of the student's confirmed / SOS-pending exams with the matched
+ * scribe's details.
+ *
+ * Data (via the `supabase` shim — a custom client for the Rust/Axum backend,
+ * not real Supabase): the student's `profiles` row, their `exam_requests`,
+ * the matched scribes' `profiles`, and a count of their `assignment_requests`.
+ *
+ * SOS: the "SOS Broadcast" button reopens the request as an emergency
+ * (status 'pending', scribe removed, `is_emergency = 'yes'`) and inserts an
+ * urgent `notifications` row for every approved scribe. There is no time
+ * window restriction here. On web, `Alert.alert` is polyfilled in
+ * `app/_layout.tsx` and auto-confirms, so the confirmation step is skipped.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -5,17 +24,31 @@ import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { hoursUntilExam } from '@/core/examDate';
 
+/**
+ * Props passed down from ConsoleStudentPC.
+ * - `userProfile` initial profile, used until (or if) the fresh fetch fails.
+ * - `requests`    the parent's request list; currently unused here because
+ *                 this view fetches its own `exam_requests`.
+ * - `onRefresh`   asks the parent console to reload after an SOS is sent.
+ */
 interface StudentHomePCViewProps {
   userProfile?: any;
   requests?: any[];
   onRefresh?: () => void;
 }
 
+/**
+ * Desktop student home dashboard. See the file header for data and SOS
+ * behaviour. Navigation: every "New / Request / Create" button pushes
+ * `/console/student/request_form`.
+ */
 export default function StudentHomePCView({
   userProfile,
   requests = [],
   onRefresh,
 }: StudentHomePCViewProps) {
+  // Dashboard data, the three counters for the stat cards, and the id of the
+  // exam whose SOS is currently being sent (drives that button's spinner).
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(userProfile || null);
   const [confirmedPlans, setConfirmedPlans] = useState<any[]>([]);
@@ -23,16 +56,25 @@ export default function StudentHomePCView({
   const [assignmentRequestsCount, setAssignmentRequestsCount] = useState(0);
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
 
+  // Load once when the tab is first mounted (TabPane keeps it alive afterwards).
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
+  /**
+   * Load everything the dashboard shows. Reads `profiles` (self),
+   * `exam_requests` (by `student_id`), `profiles` (each matched scribe) and
+   * `assignment_requests` (ids only, for the count). Errors are logged and
+   * leave the previous values in place. Shows the spinner while running.
+   */
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
+      // Not signed in: nothing to load (the finally block still clears the spinner).
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Fresh copy of the student's own profile (falls back to the prop).
       const { data: profileData } = await supabase
         .from('profiles')
         .select('*')
@@ -50,6 +92,7 @@ export default function StudentHomePCView({
       const allReqs = reqs || [];
       setExamRequestsCount(allReqs.length);
 
+      // "Confirmed" list = matched exams plus pending emergency (SOS) requests.
       const matchedPlans = allReqs.filter((exam: any) => 
         exam.status === 'matched' || (exam.status === 'pending' && exam.is_emergency === 'yes')
       );
@@ -85,6 +128,14 @@ export default function StudentHomePCView({
     }
   };
 
+  /**
+   * Ask for confirmation, then send an emergency SOS for one exam.
+   * Writes: updates the `exam_requests` row (status 'pending', scribe_id null,
+   * is_emergency 'yes'); inserts one `notifications` row per scribe whose
+   * profile has verification_status 'approved' (sequentially). Then reloads
+   * this view and calls the parent's `onRefresh`.
+   * @param exam the exam_requests row (enriched) the SOS is for.
+   */
   const handleSosBroadcast = (exam: any) => {
     Alert.alert(
       '🚨 Emergency SOS Broadcast',
@@ -97,18 +148,21 @@ export default function StudentHomePCView({
           onPress: async () => {
             setSosSendingId(exam.id);
             try {
+              // 1. Reopen the request and flag it as an emergency so a new scribe can take it.
               const { error: reqErr } = await supabase
                 .from('exam_requests')
                 .update({ status: 'pending', scribe_id: null, is_emergency: 'yes' })
                 .eq('id', exam.id);
               if (reqErr) throw reqErr;
 
+              // 2. Find every approved scribe (no city / availability filtering).
               const { data: scribes } = await supabase
                 .from('profiles')
                 .select('id')
                 .eq('role', 'scribe')
                 .eq('verification_status', 'approved');
 
+              // 3. Notify each of them with an urgent in-app notification (one insert per scribe).
               for (const scribe of scribes || []) {
                 await supabase.from('notifications').insert({
                   user_id: scribe.id,
@@ -118,6 +172,7 @@ export default function StudentHomePCView({
                   created_at: new Date().toISOString(),
                 });
               }
+              // 4. Tell the student and refresh both this view and the parent console.
               Alert.alert('SOS Sent', 'Emergency broadcast sent to available scribes!');
               fetchDashboardData();
               if (onRefresh) onRefresh();
@@ -132,6 +187,12 @@ export default function StudentHomePCView({
     );
   };
 
+  /**
+   * Start a phone call to the matched scribe via a `tel:` link.
+   * If no number is available (contact not yet shared), shows a "Contact
+   * Locked" alert instead; if the device cannot dial, shows the number.
+   * @param phoneNumber the scribe's `profiles.phone` value.
+   */
   const openCallScribe = (phoneNumber: string) => {
     if (!phoneNumber) {
       Alert.alert('Contact Locked', 'Scribe phone number will be unlocked on the exam day.');
@@ -142,6 +203,7 @@ export default function StudentHomePCView({
     });
   };
 
+  // Inline spinner while the dashboard data loads.
   if (loading) {
     return (
       <View style={{ paddingVertical: 60, alignItems: 'center', justifyContent: 'center' }}>
@@ -153,6 +215,7 @@ export default function StudentHomePCView({
     );
   }
 
+  // Profiles store 'approved' (not the 'verified' value from types/user.ts) once documents are accepted.
   const isApproved = profile?.verification_status === 'approved';
 
   // Glassmorphic Card Helper Styles (Ultra-Glassmorphic System)
@@ -300,6 +363,7 @@ export default function StudentHomePCView({
 
       {/* ── 2. ACTIVE EXAM MATCHES & SCRIBE CONFIRMATIONS ── */}
       <View style={{ gap: 16 }}>
+        {/* Section title + "Request Scribe" shortcut */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <Text style={{ fontSize: 20, fontWeight: '900', color: '#0f172a' }}>
             Your Confirmed Scribes & Exams 🎯
@@ -321,6 +385,7 @@ export default function StudentHomePCView({
           </Pressable>
         </View>
 
+        {/* Empty state with a call to action, otherwise one card per confirmed / SOS exam */}
         {confirmedPlans.length === 0 ? (
           <View style={{
             ...glassCardStyle,
@@ -358,6 +423,7 @@ export default function StudentHomePCView({
           <View style={{ gap: 16 }}>
             {confirmedPlans.map((exam: any) => {
               const scribe = exam.scribeProfile;
+              // Exams starting within the next 24 hours get a red card border.
               const hours = hoursUntilExam(exam.exam_date);
               const isUrgent = hours !== null && hours >= 0 && hours <= 24;
 

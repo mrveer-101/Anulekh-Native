@@ -1,3 +1,22 @@
+/**
+ * Onboarding / induction carousel — route `/landing/induction`.
+ *
+ * Opened from the "Get Started" buttons on the mobile landing screen
+ * (`app/landing/index.tsx`) and the desktop landing page (LandingPC,
+ * HeaderPC, FooterPC). Four steps: brand intro, how students request help,
+ * how scribes volunteer, and a role picker that sends the user to
+ * `/auth/register?role=student` or `/auth/register?role=scribe`.
+ *
+ * Loads no backend data. A language bottom sheet opens automatically on
+ * start; the choice goes through the shared `useLanguage()` hook (persisted
+ * in AsyncStorage as `app_language`) so it carries into registration, while
+ * this screen's own copy comes from the local TRANSLATIONS table. Choosing a
+ * role writes `onboarding_complete = 'true'` to AsyncStorage.
+ *
+ * Accessibility: all controls have roles/labels/hints, slide titles are
+ * headers, language options are radios, and every animation is disabled when
+ * the OS "Reduce Motion" setting is on.
+ */
 import React, { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, TouchableOpacity, ScrollView, Image as RNImage, Platform } from 'react-native';
@@ -24,6 +43,12 @@ import Animated, {
 import { useLanguage } from '@/core/translation';
 
 // Translation dictionary for English, Hindi, and Gujarati
+/**
+ * Screen-local copy, keyed by the language name used by `useLanguage()`
+ * ('English' | 'Hindi' | 'Gujarati'). `slides[0..2]` hold the title and
+ * description for steps 1-3; `step4*`, `studentBtn` and `scribeBtn` are for
+ * the role-selection step; the rest label header, footer and sheet buttons.
+ */
 const TRANSLATIONS: Record<string, {
   back: string;
   skip: string;
@@ -132,6 +157,7 @@ const HEADER_BUTTON = {
   shadowRadius: 8,
   elevation: 3,
 } as const;
+/** Colour variants of HEADER_BUTTON plus the matching text style / colours. */
 const HEADER_BUTTON_BLUE = { ...HEADER_BUTTON, backgroundColor: '#EAF1FF', borderColor: '#BFD3FB', shadowColor: '#2563eb' };
 const HEADER_BUTTON_ORANGE = { ...HEADER_BUTTON, backgroundColor: '#FFF1E5', borderColor: '#FDC9A3', shadowColor: '#ea580c' };
 const HEADER_BUTTON_TEXT = { fontWeight: '800', fontSize: 15 } as const;
@@ -143,7 +169,12 @@ const ORB_TOP_COLORS = ['rgba(37,99,235,0.18)', 'rgba(79,70,229,0.18)', 'rgba(16
 const ORB_BOTTOM_COLORS = ['rgba(16,185,129,0.12)', 'rgba(37,99,235,0.12)', 'rgba(234,179,8,0.14)', 'rgba(37,99,235,0.12)'];
 
 /** Progress pill that smoothly stretches and recolours when it becomes the active step. */
+/**
+ * @param active       true for the dot of the current step (wide + blue).
+ * @param reduceMotion when true the change is applied instantly (0ms).
+ */
 function ProgressDot({ active, reduceMotion }: { active: boolean; reduceMotion: boolean }) {
+  // 0 = inactive (8px grey dot), 1 = active (32px blue pill); animated in between.
   const progress = useSharedValue(active ? 1 : 0);
   useEffect(() => {
     progress.set(withTiming(active ? 1 : 0, { duration: reduceMotion ? 0 : 300, easing: Easing.out(Easing.cubic) }));
@@ -180,6 +211,10 @@ export default function OnboardingCarousel() {
   // Animation state: slide direction (1 = forward, -1 = back) and the OS "Reduce Motion" preference.
   const [direction, setDirection] = useState<1 | -1>(1);
   const reduceMotion = useReducedMotion();
+  /**
+   * Wrap a Reanimated `entering` animation so it is dropped (undefined) when
+   * Reduce Motion is on; used for every entering animation on this screen.
+   */
   const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
 
   // Background orbs drift between per-slide tints.
@@ -209,6 +244,7 @@ export default function OnboardingCarousel() {
   const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
 
   // Fetch active translation strings
+  // (local table, not the shared `t()` from useLanguage — keys must match its language names)
   const t = TRANSLATIONS[appLanguage];
 
   // Handler to advance to the next slide
@@ -228,6 +264,7 @@ export default function OnboardingCarousel() {
   };
 
   // Routing actions for user roles — mark onboarding complete before navigating to registration
+  // (`onboarding_complete` is only written here; nothing in the app reads it yet.)
   const handleNavigateToStudent = async () => {
     await AsyncStorage.setItem('onboarding_complete', 'true');
     router.push('/auth/register?role=student');
@@ -318,8 +355,9 @@ export default function OnboardingCarousel() {
           - Slides 1, 2, 3: Skip button (light orange).
           - Slide 4: Renders an empty placeholder to keep the header aligned.
         */}
+        {/* Skip jumps straight to the last (role selection) step, animating forward */}
         {currentStep < totalSteps - 1 ? (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => { setDirection(1); setCurrentStep(totalSteps - 1); }}
             activeOpacity={0.75}
             style={HEADER_BUTTON_ORANGE}
@@ -344,6 +382,7 @@ export default function OnboardingCarousel() {
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} 
         className="px-6 py-4"
       >
+        {/* Keyed by step so each change remounts and replays the slide-in from the travel direction */}
         <Animated.View
           key={currentStep}
           entering={enter(direction === 1 ? FadeInRight.duration(380) : FadeInLeft.duration(380))}
@@ -678,6 +717,7 @@ export default function OnboardingCarousel() {
 
             {/* Language Selection List */}
             <View className="mb-6">
+              {/* Selecting a language applies it app-wide immediately, then closes the sheet */}
               {['English', 'Hindi', 'Gujarati'].map((lang) => {
                 const isSelected = appLanguage === lang;
                 

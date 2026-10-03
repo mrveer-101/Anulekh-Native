@@ -1,3 +1,24 @@
+/**
+ * ScribeProfileView - the volunteer scribe's "My Account" / profile tab.
+ *
+ * Mounted (inside a TabPane) by the desktop shell components/pc_view/ConsoleScribePC.tsx
+ * for the 'profile' tab. The mobile scribe console (app/console/scribe/index.tsx) does
+ * not render it.
+ *
+ * What it shows / does:
+ * - header card with avatar (device-local photo), name and email;
+ * - "Basic Information" form (name, phone, read-only email) with a "Details" toggle that
+ *   reveals DOB, gender, city, education, occupation, Aadhaar number and the names of the
+ *   verification documents (their "View" buttons only show a placeholder alert);
+ * - multi-select of exam languages the scribe can write in (English / Hindi / Gujarati);
+ * - an achievements card whose badges are a hard-coded demo list, not real data;
+ * - app display-language picker (useLanguage / changeLanguage);
+ * - Save Changes and Log Out buttons.
+ *
+ * Data (via the `supabase` shim, a custom client for the Rust/Axum backend):
+ * - reads and updates the scribe's `profiles` row;
+ * - the profile photo lives only in AsyncStorage under `profile_photo_<userId>`.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -7,10 +28,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 
+/** Exam languages a scribe can offer; saved as an array in `profiles.languages`. */
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
+/**
+ * Scribe profile editor (no props; reads the current session itself).
+ * Side effects: updates `profiles`, writes the photo to AsyncStorage, can change the
+ * app language, and can sign out (navigating to /landing).
+ */
 export default function ScribeProfileView() {
   const { lang, changeLanguage, t } = useLanguage();
+  // Auth user and the basic, always-visible form fields.
   const [user, setUser] = useState<any>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -29,10 +57,12 @@ export default function ScribeProfileView() {
   const [certificationProof, setCertificationProof] = useState('');
   const [aadharImageProof, setAadharImageProof] = useState('');
 
+  // Load / save spinners and the app-language dropdown toggle.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
+  /** Converts a picked image's local URI into a base64 `data:` URI so it can be stored in AsyncStorage. */
   const toDataUri = async (uri: string): Promise<string> => {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -44,6 +74,10 @@ export default function ScribeProfileView() {
     });
   };
 
+  /**
+   * Requests photo-library permission, lets the scribe pick a square-cropped image
+   * (quality 0.5), shows it immediately and saves it on the device only.
+   */
   const handleSelectPhoto = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -69,10 +103,15 @@ export default function ScribeProfileView() {
     }
   };
 
+  // Load the profile once on mount.
   useEffect(() => {
     fetchProfile();
   }, []);
 
+  /**
+   * Fills the form from the session (email), AsyncStorage (photo) and the `profiles` row.
+   * Errors are only logged; the spinner is always cleared.
+   */
   const fetchProfile = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -80,6 +119,7 @@ export default function ScribeProfileView() {
       setUser(session.user);
       setEmail(session.user.email || '');
 
+      // Device-local profile photo (never uploaded).
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
@@ -99,6 +139,8 @@ export default function ScribeProfileView() {
         setSelectedLanguages(profile.languages || []);
         
         // Populate extra details
+        // NOTE: empty columns fall back to hard-coded sample values (including a sample
+        // Aadhaar number); handleUpdateProfile will then save those samples back to `profiles`.
         setDob(profile.dob || '2005-02-03');
         setLocation(profile.location || 'Ahmedabad, Gujarat');
         setOccupation(profile.occupation || 'Working Professional');
@@ -114,6 +156,7 @@ export default function ScribeProfileView() {
     }
   };
 
+  /** Adds or removes one exam language from the selection (saved only on "Save Changes"). */
   const toggleLanguage = (langName: string) => {
     if (selectedLanguages.includes(langName)) {
       setSelectedLanguages(selectedLanguages.filter((l) => l !== langName));
@@ -122,7 +165,12 @@ export default function ScribeProfileView() {
     }
   };
 
+  /**
+   * Validates and saves the form to the scribe's `profiles` row.
+   * Gender and the document file names are shown but not saved.
+   */
   const handleUpdateProfile = async () => {
+    // Validation: name and phone required, plus at least one exam language.
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert(t('error'), t('enter_name') + ' & ' + t('enter_phone'));
       return;
@@ -158,6 +206,10 @@ export default function ScribeProfileView() {
     }
   };
 
+  /**
+   * Confirms, then clears the one-time welcome-toast flags, signs out and goes to /landing.
+   * On web the global Alert polyfill (app/_layout.tsx) auto-confirms this dialog.
+   */
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -173,6 +225,7 @@ export default function ScribeProfileView() {
     ]);
   };
 
+  // Spinner until the first profile load completes.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#f8fafc' }}>
@@ -215,6 +268,7 @@ export default function ScribeProfileView() {
             justifyContent: 'center',
             overflow: 'hidden',
           }}>
+            {/* Saved photo, or the first letter of the name as a fallback avatar. */}
             {profilePhoto ? (
               <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
             ) : (
@@ -259,7 +313,8 @@ export default function ScribeProfileView() {
 
       {/* Editable Account Information Card */}
       <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 16 }}>
-        
+
+        {/* Card title with the "Details" / "Collapse" toggle for the extra fields. */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Basic Information</Text>
           <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
@@ -411,7 +466,8 @@ export default function ScribeProfileView() {
               {/* Verification Proof Documents (Read Only Row style) */}
               <View style={{ borderTopWidth: 1.5, borderTopColor: '#f8fafc', paddingTop: 10, gap: 10 }}>
                 <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Verification Documents</Text>
-                
+                {/* Only file names are shown; the "View" buttons open a placeholder alert, not the real document. */}
+
                 {/* Government ID Document Row */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
@@ -454,6 +510,7 @@ export default function ScribeProfileView() {
         <Text style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10 }}>Select all languages you are comfortable writing exams in:</Text>
         
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {/* Toggleable language chips; a check mark shows the selected ones. */}
           {EXAM_LANGUAGES.map((langName) => {
             const isSelected = selectedLanguages.includes(langName);
             return (
@@ -484,7 +541,8 @@ export default function ScribeProfileView() {
             <Ionicons name="trophy" size={16} color="#eab308" />
             <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Achievements & Badges</Text>
           </View>
-          <TouchableOpacity 
+          {/* "View Certificate": shows an alert with a certificate id derived from the user id and the backend's /api/certificates/view/<userId> link. */}
+          <TouchableOpacity
             onPress={() => {
               if (user) {
                 const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
@@ -502,6 +560,7 @@ export default function ScribeProfileView() {
         </Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {/* Static demo badge list: `unlocked` is hard-coded, not computed from the scribe's completed jobs. */}
           {[
             { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: true, desc: '5 Jobs' },
             { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Jobs' },
@@ -555,6 +614,7 @@ export default function ScribeProfileView() {
           <Feather name={isLangDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
         </TouchableOpacity>
 
+        {/* Language options; picking one switches the app UI language and closes the list. */}
         {isLangDropdownOpen && (
           <View style={{ marginTop: 6, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#f1f5f9', borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, overflow: 'hidden' }}>
             {(['English', 'Hindi', 'Gujarati'] as LanguageType[]).map((l) => (

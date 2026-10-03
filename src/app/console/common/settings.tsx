@@ -1,3 +1,23 @@
+/**
+ * Standalone Settings screen — route `/console/common/settings`, shared by
+ * students and scribes.
+ *
+ * Note: nothing in the app currently navigates here; the dashboards show
+ * components/shared/SharedSettingsView.tsx in their "Account" tab instead.
+ * This route still works if opened directly.
+ *
+ * What it does:
+ *  - Loads the session (no session → `/auth/login`) and the user's `profiles`
+ *    row (via the `supabase` shim, i.e. the Rust/Axum backend) to fill in
+ *    name, phone, email and role.
+ *  - Lets the user edit full name + phone and saves them to `profiles`.
+ *  - Shows push / email notification switches — local state only, they are
+ *    not saved anywhere.
+ *  - Language picker (English / Hindi / Gujarati) via useLanguage(), which
+ *    persists the choice in AsyncStorage (`app_language`).
+ *  - Sign out: clears the welcome-toast flags, signs out and goes to `/`.
+ * Colours follow the role: blue for students, green for scribes.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, Switch, TouchableOpacity, ScrollView, Alert, ActivityIndicator, TextInput, SafeAreaView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -7,8 +27,19 @@ import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 
+/**
+ * Settings screen component (default export for the route).
+ *
+ * Side effects: reads the session and `profiles`; `handleSaveSettings` updates
+ * `profiles.full_name` / `profiles.phone`; `handleSignOut` clears AsyncStorage
+ * flags and the session. Navigates to `/auth/login`, `/` or back.
+ *
+ * @returns A spinner while loading, then the scrollable settings form.
+ */
 export default function SettingsScreen() {
+  // Translation helpers; `lang` is the active language name.
   const { lang, changeLanguage, t } = useLanguage();
+  // Screen status + account identity (email is read-only, from the session).
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [role, setRole] = useState<'student' | 'scribe'>('student');
@@ -23,10 +54,16 @@ export default function SettingsScreen() {
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
 
+  // Load the account once on mount.
   useEffect(() => {
     fetchUserData();
   }, []);
 
+  /**
+   * Reads the stored session and the user's `profiles` row and copies role,
+   * name and phone into state. Redirects to `/auth/login` when signed out.
+   * Errors are only logged; `loading` is always cleared.
+   */
   const fetchUserData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -55,7 +92,14 @@ export default function SettingsScreen() {
     }
   };
 
+  /**
+   * Validates and saves the edited name and phone to the user's `profiles` row.
+   * Only these two fields are written — the notification switches are not saved,
+   * and the language is already saved when it is picked.
+   * Shows a success or error alert.
+   */
   const handleSaveSettings = async () => {
+    // Both fields are required.
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert(t('error'), t('enter_name') + ' & ' + t('enter_phone'));
       return;
@@ -83,6 +127,12 @@ export default function SettingsScreen() {
     }
   };
 
+  /**
+   * Signs the user out and returns to the app root (`/`).
+   * Removes the student/scribe "welcome toast shown" flags first so the next
+   * person to sign in on this device sees their welcome message.
+   * `supabase.auth.signOut()` also clears the stored session and screen cache.
+   */
   const handleSignOut = async () => {
     try {
       await AsyncStorage.removeItem('welcome_toast_shown');
@@ -95,11 +145,13 @@ export default function SettingsScreen() {
     }
   };
 
+  // Role-based theme: blue for students, green for scribes.
   const isStudent = role === 'student';
   const themeColor = isStudent ? '#2563eb' : '#059669';
   const themeBgLight = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(5,150,105,0.08)';
   const themeBorder = isStudent ? 'rgba(37,99,235,0.18)' : 'rgba(5,150,105,0.18)';
 
+  // Spinner until fetchUserData() completes.
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
@@ -113,6 +165,7 @@ export default function SettingsScreen() {
       <StatusBar style="dark" />
 
       {/* Header */}
+      {/* Back button. Its label uses the 'my_requests' translation key, not a settings title. */}
       <View style={{ backgroundColor: '#fff', paddingHorizontal: 24, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 }}>
         <TouchableOpacity onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Feather name="arrow-left" size={20} color="#0f172a" />
@@ -123,6 +176,7 @@ export default function SettingsScreen() {
       <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
         
         {/* પ્રોફાઇલ કાર્ડ */}
+        {/* Profile card: initial avatar, name/email summary, then editable name + phone and read-only email */}
         <View style={{ backgroundColor: 'rgba(255,255,255,0.85)', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 16 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 }}>{t('profile_info')}</Text>
           
@@ -176,6 +230,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* નોટિફિકેશન સેટિંગ્સ */}
+        {/* Notification preferences: these switches only change local state and are not persisted */}
         <View style={{ backgroundColor: 'rgba(255,255,255,0.85)', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 16 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 }}>{t('notifications_settings')}</Text>
           
@@ -211,6 +266,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* ભાષા પસંદગી */}
+        {/* Language picker: a toggleable dropdown; choosing a language applies and saves it immediately */}
         <View style={{ backgroundColor: 'rgba(255,255,255,0.85)', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 20 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 }}>{t('language_display')}</Text>
           
@@ -251,6 +307,7 @@ export default function SettingsScreen() {
         </View>
 
         {/* સેવ બટન */}
+        {/* Save button (saves name + phone); shows a spinner and is disabled while saving */}
         <TouchableOpacity
           onPress={handleSaveSettings}
           disabled={updating}
@@ -264,6 +321,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* સાઇન આઉટ */}
+        {/* Sign-out button */}
         <TouchableOpacity
           onPress={handleSignOut}
           style={{ width: '100%', backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fecaca', paddingVertical: 13, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}

@@ -1,3 +1,12 @@
+/**
+ * examDate — pure date helpers for exam scheduling rules (no network, no state).
+ *
+ * Used by the student views (StudentHomeView, StudentPlanView, StudentRequestsView, StudentHomePCView),
+ * the scribe views (ScribeExploreView, ScribeCommitmentsView) and the chat screen
+ * (app/console/common/chat.tsx) to decide things like "is this exam today / already over" and whether a
+ * scribe may still withdraw (the 24-hour lock in `canScribeWithdraw`).
+ * All functions work in the device's local time zone.
+ */
 // Utilities for interpreting the free-text `exam_date` values stored on exam_requests.
 // Exam dates come in two shapes across the app:
 //   • Form format:  "24/07/2026 | 12:00 PM"  (DD/MM/YYYY | HH:MM AM/PM)
@@ -5,6 +14,13 @@
 // These helpers parse whichever is present and return null when nothing usable is found,
 // so callers can fail open (never hide/lock based on an unparseable date).
 
+/**
+ * Parses an `exam_date` string in either supported format into a local `Date`.
+ *
+ * @param examDate Raw value from exam_requests.exam_date (may be empty/null).
+ * @returns The exam's date at the parsed time (midnight if no "HH:MM AM/PM" part is present),
+ *          or null when no DD/MM/YYYY or YYYY-MM-DD date can be found.
+ */
 export function parseExamDate(examDate?: string | null): Date | null {
   if (!examDate) return null;
 
@@ -85,6 +101,7 @@ export function hoursUntilExam(examDate?: string | null): number | null {
 // Under 24 hours, withdrawal is locked to protect the student.
 export function canScribeWithdraw(examDate?: string | null): { allowed: boolean; hoursRemaining: number | null; reason?: string } {
   const hours = hoursUntilExam(examDate);
+  // Unparseable date: fail open (allow) rather than trap the scribe in a commitment.
   if (hours === null) {
     return { allowed: true, hoursRemaining: null };
   }
@@ -98,6 +115,11 @@ export function canScribeWithdraw(examDate?: string | null): { allowed: boolean;
   return { allowed: true, hoursRemaining: Math.round(hours) };
 }
 
+/**
+ * Placeholder default export that renders nothing. This module is a utility, not a screen; the
+ * null-returning component only exists so tooling that expects a default export (e.g. Expo Router's
+ * route scanning, if the file is ever picked up as a route) finds one and stays quiet.
+ */
 export default function ExamDateNonRoute() {
   return null;
 }

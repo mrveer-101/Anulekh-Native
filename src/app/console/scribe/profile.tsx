@@ -1,3 +1,17 @@
+/**
+ * Scribe (volunteer) profile editor — route `/console/scribe/profile`.
+ *
+ * A standalone, older screen: no in-app link points here today (the scribe portal's Account tab
+ * in app/console/scribe/index.tsx renders SharedSettingsView instead), but the route still works.
+ *
+ * Data: reads the signed-in user's row from the `profiles` table (keyed by `id` = auth user id)
+ * via the `supabase` shim, which proxies the Rust/Axum backend, and writes edits back to the same
+ * row. Booleans are stored as 'yes'/'no' strings. `urgent_calls = 'yes'` opts the scribe into
+ * Emergency SOS: student screens query scribes with that flag when sending urgent requests.
+ *
+ * Navigation: redirects to /auth/login without a session; the bottom bar jumps back to the
+ * scribe portal (`/console/scribe`) with a `tab` param selecting Home / Commitments / Plan / Account.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,9 +20,15 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
+/** Languages a scribe can offer to write an exam in; shown as toggle chips and saved to `profiles.languages`. */
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
+/**
+ * Screen component (default export used by Expo Router). Takes no props.
+ * Loads the profile on mount, keeps every field in local state, and saves on "Save Changes".
+ */
 export default function VolunteerProfile() {
+  // Signed-in auth user plus one state value per editable profile field.
   const [user, setUser] = useState<any>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -19,15 +39,22 @@ export default function VolunteerProfile() {
   const [firstTime, setFirstTime] = useState(false);
   const [urgentCalls, setUrgentCalls] = useState(false);
   
+  // UI flags: initial load spinner and save-in-progress spinner.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
+  // Load once on mount.
   useEffect(() => {
     fetchProfile();
   }, []);
 
+  /**
+   * Reads the session and the matching `profiles` row, then fills the form state.
+   * Redirects to /auth/login when signed out; errors are only logged (form stays empty).
+   */
   const fetchProfile = async () => {
     try {
+      // 1. Session check — the email comes from the auth user, not the profile row.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/auth/login');
@@ -36,6 +63,7 @@ export default function VolunteerProfile() {
       setUser(session.user);
       setEmail(session.user.email || '');
 
+      // 2. Fetch this user's profile row.
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -44,6 +72,7 @@ export default function VolunteerProfile() {
 
       if (error) throw error;
 
+      // 3. Copy columns into form state, converting 'yes'/'no' flags to booleans.
       if (profile) {
         setFullName(profile.full_name || '');
         setPhone(profile.phone || '');
@@ -60,6 +89,7 @@ export default function VolunteerProfile() {
     }
   };
 
+  /** Adds the language to the selection, or removes it if already selected. */
   const toggleLanguage = (lang: string) => {
     if (selectedLanguages.includes(lang)) {
       setSelectedLanguages(selectedLanguages.filter((l) => l !== lang));
@@ -68,7 +98,12 @@ export default function VolunteerProfile() {
     }
   };
 
+  /**
+   * Validates the form and updates the user's `profiles` row (name, phone, languages, occupation,
+   * location, first_time, urgent_calls). Shows an Alert with the outcome.
+   */
   const handleUpdateProfile = async () => {
+    // Validation: name, phone and at least one language are mandatory.
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert('Required Fields', 'Name and Phone number are required.');
       return;
@@ -79,6 +114,7 @@ export default function VolunteerProfile() {
       return;
     }
 
+    // Save: trimmed text fields; boolean toggles stored back as 'yes'/'no'.
     setUpdating(true);
     try {
       const { error } = await supabase
@@ -103,6 +139,7 @@ export default function VolunteerProfile() {
     }
   };
 
+  // Full-screen spinner until the first profile load finishes.
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-white items-center justify-center">
@@ -124,6 +161,7 @@ export default function VolunteerProfile() {
           <Text className="text-xl font-black text-slate-800">Anulekh</Text>
         </View>
 
+        {/* Initial-letter avatar; tapping returns to the scribe portal */}
         <TouchableOpacity 
           onPress={() => router.push('/console/scribe' as any)}
           className="w-10 h-10 rounded-full items-center justify-center border-2 border-white bg-emerald-500 shadow-md shadow-emerald-500/30"
@@ -156,6 +194,7 @@ export default function VolunteerProfile() {
           <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Account Information</Text>
           
           <View className="space-y-3">
+            {/* Text fields: name, phone, read-only email, occupation, location */}
             <View>
               <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Full Name</Text>
               <TextInput 
@@ -210,6 +249,7 @@ export default function VolunteerProfile() {
             <View className="pt-2 border-t border-slate-100 mt-2">
               <Text className="text-[10px] font-semibold text-slate-500 mb-3 ml-1">Scribe Preferences</Text>
               
+              {/* First-time toggle (saved as profiles.first_time); the pill is a hand-made switch */}
               <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mb-3">
                 <View>
                   <Text className="text-sm font-bold text-slate-700">First Time Scribe</Text>
@@ -223,6 +263,7 @@ export default function VolunteerProfile() {
                 </TouchableOpacity>
               </View>
 
+              {/* SOS opt-in toggle (saved as profiles.urgent_calls) */}
               <View className="flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
                 <View className="flex-1 pr-4">
                   <Text className="text-sm font-bold text-slate-700">Emergency SOS Scribe</Text>
@@ -283,6 +324,7 @@ export default function VolunteerProfile() {
 
       {/* Bottom Navigation Tab Bar */}
       <View className="bg-white border-t border-slate-100 py-2.5 px-6 flex-row justify-around items-center shadow-lg">
+        {/* Each button replaces this screen with the portal, opening the matching tab ('settings' = Account) */}
         <TouchableOpacity onPress={() => router.replace({ pathname: '/console/scribe' as any, params: { tab: 'home' } })} className="items-center">
           <Feather name="home" size={22} color="#64748b" />
           <Text className="text-slate-400 text-[10px] font-bold mt-1">Home</Text>

@@ -1,3 +1,15 @@
+/**
+ * LandingPC: the wide-screen (desktop / tablet, window width >= 768px) marketing landing page.
+ *
+ * Rendered by app/landing/index.tsx (route `/landing`) in place of the mobile landing when the
+ * window is wide. Layout, top to bottom: HeaderPC (nav), hero banner with CTAs and a static
+ * "live match" showcase card, impact stats, "How it works" steps, an FAQ accordion, FooterPC.
+ *
+ * All content is static, hard-coded marketing copy (the stats, scribe name and distances are
+ * illustrative, not live data); nothing is loaded from the backend. Both hero CTAs navigate to
+ * `/landing/induction`. Hover effects rely on react-native-web's `hovered` Pressable state, so
+ * they only do anything on web.
+ */
 import React, { useState, useRef } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
@@ -5,7 +17,12 @@ import { Feather } from '@expo/vector-icons';
 import HeaderPC from './HeaderPC';
 import FooterPC from './FooterPC';
 
+/**
+ * Desktop landing page component (no props). Owns the FAQ accordion state and the ScrollView
+ * ref used by the header/footer nav links to jump to sections.
+ */
 export default function LandingPC() {
+  // Index of the expanded FAQ item (first one open by default; null = all collapsed).
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -15,6 +32,13 @@ export default function LandingPC() {
   const ngosY = 1450;
   const faqY = 1850;
 
+  /**
+   * Smooth-scrolls the page to a named section. Passed to HeaderPC and FooterPC as
+   * `onNavigateSection`. The offsets above are hard-coded estimates rather than measured with
+   * onLayout, so they drift if section heights change. Unknown ids scroll to the top.
+   * Note: there is currently no NGO section on this page, so 'ngos' lands between sections.
+   * @param sectionId One of 'how-it-works' | 'features' | 'ngos' | 'faq'.
+   */
   const scrollToSection = (sectionId: string) => {
     let targetY = 0;
     if (sectionId === 'how-it-works') targetY = howItWorksY;
@@ -25,6 +49,7 @@ export default function LandingPC() {
     scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
   };
 
+  /** Headline numbers for the impact strip (static marketing figures). `icon` is a Feather name. */
   const stats = [
     { label: 'Free Accessibility Platform', value: '100%', icon: 'gift', color: '#2563eb' },
     { label: 'Verified Volunteer Scribes', value: '5,000+', icon: 'users', color: '#16a34a' },
@@ -32,6 +57,7 @@ export default function LandingPC() {
     { label: 'Emergency SOS Response Time', value: '< 3 Mins', icon: 'zap', color: '#ea580c' },
   ];
 
+  /** The three "How it works" cards: big step number, Feather icon, accent and tint colours. */
   const steps = [
     {
       num: '01',
@@ -59,6 +85,7 @@ export default function LandingPC() {
     },
   ];
 
+  /** FAQ accordion entries: `q` is the clickable question, `a` the answer revealed when open. */
   const faqs = [
     {
       q: 'Is Anulekh completely free for students and scribes?',
@@ -148,6 +175,7 @@ export default function LandingPC() {
 
               {/* Action Buttons (with Responsive Hover Scaling) */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 40 }}>
+                {/* Primary CTA (student) -> induction flow */}
                 <Pressable
                   onPress={() => router.push('/landing/induction')}
                   style={({ hovered }: any) => ({
@@ -169,6 +197,7 @@ export default function LandingPC() {
                   <Feather name="arrow-right" size={18} color="#ffffff" />
                 </Pressable>
 
+                {/* Secondary CTA (volunteer) -> same induction flow; role is chosen there */}
                 <Pressable
                   onPress={() => router.push('/landing/induction')}
                   style={({ hovered }: any) => ({
@@ -207,6 +236,7 @@ export default function LandingPC() {
 
             {/* Hero Right Column: Interactive Glass Showcase Card */}
             <View style={{ flex: 0.9, width: '100%', maxWidth: 500 }}>
+              {/* Pressable is used only for its hover lift; it has no onPress */}
               <Pressable
                 style={({ hovered }: any) => ({
                   backgroundColor: '#ffffff',
@@ -295,6 +325,7 @@ export default function LandingPC() {
             flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
             flexWrap: 'wrap', gap: 24,
           }}>
+            {/* One hoverable tile per stat; the icon tint uses the stat colour with a hex alpha suffix */}
             {stats.map((s) => (
               <Pressable
                 key={s.label}
@@ -350,6 +381,7 @@ export default function LandingPC() {
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 32 }}>
+              {/* Step cards; the large faded step number is absolutely positioned in the corner */}
               {steps.map((st) => (
                 <Pressable
                   key={st.num}
@@ -404,6 +436,7 @@ export default function LandingPC() {
             </View>
 
             <View style={{ gap: 16 }}>
+              {/* Accordion: only one item open at a time; tapping the open one collapses it */}
               {faqs.map((f, i) => {
                 const isOpen = openFaqIndex === i;
                 return (

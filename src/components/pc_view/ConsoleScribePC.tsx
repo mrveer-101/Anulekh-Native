@@ -1,3 +1,19 @@
+/**
+ * ConsoleScribePC - desktop / wide-screen shell of the volunteer scribe console.
+ *
+ * Rendered by app/console/scribe/index.tsx instead of the mobile layout when the
+ * window is desktop-width (`isDesktop`). It draws a glass-style top header (logo,
+ * breadcrumb, notification bell, profile pill + dropdown), a collapsible left sidebar
+ * (260px / 84px) and a content area that hosts the scribe tab views
+ * (ScribeHomeView, ScribeExploreView, ScribeCommitmentsView, ScribePlanView,
+ * ScribeProfileView, SharedSettingsView, SharedNotificationsPCView).
+ *
+ * Each tab view is wrapped in a TabPane, so it is mounted on first visit and then kept
+ * alive (just hidden) when switching tabs; every view loads its own data. This shell
+ * itself only touches the backend to sign out (via the `supabase` shim, which talks to
+ * the Rust/Axum backend). Styles such as `backdropFilter`, `boxShadow` and
+ * `backgroundImage` are web-only and cast with `as any`.
+ */
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
@@ -11,7 +27,18 @@ import ScribeProfileView from '../scribe/ScribeProfileView';
 import SharedSettingsView from '../shared/SharedSettingsView';
 import SharedNotificationsPCView from './SharedNotificationsPCView';
 import ScribePlanView from '../scribe/ScribePlanView';
+import { TabPane } from '@/components/ui/TabPane';
+import { DesktopShellProvider } from '@/components/ui/DesktopShell';
 
+/**
+ * Props for ConsoleScribePC.
+ * - `userProfile`: the scribe's `profiles` row; used for the avatar initial and first name.
+ * - `activeTab` / `onSelectTab`: optional controlled tab state; when omitted the shell
+ *   keeps its own internal tab (default 'home').
+ * - `availableRequests`, `myAssignedRequests`, `onAcceptRequest`, `onRefresh`, `layoutMode`,
+ *   `onChangeLayoutMode`: accepted for API compatibility but not used by this component
+ *   (the tab views fetch their own data).
+ */
 interface ConsoleScribePCProps {
   userProfile?: any;
   availableRequests?: any[];
@@ -22,8 +49,13 @@ interface ConsoleScribePCProps {
   onSelectTab?: (tab: string) => void;
   layoutMode?: 'auto' | 'pc' | 'mobile';
   onChangeLayoutMode?: (mode: 'auto' | 'pc' | 'mobile') => void;
+  /** Unread notifications; the bell shows a dot while this is above 0. */
+  unreadCount?: number;
+  /** Called when the Notifications tab is opened (the parent clears its unread count). */
+  onNotificationsOpened?: () => void;
 }
 
+/** Desktop scribe console layout (header + sidebar + tab content). See the file header. */
 export default function ConsoleScribePC({
   userProfile,
   availableRequests = [],
@@ -34,18 +66,25 @@ export default function ConsoleScribePC({
   onSelectTab: externalOnSelectTab,
   layoutMode: _layoutMode,
   onChangeLayoutMode: _onChangeLayoutMode,
+  unreadCount = 0,
+  onNotificationsOpened,
 }: ConsoleScribePCProps) {
+  // Local UI state: fallback tab selection, sidebar collapsed flag, profile dropdown visibility.
   const [internalActiveTab, setInternalActiveTab] = useState('home');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
+  // Controlled-or-uncontrolled tab: prefer the parent's tab when provided.
   const activeTab = externalActiveTab || internalActiveTab;
+  /** Switches tab (via the parent callback if given) and always closes the profile dropdown. */
   const setActiveTab = (tab: string) => {
     if (externalOnSelectTab) externalOnSelectTab(tab);
     else setInternalActiveTab(tab);
+    if (tab === 'notifications') onNotificationsOpened?.();
     setShowProfileDropdown(false);
   };
 
+  /** Signs out (errors ignored) and always navigates to the login screen. */
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -53,6 +92,8 @@ export default function ConsoleScribePC({
     router.replace('/auth/login');
   };
 
+  // Sidebar entries; `id` must match the TabPane keys below. 'settings' has no sidebar
+  // entry and is reached only from the profile dropdown.
   const navItems = [
     { id: 'home', label: 'Exam Matches', icon: 'grid' as const },
     { id: 'explore', label: 'Explore Requests', icon: 'search' as const },
@@ -101,6 +142,7 @@ export default function ConsoleScribePC({
           justifyContent: 'center',
           paddingHorizontal: 12,
         }}>
+          {/* Logo + wordmark; clicking it goes to the app root route. The wordmark hides when collapsed. */}
           <Pressable
             onPress={() => router.push('/')}
             style={({ hovered }: any) => ({
@@ -182,11 +224,14 @@ export default function ConsoleScribePC({
             })}
           >
             <Feather name="bell" size={19} color={"#475569"} />
-            <View style={{
-              position: 'absolute', top: 8, right: 8,
-              width: 8, height: 8, borderRadius: 4,
-              backgroundColor: '#16a34a',
-            }} />
+            {/* Green dot while there are unread notifications */}
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 8, right: 8,
+                width: 8, height: 8, borderRadius: 4,
+                backgroundColor: '#16a34a',
+              }} />
+            )}
           </Pressable>
 
           {/* 3. User Profile Pill Button (Compact Pill Shape with First Name Only + Arrow) */}
@@ -238,6 +283,7 @@ export default function ConsoleScribePC({
               shadowColor: '#000000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 24,
               elevation: 12, zIndex: 200,
             }}>
+              {/* Dropdown items: My Profile, Account Settings, divider, Log Out. */}
               <Pressable
                 onPress={() => setActiveTab('profile')}
                 style={({ hovered }: any) => ({
@@ -332,6 +378,7 @@ export default function ConsoleScribePC({
                   })}
                 >
                   <Feather name={item.icon} size={20} color={active ? '#16a34a' : textSecondary} />
+                  {/* Labels are hidden in the collapsed (icon-only) sidebar. */}
                   {!isCollapsed && (
                     <Text style={{
                       fontSize: 14,
@@ -439,13 +486,16 @@ export default function ConsoleScribePC({
               )}
 
               {/* Tab View Content */}
-              {activeTab === 'home' && <ScribeHomeView />}
-              {activeTab === 'explore' && <ScribeExploreView />}
-              {activeTab === 'commitments' && <ScribeCommitmentsView />}
-              {activeTab === 'plan' && <ScribePlanView />}
-              {activeTab === 'profile' && <ScribeProfileView />}
-              {activeTab === 'settings' && <SharedSettingsView />}
-              {activeTab === 'notifications' && <SharedNotificationsPCView userRole="scribe" />}
+              {/* Each view is kept mounted after its first visit (TabPane keep-alive) and fetches its own data. */}
+              <DesktopShellProvider>
+                <TabPane active={activeTab === 'home'}><ScribeHomeView /></TabPane>
+                <TabPane active={activeTab === 'explore'}><ScribeExploreView /></TabPane>
+                <TabPane active={activeTab === 'commitments'}><ScribeCommitmentsView /></TabPane>
+                <TabPane active={activeTab === 'plan'}><ScribePlanView /></TabPane>
+                <TabPane active={activeTab === 'profile'}><ScribeProfileView /></TabPane>
+                <TabPane active={activeTab === 'settings'}><SharedSettingsView /></TabPane>
+                <TabPane active={activeTab === 'notifications'}><SharedNotificationsPCView userRole="scribe" /></TabPane>
+              </DesktopShellProvider>
 
             </View>
           </ScrollView>

@@ -1,10 +1,30 @@
+/**
+ * PolicyModal: full-screen, slide-up modal that displays one of Anulekh's policy documents
+ * (student terms, scribe terms, or the practical dictation guidelines).
+ *
+ * Used by the registration screen (app/auth/register.tsx), the scribe application form
+ * (app/console/scribe/apply.tsx) and the scribe home tab (components/scribe/ScribeHomeView.tsx).
+ * The policy text is hard-coded here; nothing is loaded from the backend and agreeing is not
+ * persisted by this component (the parent's `onAgree` decides what to do).
+ *
+ * Every variant shows the same six "Core Non-Negotiables", followed by a role-specific section.
+ * Accent colour: blue for students, green for scribes, purple for guidelines.
+ */
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
+/** Which policy document to show. */
 export type PolicyType = 'student_terms' | 'scribe_terms' | 'guidelines';
 
+/**
+ * Props for {@link PolicyModal}.
+ * - `visible` / `onClose`: controlled visibility; `onClose` also fires after "I Understand & Agree".
+ * - `type`: which document to render.
+ * - `onAgree`: optional callback run when the agree button is pressed (before `onClose`).
+ * - `showAgreeButton`: hide the agree button for read-only viewing (defaults to `true`).
+ */
 interface PolicyModalProps {
   visible: boolean;
   onClose: () => void;
@@ -13,9 +33,12 @@ interface PolicyModalProps {
   showAgreeButton?: boolean;
 }
 
+/** Renders the selected policy document in a full-screen modal; returns `null` while hidden. */
 export default function PolicyModal({ visible, onClose, type, onAgree, showAgreeButton = true }: PolicyModalProps) {
+  // Render nothing while hidden (the Modal is unmounted, so there is no slide-out animation on close).
   if (!visible) return null;
 
+  // Variant flags drive the title, icon, badge text, colours and role-specific section below.
   const isStudent = type === 'student_terms';
   const isScribe = type === 'scribe_terms';
   const isGuidelines = type === 'guidelines';
@@ -69,6 +92,7 @@ export default function PolicyModal({ visible, onClose, type, onAgree, showAgree
             </View>
           </View>
 
+          {/* Close (X) button: dismisses without calling onAgree */}
           <TouchableOpacity onPress={onClose} style={{ padding: 6, borderRadius: 10, backgroundColor: '#f1f5f9' }}>
             <Feather name="x" size={20} color="#475569" />
           </TouchableOpacity>
@@ -161,6 +185,7 @@ export default function PolicyModal({ visible, onClose, type, onAgree, showAgree
           </View>
 
           {/* Section: Specific Role Details */}
+          {/* Student terms: protections and rights */}
           {isStudent && (
             <>
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
@@ -180,6 +205,7 @@ export default function PolicyModal({ visible, onClose, type, onAgree, showAgree
             </>
           )}
 
+          {/* Scribe terms: duties and code of conduct */}
           {isScribe && (
             <>
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>
@@ -199,6 +225,7 @@ export default function PolicyModal({ visible, onClose, type, onAgree, showAgree
             </>
           )}
 
+          {/* Practical guidelines: how to handle common dictation situations */}
           {isGuidelines && (
             <>
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>

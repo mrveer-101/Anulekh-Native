@@ -1,18 +1,40 @@
+/**
+ * StudentRequestsPCView — desktop/web ("PC") version of the student's "My Requests" tab.
+ *
+ * Rendered by components/pc_view/ConsoleStudentPC.tsx inside the `requests` tab pane. It lists every
+ * request the signed-in student has created, from two tables read through the `supabase` shim (which
+ * calls the Rust/Axum backend): `exam_requests` and `assignment_requests`, both filtered by
+ * `student_id`. Rows are normalised into one list (title / location / dateStr / request_category).
+ *
+ * Features: category tabs (all / exams / assignments), status pills (pending / matched), live text
+ * search over title and location, and an "Advanced Filters" modal (language, newest/oldest sort,
+ * Emergency-SOS-only, where SOS means `is_emergency === 'yes'`). Each card links to
+ * /console/student/view_applications for that request and can delete the request.
+ * Uses web-only styling (hover states, cursor, backdropFilter) since it targets browsers.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, TextInput, ActivityIndicator, Alert, Modal, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 
+/**
+ * Props:
+ * - requests: list passed down by ConsoleStudentPC. Currently ignored (aliased to
+ *   `initialRequests` but never read) — the component always fetches its own data.
+ * - onRefresh: called after a successful delete so the parent can reload its own copy.
+ */
 interface StudentRequestsPCViewProps {
   requests?: any[];
   onRefresh?: () => void;
 }
 
+/** Student "My Requests" list for desktop: fetches, filters, sorts and renders request cards plus the filter modal. */
 export default function StudentRequestsPCView({
   requests: initialRequests = [],
   onRefresh,
 }: StudentRequestsPCViewProps) {
+  // Loaded data: combined exam + assignment requests, newest first.
   const [loading, setLoading] = useState(true);
   const [requestsList, setRequestsList] = useState<any[]>([]);
 
@@ -27,10 +49,16 @@ export default function StudentRequestsPCView({
   const [advEmergencyOnly, setAdvEmergencyOnly] = useState<boolean>(false);
   const [advSortOrder, setAdvSortOrder] = useState<'newest' | 'oldest'>('newest');
 
+  // Load once on mount; afterwards only a delete triggers a re-fetch.
   useEffect(() => {
     fetchRequests();
   }, []);
 
+  /**
+   * Loads the student's requests from `exam_requests` and `assignment_requests` (by `student_id`),
+   * tags each row with `request_category` plus display fields, merges them and sorts newest first.
+   * Errors are only logged; no-op when signed out.
+   */
   const fetchRequests = async () => {
     setLoading(true);
     try {
@@ -51,12 +79,16 @@ export default function StudentRequestsPCView({
         dateStr: r.exam_date || 'Date N/A',
       }));
 
+      // Exams: display location prefers the full centre address over the venue name.
+
       // 2. Fetch Assignment Requests
       const { data: assignReqs } = await supabase
         .from('assignment_requests')
         .select('*')
         .eq('student_id', session.user.id);
 
+      // NOTE: the backend schema names these columns `assignment_title` and `deadline` and has no
+      // address/city, so assignments typically show the subject, "Location N/A" and "Deadline N/A".
       const taggedAssignments = (assignReqs || []).map((r: any) => ({
         ...r,
         request_category: 'assignment',

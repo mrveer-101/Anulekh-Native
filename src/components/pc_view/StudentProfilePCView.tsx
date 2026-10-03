@@ -1,3 +1,22 @@
+/**
+ * Desktop / wide-screen "Profile" tab for students.
+ *
+ * Rendered by components/pc_view/ConsoleStudentPC.tsx inside its 'profile' TabPane
+ * (the PC layout of the student console). Shows a glass-style header with avatar,
+ * name, email and verification badge, an editable "Personal Details" form, a
+ * verification-document status card and an account-security card (reset password,
+ * log out).
+ *
+ * Data (via the `supabase` shim in core/supabase.ts, which talks to the Rust/Axum
+ * backend, not real Supabase):
+ *   - reads the session and the user's `profiles` row on mount
+ *   - "Save Profile Changes" updates `profiles` (full_name, phone, education_grade)
+ *     and then calls the parent's `onRefresh`
+ * The profile photo is device-local only: it is stored as a data: URI in
+ * AsyncStorage under `profile_photo_<userId>` and never uploaded to the backend.
+ * Mixed RN + web-only style keys (backdropFilter, boxShadow, cursor, `hovered`
+ * Pressable state) reflect that this view targets React Native Web.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -6,29 +25,47 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 
+/**
+ * Props for StudentProfilePCView.
+ * @property userProfile - profile row already loaded by the console; used as the
+ *   initial value until this view re-fetches its own copy.
+ * @property onRefresh - called after a successful save so the parent console can reload its data.
+ */
 interface StudentProfilePCViewProps {
   userProfile?: any;
   onRefresh?: () => void;
 }
 
+/**
+ * Student profile editor for the PC layout (see file header).
+ * Shows a spinner until the profile is fetched, then the header banner and two-column grid.
+ */
 export default function StudentProfilePCView({
   userProfile,
   onRefresh,
 }: StudentProfilePCViewProps) {
+  // Loading / saving flags, the session user and the full profile row.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(userProfile || null);
+  // Editable form fields (email is display-only) and the locally stored avatar.
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [educationGrade, setEducationGrade] = useState('');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
+  // Load the profile once when the tab is first shown.
   useEffect(() => {
     fetchProfile();
   }, []);
 
+  /**
+   * Loads the session, the cached avatar from AsyncStorage and the `profiles` row,
+   * then fills the form. Without a session it just stops loading (no redirect);
+   * errors are only logged.
+   */
   const fetchProfile = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -37,6 +74,7 @@ export default function StudentProfilePCView({
       setUser(session.user);
       setEmail(session.user.email || '');
 
+      // Avatar is kept per user on this device only.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
@@ -48,6 +86,7 @@ export default function StudentProfilePCView({
         .eq('id', session.user.id)
         .single();
 
+      // Education falls back to `qualification`, then to a generic default label.
       if (profileData) {
         setProfile(profileData);
         setFullName(profileData.full_name || '');
@@ -61,6 +100,12 @@ export default function StudentProfilePCView({
     }
   };
 
+  /**
+   * Converts a picked image URI (blob:/file:) into a base64 data: URI so it can be
+   * stored as a string in AsyncStorage and used directly as an <Image> source.
+   * @param uri - local URI returned by the image picker.
+   * @returns the data: URI string.
+   */
   const toDataUri = async (uri: string): Promise<string> => {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -72,13 +117,20 @@ export default function StudentProfilePCView({
     });
   };
 
+  /**
+   * Lets the user pick a square-cropped photo from the library, shows it as the
+   * avatar and caches it in AsyncStorage (`profile_photo_<userId>`). Nothing is
+   * sent to the backend.
+   */
   const handleSelectPhoto = async () => {
     try {
+      // Ask for photo library permission first.
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
         return;
       }
+      // Open the picker with a 1:1 crop and reduced quality to keep the stored string small.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -97,7 +149,12 @@ export default function StudentProfilePCView({
     }
   };
 
+  /**
+   * Saves name, phone and education to the user's `profiles` row, then shows a
+   * confirmation and calls `onRefresh` so the parent console reloads.
+   */
   const handleUpdateProfile = async () => {
+    // Validation: name and phone are mandatory (education is optional).
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert('Missing Fields', 'Full Name and Phone Number are required.');
       return;
@@ -128,6 +185,11 @@ export default function StudentProfilePCView({
     }
   };
 
+  /**
+   * Asks for confirmation, signs out through the shim (clears the stored session)
+   * and replaces the route with /auth/login. On web the global Alert polyfill in
+   * app/_layout.tsx auto-confirms, so this logs out immediately after the alert.
+   */
   const handleSignOut = async () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -142,6 +204,7 @@ export default function StudentProfilePCView({
     ]);
   };
 
+  // Inline spinner (not full-screen) because this view sits inside the console's tab pane.
   if (loading) {
     return (
       <View style={{ paddingVertical: 60, alignItems: 'center', justifyContent: 'center' }}>
@@ -153,6 +216,7 @@ export default function StudentProfilePCView({
     );
   }
 
+  // Drives the green "verified" vs orange "pending" badges; only an explicit 'approved' counts here.
   const isApproved = profile?.verification_status === 'approved';
 
   // Glassmorphic Helper Style (Ultra-Glassmorphic System)
@@ -249,6 +313,7 @@ export default function StudentProfilePCView({
             </Text>
           </View>
 
+          {/* Same action as tapping the avatar: pick a new local profile photo */}
           <Pressable
             onPress={handleSelectPhoto}
             style={({ hovered }: any) => ({
@@ -436,6 +501,7 @@ export default function StudentProfilePCView({
               <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>Account Security</Text>
             </View>
 
+            {/* Reset Password: currently only shows a message; no reset request is sent to the backend */}
             <Pressable
               onPress={() => Alert.alert('Password Reset', `Password reset instructions sent to ${email}`)}
               style={({ hovered }: any) => ({

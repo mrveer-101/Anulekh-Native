@@ -1,8 +1,25 @@
+/**
+ * SharedNotificationsPCView — desktop (wide-screen) "Notifications" tab, shared by both roles.
+ *
+ * Rendered inside a <TabPane> by ConsoleStudentPC (userRole="student") and ConsoleScribePC
+ * (userRole="scribe"); the role only changes the accent colour (blue vs green).
+ *
+ * Data: reads the signed-in user's rows from the `notifications` table (newest first) once on mount,
+ * and writes back to the same table to mark one/all as read (`is_read = 1`) or delete a row. The
+ * `supabase` client is the app's shim over the Rust/Axum backend (core/supabase.ts), not real Supabase.
+ * The list is not polled or refreshed when the tab is re-shown; it reloads only on remount.
+ *
+ * Layout: a summary bar (unread badge + "Mark All as Read"), then a two-column grid — the filterable
+ * feed (All / Unread / SOS & Urgent) on the left, and alert-preference toggles plus an SOS info card on
+ * the right. "SOS & Urgent" is detected purely by the notification title containing "SOS" or "URGENT".
+ * The preference toggles are local UI state only; they are not saved anywhere.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
+/** One row of the `notifications` table as returned by the backend (`is_read` is SQLite 0/1). */
 interface Notification {
   id: number;
   user_id: string;
@@ -12,13 +29,19 @@ interface Notification {
   created_at: string;
 }
 
+/** Props: `userRole` selects the accent colour scheme (defaults to 'student'). */
 interface SharedNotificationsPCViewProps {
   userRole?: 'student' | 'scribe';
 }
 
+/**
+ * Desktop notifications screen for the current user (see file header for data and layout).
+ * @param props.userRole 'student' | 'scribe' — only affects colours.
+ */
 export default function SharedNotificationsPCView({
   userRole = 'student',
 }: SharedNotificationsPCViewProps) {
+  // Feed state: loading flag, the user's notifications, and the active filter chip.
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filterTab, setFilterTab] = useState<'all' | 'unread' | 'emergency'>('all');
@@ -28,10 +51,15 @@ export default function SharedNotificationsPCView({
   const [sosAlerts, setSosAlerts] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
 
+  // Load the feed once when the component mounts.
   useEffect(() => {
     fetchNotifications();
   }, []);
 
+  /**
+   * Loads all `notifications` rows for the signed-in user, newest first, into state.
+   * Silently leaves the list empty when there is no session; logs (does not alert) on failure.
+   */
   const fetchNotifications = async () => {
     setLoading(true);
     try {
@@ -53,6 +81,10 @@ export default function SharedNotificationsPCView({
     }
   };
 
+  /**
+   * Sets `is_read = 1` on every `notifications` row of the signed-in user, then updates local state.
+   * Shows an Alert if the update fails.
+   */
   const handleMarkAllAsRead = async () => {
     if (notifications.length === 0) return;
     try {
@@ -71,6 +103,7 @@ export default function SharedNotificationsPCView({
     }
   };
 
+  /** Sets `is_read = 1` on one `notifications` row (by id) and reflects it locally; logs on failure. */
   const handleMarkSingleAsRead = async (id: number) => {
     try {
       const { error } = await supabase
@@ -85,6 +118,7 @@ export default function SharedNotificationsPCView({
     }
   };
 
+  /** Permanently deletes one `notifications` row (by id) and removes it from the list; logs on failure. */
   const handleDeleteNotification = async (id: number) => {
     try {
       const { error } = await supabase
@@ -99,6 +133,10 @@ export default function SharedNotificationsPCView({
     }
   };
 
+  /**
+   * Formats a `created_at` timestamp as e.g. "05 Jul, 10:30 am" (en-IN locale).
+   * @returns The formatted string; "Just now" if formatting throws.
+   */
   const formatTime = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -113,6 +151,7 @@ export default function SharedNotificationsPCView({
     }
   };
 
+  // Derived values: unread badge count, the list for the active filter chip, and the role colour.
   const unreadCount = notifications.filter(n => n.is_read === 0).length;
 
   const filteredNotifications = notifications.filter((n) => {
@@ -123,6 +162,7 @@ export default function SharedNotificationsPCView({
 
   const accentColor = userRole === 'student' ? '#2563eb' : '#16a34a';
 
+  // Full-area spinner until the first fetch finishes.
   if (loading) {
     return (
       <View style={{ paddingVertical: 60, alignItems: 'center', justifyContent: 'center' }}>

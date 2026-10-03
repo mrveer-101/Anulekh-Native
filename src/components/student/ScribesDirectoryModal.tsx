@@ -1,9 +1,37 @@
+/**
+ * ScribesDirectoryModal — full-screen "Find Scribes & Writers" directory for students.
+ *
+ * Opened from StudentRequestsView (the student's Requests tab). Lists every verified volunteer scribe
+ * with ratings, lets the student search by name / education / location / languages, expand a card for
+ * the 5-category rating breakdown, and invite a scribe to one of their pending requests.
+ *
+ * Data (via the `supabase` shim in core/supabase.ts, which calls the Rust/Axum backend — not real Supabase):
+ *   - reads  `profiles` (role 'scribe', verification_status 'approved') — the directory itself
+ *   - reads  `scribe_reviews` — averaged client-side into per-scribe ratings
+ *   - POST   /api/recommendations (Axum matching engine) — optional smart-match scores that override
+ *            the client-side ratings; failures are ignored
+ *   - reads  `exam_requests` / `assignment_requests` (this student's, status 'pending') — invite targets
+ *   - reads  `scribe_applications` — which scribes already have an application/invite for the
+ *            pre-selected request (shown as "Request Sent")
+ *   - writes `scribe_applications` (status 'invited') and `notifications` (to the scribe) when inviting
+ *
+ * Two invite flows: with `preSelectedRequest` the student just confirms in an Alert; without it a
+ * picker sub-modal lets them choose the exam/assignment to invite the scribe to.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, FlatList, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
+import { useIsDesktopWeb } from '@/components/ui/DesktopShell';
 
+/**
+ * Props for ScribesDirectoryModal.
+ * @property visible            Whether the modal is shown; data is (re)loaded each time it opens.
+ * @property onClose            Called when the user closes the modal (X button or Android back).
+ * @property studentId          The signed-in student's user id (used to find their pending requests).
+ * @property preSelectedRequest Optional request to invite scribes to directly (skips the picker).
+ */
 interface ScribesDirectoryModalProps {
   visible: boolean;
   onClose: () => void;
@@ -11,7 +39,11 @@ interface ScribesDirectoryModalProps {
   preSelectedRequest?: { id: number; type: 'exam' | 'assignment'; subject: string };
 }
 
+/** Scribe directory + invitation modal (see file header for data flow). */
 export default function ScribesDirectoryModal({ visible, onClose, studentId, preSelectedRequest }: ScribesDirectoryModalProps) {
+  // Wide browser windows show the directory as a centred panel instead of a full-screen sheet.
+  const isDesktop = useIsDesktopWeb();
+  // Directory state: loading flag, approved scribe profiles, per-scribe rating info, search text.
   const [loading, setLoading] = useState(false);
   const [scribes, setScribes] = useState<any[]>([]);
   const [ratings, setRatings] = useState<{ [key: string]: any }>({});
@@ -26,6 +58,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
   const [actionLoading, setActionLoading] = useState(false);
   const [sentInvites, setSentInvites] = useState<Set<string>>(new Set());
 
+  // On open: load the directory and the student's pending requests.
   useEffect(() => {
     if (visible) {
       fetchScribesAndRatings();
@@ -36,6 +69,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   }, [visible]);
 
+  // With a pre-selected request, mark scribes who already have an application/invite for it.
   useEffect(() => {
     if (visible && preSelectedRequest) {
       fetchSentInvites();
@@ -44,6 +78,11 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   }, [visible, preSelectedRequest]);
 
+  /**
+   * Loads approved scribe `profiles` and all `scribe_reviews`, computes each scribe's average per
+   * rating category (missing/0 scores count as 5), then optionally overlays scores from the Axum
+   * /api/recommendations engine. Shows an Alert if the profile/review reads fail.
+   */
   const fetchScribesAndRatings = async () => {
     setLoading(true);
     try {
@@ -85,6 +124,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
         ratingMap[r.scribe_id].count += 1;
       });
 
+      // Turn sums into averages rounded to one decimal place.
       const finalRatings: { [key: string]: any } = {};
       Object.keys(ratingMap).forEach((scribeId) => {
         const c = ratingMap[scribeId].count;
@@ -113,6 +153,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
             request_type: preSelectedRequest?.type || 'exam',
           }),
         });
+        // Merge engine results over the client-side ratings (adds `match_score` for the badge).
         if (recRes.ok) {
           const recJson = await recRes.json();
           if (recJson?.data?.length > 0) {
@@ -142,6 +183,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   };
 
+  /** Loads this student's `exam_requests` and `assignment_requests` still in status 'pending' (invite targets). */
   const fetchStudentRequests = async () => {
     try {
       // Fetch student's unmatched exam requests
@@ -165,6 +207,10 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   };
 
+  /**
+   * Reads `scribe_applications` for the pre-selected request and stores the scribe ids, so those
+   * scribes show "Request Sent" (covers both student invites and scribe-initiated applications).
+   */
   const fetchSentInvites = async () => {
     if (!preSelectedRequest) return;
     try {
@@ -182,6 +228,10 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   };
 
+  /**
+   * "Invite" button handler. With a pre-selected request, asks for confirmation in an Alert and then
+   * sends the invite; otherwise opens the picker sub-modal to choose which request to invite to.
+   */
   const handleOpenInvite = (scribe: any) => {
     setInvitingScribe(scribe);
     if (preSelectedRequest) {
@@ -198,6 +248,15 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   };
 
+  /**
+   * Invites a scribe to a request.
+   * @param scribe  The scribe's `profiles` row.
+   * @param request The exam/assignment request row (needs `id` and `subject`).
+   * @param type    Which table the request belongs to ('exam' | 'assignment').
+   * Side effects: refuses if a `scribe_applications` row already exists for this scribe/request/type;
+   * otherwise inserts one with status 'invited', inserts a `notifications` row for the scribe, shows a
+   * success Alert, marks the scribe as "Request Sent" and closes the picker.
+   */
   const sendInvitation = async (scribe: any, request: any, type: 'exam' | 'assignment') => {
     if (!scribe) {
       Alert.alert('Error', 'No scribe selected.');
@@ -259,8 +318,10 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     }
   };
 
+  // Ids of scribe cards currently expanded to show the full rating breakdown.
   const [expandedScribeIds, setExpandedScribeIds] = useState<Set<string>>(new Set());
 
+  /** Expands or collapses one scribe card. */
   const toggleExpandScribe = (id: string) => {
     setExpandedScribeIds(prev => {
       const next = new Set(prev);
@@ -270,6 +331,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
     });
   };
 
+  /** Case-insensitive search over name, education level, location and languages; all scribes when empty. */
   const getFilteredScribes = () => {
     if (!searchQuery.trim()) return scribes;
     return scribes.filter((s) => {
@@ -284,9 +346,12 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
 
   const filtered = getFilteredScribes();
 
+  // Full-screen modal: header, search bar, scribe list, and the invite picker sub-modal.
   return (
-    <Modal animationType="slide" transparent={false} visible={visible} onRequestClose={onClose}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
+    // Phones: full-screen sheet. Desktop web: a centred panel over a dimmed backdrop.
+    <Modal animationType={isDesktop ? 'fade' : 'slide'} transparent={isDesktop} visible={visible} onRequestClose={onClose}>
+      <View style={isDesktop ? { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', alignItems: 'center', justifyContent: 'center', padding: 32 } : { flex: 1 }}>
+      <SafeAreaView style={[{ flex: 1, backgroundColor: '#f9fafb' }, isDesktop && { width: '100%', maxWidth: 880, maxHeight: '88%', borderRadius: 24, overflow: 'hidden' }]}>
         
         {/* Header */}
         <View style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -347,6 +412,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
             renderItem={({ item }) => {
+              // Scribes with no reviews default to a 5.0 rating; `languages` may be a JSON array string.
               const ratingInfo = ratings[item.id] || { avg: 5.0, count: 0 };
               const isExpanded = expandedScribeIds.has(item.id);
               const cleanLanguages = (() => {
@@ -588,6 +654,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
           <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
             <View style={{ backgroundColor: '#ffffff', width: '100%', maxWidth: 380, borderRadius: 28, padding: 22, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 15, elevation: 5 }}>
               
+              {/* Picker title + close button */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>
                   Invite {invitingScribe?.full_name}
@@ -670,6 +737,7 @@ export default function ScribesDirectoryModal({ visible, onClose, studentId, pre
         </Modal>
 
       </SafeAreaView>
+      </View>
     </Modal>
   );
 }

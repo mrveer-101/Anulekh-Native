@@ -1,3 +1,18 @@
+/**
+ * Route: /console/student/profile — simple "Account" screen for editing name and phone.
+ *
+ * A standalone, older account page: no other screen currently links to this route
+ * (the student console's Settings tab is the main account UI). It still works if
+ * opened directly.
+ *
+ * Data (via the `supabase` shim in core/supabase.ts, which calls the Rust/Axum
+ * backend rather than real Supabase):
+ *   - reads the session (redirects to /auth/login if none) and the user's `profiles` row
+ *   - on save, updates `profiles.full_name` and `profiles.phone`
+ * The colour theme switches between blue (student) and emerald (scribe) from
+ * `profiles.role`. The bottom tab bar replaces the route with /console/student and a
+ * `tab` param (home / requests / plan / settings), which that screen reads to open the tab.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +21,12 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
+/**
+ * Account screen component (default export used by Expo Router for this route).
+ * Takes no props; all data is loaded from the backend on mount.
+ */
 export default function ProfileScreen() {
+  // Loading / saving flags and the (read-only) login email from the session.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [email, setEmail] = useState('');
@@ -16,10 +36,15 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<'student' | 'scribe'>('student');
 
+  // Load the profile once when the screen mounts.
   useEffect(() => {
     fetchProfile();
   }, []);
 
+  /**
+   * Loads the session email and the `profiles` row (name, phone, role) into state.
+   * Redirects to /auth/login when there is no session; shows an alert on failure.
+   */
   const fetchProfile = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -51,7 +76,12 @@ export default function ProfileScreen() {
     }
   };
 
+  /**
+   * Saves the edited name and phone to the user's `profiles` row.
+   * Both fields are required; shows a success or error alert when done.
+   */
   const handleUpdateProfile = async () => {
+    // Validation: both editable fields must be non-blank.
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert('Missing Fields', 'Full Name and Phone Number are required.');
       return;
@@ -82,12 +112,14 @@ export default function ProfileScreen() {
 
 
 
+  // Role-based theme: Tailwind (NativeWind) classes in blue for students, emerald for scribes.
   const isStudent = role === 'student';
   const themeColorClass = isStudent ? 'bg-blue-500 active:bg-blue-600' : 'bg-emerald-500 active:bg-emerald-600';
   const themeTextClass = isStudent ? 'text-blue-600' : 'text-emerald-600';
   const themeBorderClass = isStudent ? 'border-blue-200' : 'border-emerald-200';
   const themeBgClass = isStudent ? 'bg-blue-50' : 'bg-emerald-50';
 
+  // Full-screen spinner until the profile has loaded.
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 justify-center items-center">
@@ -120,7 +152,8 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <TouchableOpacity 
+        {/* Avatar initial button: goes back to the user's console home */}
+        <TouchableOpacity
           onPress={() => router.push(isStudent ? '/console/student' : '/console/scribe')}
           className={`w-10 h-10 rounded-full items-center justify-center border-2 border-white shadow-md ${
             isStudent ? 'bg-blue-400 shadow-blue-500/30' : 'bg-emerald-500 shadow-emerald-500/30'

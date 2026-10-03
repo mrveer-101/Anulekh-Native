@@ -1,3 +1,27 @@
+/**
+ * Sign-in screen. Route: `/auth/login` (optional `?role=student|scribe` query param).
+ *
+ * Reached from the landing page "Login" button, the Register screen's "Sign In" links and
+ * console screens that find no session. The `role` param only picks the accent colour (blue for
+ * students, green for scribes) and is forwarded to the Register links; where the user ends up
+ * after signing in is decided by the role stored on their account, not by this param.
+ *
+ * Flows on this screen:
+ *   - Email/phone + password sign-in via `supabase.auth.signInWithPassword`. The `supabase` object
+ *     is the custom shim in core/supabase.ts that talks to the Rust/Axum backend (not real
+ *     Supabase): this hits POST /api/auth/signin and stores `{ user }` in AsyncStorage under
+ *     'local_db_session'. The user's `profiles` row is then read (POST /api/query) to choose
+ *     between the console home and that role's `complete_profile` onboarding screen.
+ *   - Forgot-password modal: POST /api/auth/forgot-password (emails a 6-digit OTP), then
+ *     POST /api/auth/reset-password with the OTP and the new password.
+ *   - "Google" modal: asks for a phone number and role, then POSTs /api/auth/google-login with the
+ *     hard-coded 'mock-google-token' (no real Google OAuth yet; the backend maps it to a fixed test
+ *     account, creating it with the given role/phone if needed). Saves the session and routes by role.
+ *   - Apple button: placeholder that only shows a "coming soon" alert.
+ *
+ * Reanimated drives the entrance, error-shake, hand-wave and button-press animations; all of
+ * them are skipped when the OS "Reduce Motion" setting is on. Styling is inline `style` objects.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -37,7 +61,10 @@ import Animated, {
 // RN's types don't list outlineStyle 'none', but react-native-web passes it through to CSS.
 const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
+/** Sign-in screen component (see file header). Takes no props; reads `?role=` from the route. */
 export default function LoginScreen() {
+  // Route param and main form state. `role` has no setter: it is fixed from `?role=` for the
+  // screen's lifetime and defaults to 'student' for any other value.
   const params = useLocalSearchParams<{ role?: string }>();
   const [role]                        = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -46,6 +73,7 @@ export default function LoginScreen() {
   const [loading, setLoading]         = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Role-based theme: blue accent for students, green for scribes.
   const isStudent   = role === 'student';
   const accentColor = isStudent ? '#2563eb' : '#16a34a';
 
@@ -68,7 +96,12 @@ export default function LoginScreen() {
   const [googleError, setGoogleError] = useState('');
 
   // Forgot Password Flow Handlers
+  /**
+   * Forgot-password step 1: checks an email was entered and asks the backend to email a reset
+   * OTP (POST /api/auth/forgot-password). Moves the modal to step 2 on success.
+   */
   const handleForgotSendOtp = async () => {
+    // An email is required before calling the backend.
     if (!forgotEmail.trim()) {
       setForgotError('Please enter your registered email address.');
       return;
@@ -76,6 +109,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotError('');
     try {
+      // Calls the backend directly with fetch (the shim has no password-reset helper).
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/forgot-password`, {
         method: 'POST',
@@ -83,6 +117,7 @@ export default function LoginScreen() {
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
       
+      // Read the body as text first so a non-JSON error response still gives a readable message.
       const resText = await res.text();
       let data: any = {};
       try {
@@ -93,6 +128,7 @@ export default function LoginScreen() {
 
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to send verification OTP.');
       
+      // OTP sent: show the OTP + new password step.
       setForgotStep(2);
     } catch (err: any) {
       setForgotError(friendlyAuthError(err, 'Failed to send OTP. Please try again.'));
@@ -101,7 +137,13 @@ export default function LoginScreen() {
     }
   };
 
+  /**
+   * Forgot-password step 2: validates the OTP and new password (at least 6 characters, both
+   * entries must match), then POSTs /api/auth/reset-password. On success it alerts and closes the
+   * modal; the user then signs in normally with the new password.
+   */
   const handleForgotResetPassword = async () => {
+    // Client-side checks before hitting the backend.
     if (!forgotOtp.trim()) {
       setForgotError('Verification code (OTP) is required.');
       return;
@@ -118,6 +160,7 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotError('');
     try {
+      // Send email + OTP + new password to the backend.
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/reset-password`, {
         method: 'POST',
@@ -139,6 +182,7 @@ export default function LoginScreen() {
 
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to reset password.');
 
+      // Done: tell the user and close the modal (this does not sign them in).
       Alert.alert('Success', 'Your password has been reset successfully! Please log in.');
       setForgotModalVisible(false);
     } catch (err: any) {
@@ -148,10 +192,20 @@ export default function LoginScreen() {
     }
   };
 
+  /**
+   * "Sign in with Google" (currently mocked). POSTs /api/auth/google-login with a placeholder
+   * `id_token`, plus the phone number and role the backend uses if it has to create the account.
+   * On success it saves the session itself and routes to the console of the role stored in
+   * `profiles`. Unlike handleLogin it does not check verification / redirect to complete_profile.
+   *
+   * @param phoneVal - phone number typed in the Google modal (already trimmed).
+   * @param roleVal  - 'student' or 'scribe', chosen in the Google modal.
+   */
   const handleGoogleSignIn = async (phoneVal: string, roleVal: string) => {
     setLoading(true);
     setErrorMessage('');
     try {
+      // 'mock-google-token' is a placeholder: real Google OAuth is not wired up yet.
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/google-login`, {
         method: 'POST',
@@ -173,6 +227,8 @@ export default function LoginScreen() {
 
       if (!res.ok) throw new Error(data.message || data.error || 'Google login failed');
 
+      // Signed in: read the stored role, then save `{ user }` as the session. This fetch bypasses
+      // supabase.auth, so it has to write 'local_db_session' itself before navigating.
       if (data.user) {
         const { data: profile } = await supabase
           .from('profiles').select('role').eq('id', data.user.id).single();
@@ -193,6 +249,7 @@ export default function LoginScreen() {
   // ── Motion & focus polish ──
   // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
   const reduceMotion = useReducedMotion();
+  /** Returns the given entering animation, or undefined (no animation) when Reduce Motion is on. */
   const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
 
   // Focused input gets an accent border, white background and tinted icon.
@@ -233,7 +290,14 @@ export default function LoginScreen() {
   }, [reduceMotion, waveRotate]);
   const waveStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${waveRotate.get()}deg` }] }));
 
+  /**
+   * Main email/phone + password sign-in. Signs in through the shim (POST /api/auth/signin), then
+   * reads the user's `profiles` row to decide where to go: the role's complete_profile screen if
+   * the account is not yet approved, otherwise `/console/student` or `/console/scribe`.
+   * Errors are shown in the banner via friendlyAuthError.
+   */
   const handleLogin = async () => {
+    // Both fields are required.
     if (!emailOrPhone.trim() || !password.trim()) {
       setErrorMessage('Please enter both email/phone and password.');
       return;
@@ -241,6 +305,9 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
+      // Normalise the identifier: anything containing '@' is treated as an email. Otherwise keep only
+      // digits and assume a 10-digit number is Indian (+91). The raw input is also sent as
+      // `identifier` so the backend can match whichever form the user typed.
       const input = emailOrPhone.trim();
       const isEmail = input.includes('@');
       const cleanPhone = input.replace(/[^0-9]/g, '');
@@ -254,10 +321,13 @@ export default function LoginScreen() {
       });
       if (error) throw error;
       if (data.user) {
+        // Start with the fields returned on the user object; the profile row below overrides them.
         let userRole = (data.user as any).role;
         let verificationStatus = (data.user as any).verification_status;
         let hasIdProof = !!(data.user as any).aadhar_number;
 
+        // Best-effort profile lookup (POST /api/query). Any Aadhaar number, Aadhaar image, disability
+        // certificate or location means the user has already filled in onboarding details.
         try {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -279,6 +349,7 @@ export default function LoginScreen() {
         // A user is considered approved if explicitly approved, or if an existing user already provided ID / verification details
         const isApproved = verificationStatus === 'approved' || hasIdProof;
 
+        // Unapproved users finish onboarding first; everyone else goes straight to their console.
         if (!isApproved) {
           router.replace(isScribe ? '/console/scribe/complete_profile' as any : '/console/student/complete_profile' as any);
         } else {
@@ -292,6 +363,8 @@ export default function LoginScreen() {
     }
   };
 
+  // Layout: decorative background orbs, then a scrollable column (top row, header, error banner,
+  // form card, Sign In button, social buttons). The two modals sit outside the ScrollView.
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
       <StatusBar style="dark" />
@@ -300,6 +373,7 @@ export default function LoginScreen() {
       <View style={{ position: 'absolute', top: -80, right: -70, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(37,99,235,0.20)' }} />
       <View style={{ position: 'absolute', bottom: 80, left: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(234,88,12,0.16)' }} />
 
+      {/* Safe area + keyboard avoidance so the form stays visible while typing */}
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView
@@ -310,6 +384,7 @@ export default function LoginScreen() {
             {/* Back & Top Action Row */}
             <Animated.View entering={enter(FadeIn.duration(400))}>
             <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Back button: replace (not push) so auth screens don't pile up in history */}
               <TouchableOpacity
                 onPress={() => router.replace('/landing')}
                 accessible={true}
@@ -358,6 +433,7 @@ export default function LoginScreen() {
                 <Text style={{ fontSize: 34, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
                   Welcome back
                 </Text>
+                {/* Waving hand: zooms in, then waveStyle rotates it. Decorative, hidden from screen readers. */}
                 <Animated.View entering={enter(ZoomIn.delay(250).springify().damping(12))}>
                   <Animated.View style={waveStyle}>
                     <FontAwesome5 name="hand-paper" size={26} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -372,6 +448,7 @@ export default function LoginScreen() {
             </Animated.View>
 
             {/* Error */}
+            {/* Shown only when there is an error; shakes via errorShakeStyle */}
             {errorMessage ? (
               <Animated.View entering={enter(FadeInDown.duration(300))}>
               <Animated.View style={errorShakeStyle}>
@@ -457,6 +534,7 @@ export default function LoginScreen() {
                     accessibilityLabel="Password"
                     accessibilityHint="Enter your account password"
                   />
+                  {/* Show / hide password toggle */}
                   <TouchableOpacity
                     onPress={() => setShowPassword(v => !v)}
                     style={{ padding: 6 }}
@@ -473,6 +551,7 @@ export default function LoginScreen() {
               {/* Forgot */}
               <TouchableOpacity 
                 onPress={() => {
+                  // Reset the modal to a clean step 1 every time it opens.
                   setForgotEmail('');
                   setForgotOtp('');
                   setForgotNewPass('');
@@ -496,6 +575,7 @@ export default function LoginScreen() {
 
             {/* Login CTA */}
             <Animated.View entering={enter(FadeInUp.delay(200).duration(450))}>
+            {/* Inner wrapper carries the press-scale animation; the outer one handles the entrance */}
             <Animated.View style={ctaPressStyle}>
             <TouchableOpacity
               onPress={handleLogin}
@@ -531,6 +611,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             </Animated.View>
 
+            {/* Secondary link to Register (same target as the top Register button) */}
             <TouchableOpacity
               onPress={() => router.push(`/auth/register?role=${role}`)}
               disabled={loading}
@@ -561,6 +642,7 @@ export default function LoginScreen() {
               {/* Google */}
               <TouchableOpacity
                 onPress={() => {
+                  // Open the Google details modal (phone + role) with fresh values.
                   setGooglePhone('');
                   setGoogleRole('student');
                   setGoogleError('');
@@ -619,6 +701,7 @@ export default function LoginScreen() {
         transparent={true}
         onRequestClose={() => setForgotModalVisible(false)}
       >
+        {/* Dimmed backdrop with a centred card */}
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
           <View style={{
             backgroundColor: '#ffffff',
@@ -655,12 +738,14 @@ export default function LoginScreen() {
               </View>
             ) : null}
 
+            {/* Step 1: email -> Send OTP. Step 2: OTP + new password + confirm -> Reset Password. */}
             {forgotStep === 1 ? (
               <View style={{ gap: 16 }}>
                 <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
                   Enter your registered email address below. We'll send you a 6-digit OTP code to verify your identity.
                 </Text>
                 
+                {/* Email field */}
                 <View>
                   <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
                     Email Address
@@ -685,6 +770,7 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
+                {/* Send OTP button */}
                 <TouchableOpacity
                   onPress={handleForgotSendOtp}
                   disabled={forgotLoading}
@@ -710,6 +796,7 @@ export default function LoginScreen() {
                   We have sent an email with a 6-digit verification code to <Text style={{ fontWeight: '700', color: '#0f172a' }}>{forgotEmail}</Text>.
                 </Text>
 
+                {/* OTP field */}
                 <View>
                   <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
                     Verification Code (OTP)
@@ -734,6 +821,7 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
+                {/* New password field with show/hide toggle */}
                 <View>
                   <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
                     New Password
@@ -761,6 +849,7 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
+                {/* Confirm password field with show/hide toggle */}
                 <View>
                   <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
                     Confirm Password
@@ -788,6 +877,7 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
+                {/* Reset Password button */}
                 <TouchableOpacity
                   onPress={handleForgotResetPassword}
                   disabled={forgotLoading}
@@ -820,6 +910,7 @@ export default function LoginScreen() {
         transparent={true}
         onRequestClose={() => setGoogleModalVisible(false)}
       >
+        {/* Dimmed backdrop with a centred card */}
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
           <View style={{
             backgroundColor: '#ffffff',
@@ -872,6 +963,7 @@ export default function LoginScreen() {
                   borderRadius: 14, padding: 4,
                   flexDirection: 'row',
                 }}>
+                  {/* Segmented control: one option per role, tinted in that role's colour when active */}
                   {(['student', 'scribe'] as const).map((r) => {
                     const active = googleRole === r;
                     const color = r === 'student' ? '#2563eb' : '#16a34a';
@@ -923,6 +1015,7 @@ export default function LoginScreen() {
                 </View>
               </View>
 
+              {/* Continue: requires at least 10 characters of phone, closes the modal, then runs handleGoogleSignIn */}
               <TouchableOpacity
                 onPress={async () => {
                   if (!googlePhone.trim() || googlePhone.trim().length < 10) {

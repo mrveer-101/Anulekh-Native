@@ -8,6 +8,9 @@ import { parseExamDate } from '@/core/examDate';
 import MiniCalendar from '@/components/modals/MiniCalendar';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
+import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
+import { useTabActive } from '@/components/ui/TabPane';
+import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 
 // Hides the browser's default focus ring on web; the search box's border shows focus instead.
 const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
@@ -120,8 +123,20 @@ function parseSearchQueryForDates(query: string): { start: Date | null; end: Dat
   return { start: null, end: null, cleanQuery: query };
 }
 
+/** Everything the Search tab shows, cached so the next visit paints instantly (see core/screenCache). */
+interface ExploreSnapshot {
+  profile: any;
+  appMapEntries: [string, string][];   // Map isn't JSON-serialisable, so entries are stored
+  exams: ExamRequest[];
+  assignments: any[];
+}
+
 export default function ScribeExploreView() {
+  // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
+  const inShell = useInDesktopShell();
   const { t } = useLanguage();
+  // True while this tab is visible (TabPane keep-alive) — data refreshes only then.
+  const isActive = useTabActive();
   // Blocks and cards rise in one after another (off with Reduce Motion).
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
@@ -173,35 +188,61 @@ export default function ScribeExploreView() {
     });
   };
 
+  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
+  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
   useFocusEffect(
     useCallback(() => {
+      if (!isActive) return;
       fetchSession();
-    }, [])
+    }, [isActive])
   );
 
+  /** Puts a snapshot (cached or freshly fetched) on screen. */
+  const applySnapshot = (snap: ExploreSnapshot) => {
+    setScribeProfile(snap.profile);
+    setAppMap(new Map(snap.appMapEntries));
+    setAvailableExams(snap.exams);
+    setAvailableAssignments(snap.assignments);
+  };
+
+  /**
+   * Loads the Search tab: shows the cached snapshot instantly, then fetches all six data sets in
+   * parallel (each depends only on the scribe's id), ranks the results and caches them.
+   */
   const fetchSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+      const userId = session.user.id;
 
-      // 1. Fetch Scribe Profile to check location
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      setScribeProfile(profile);
+      const cached = await readScreenCache<ExploreSnapshot>('scribe_explore', userId);
+      if (cached) {
+        applySnapshot(cached);
+        setLoading(false);
+      }
 
-      // 2. Fetch Scribe's Applications/Invitations to build appMap and filter rejections
-      const { data: myApps } = await supabase
-        .from('scribe_applications')
-        .select('*')
-        .eq('scribe_id', session.user.id);
+      const [
+        { data: profile },                           // scribe profile (location for "near you")
+        { data: myApps },                            // this scribe's applications/invitations
+        { data: exams, error: examsErr },            // open exam requests
+        { data: assignments, error: assignmentsErr },// open assignment requests
+        { data: studentReviews },                    // ratings used to prioritise students
+        { data: pastMatches },                       // students this scribe worked with before
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('scribe_applications').select('*').eq('scribe_id', userId),
+        supabase.from('exam_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+        supabase.from('assignment_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+        supabase.from('student_reviews').select('student_id, rating_overall'),
+        supabase.from('exam_requests').select('student_id').eq('scribe_id', userId),
+      ]);
+      if (examsErr) throw examsErr;
+      if (assignmentsErr) throw assignmentsErr;
 
+      // Application status per request ("123_exam" → "pending" | "invited" | ...) and rejections to hide
       const mapping = new Map<string, string>();
       const rejectedExams = new Set<number>();
       const rejectedAssignments = new Set<number>();
-
       (myApps || []).forEach((app: any) => {
         const typeStr = app.type || 'exam';
         mapping.set(`${app.request_id}_${typeStr}`, app.status);
@@ -213,31 +254,8 @@ export default function ScribeExploreView() {
           }
         }
       });
-      setAppMap(mapping);
 
-      // 3. Fetch Available Exams
-      const { data: exams, error: examsErr } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (examsErr) throw examsErr;
-
-      // 4. Fetch Available Assignments
-      const { data: assignments, error: assignmentsErr } = await supabase
-        .from('assignment_requests')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      if (assignmentsErr) throw assignmentsErr;
-
-      // 5. Fetch all student reviews to calculate average ratings for prioritization
-      const { data: studentReviews } = await supabase
-        .from('student_reviews')
-        .select('student_id, rating_overall');
-
+      // Average rating per student (no reviews → maximum, so new students aren't buried)
       const studentRatingsMap: { [studentId: string]: { sum: number; count: number } } = {};
       (studentReviews || []).forEach((r: any) => {
         if (!studentRatingsMap[r.student_id]) {
@@ -246,61 +264,51 @@ export default function ScribeExploreView() {
         studentRatingsMap[r.student_id].sum += r.rating_overall || 0;
         studentRatingsMap[r.student_id].count += 1;
       });
-
       const getStudentAvgRating = (studentId: string): number => {
         const stats = studentRatingsMap[studentId];
         if (!stats || stats.count === 0) return 5.0;
         return stats.sum / stats.count;
       };
-
-      // 6. Fetch past matches to boost previously worked student requests
-      const { data: pastMatches } = await supabase
-        .from('exam_requests')
-        .select('student_id')
-        .eq('scribe_id', session.user.id);
-
       const pastStudentsSet = new Set((pastMatches || []).map((pm: any) => pm.student_id));
 
-      // Filter and prioritize Exams
+      // Exams: SOS → private invite for this scribe → past student → student rating
       const visibleExams = (exams || [])
         .filter((exam: any) => {
           if (rejectedExams.has(exam.id)) return false;
-          if (exam.private_scribe_id && exam.private_scribe_id !== session.user.id) return false;
+          if (exam.private_scribe_id && exam.private_scribe_id !== userId) return false;
           return true;
         })
         .sort((a: any, b: any) => {
           const aEmergency = a.is_emergency === 'yes' ? 1 : 0;
           const bEmergency = b.is_emergency === 'yes' ? 1 : 0;
           if (aEmergency !== bEmergency) return bEmergency - aEmergency;
-
-          const aPrivate = a.private_scribe_id === session.user.id ? 1 : 0;
-          const bPrivate = b.private_scribe_id === session.user.id ? 1 : 0;
+          const aPrivate = a.private_scribe_id === userId ? 1 : 0;
+          const bPrivate = b.private_scribe_id === userId ? 1 : 0;
           if (aPrivate !== bPrivate) return bPrivate - aPrivate;
-
           const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
           const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
           if (aPast !== bPast) return bPast - aPast;
-
-          const ratingA = getStudentAvgRating(a.student_id);
-          const ratingB = getStudentAvgRating(b.student_id);
-          return ratingB - ratingA;
+          return getStudentAvgRating(b.student_id) - getStudentAvgRating(a.student_id);
         });
 
-      // Filter and prioritize Assignments
+      // Assignments: past student → student rating
       const visibleAssignments = (assignments || [])
         .filter((assign: any) => !rejectedAssignments.has(assign.id))
         .sort((a: any, b: any) => {
           const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
           const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
           if (aPast !== bPast) return bPast - aPast;
-
-          const ratingA = getStudentAvgRating(a.student_id);
-          const ratingB = getStudentAvgRating(b.student_id);
-          return ratingB - ratingA;
+          return getStudentAvgRating(b.student_id) - getStudentAvgRating(a.student_id);
         });
 
-      setAvailableExams(visibleExams);
-      setAvailableAssignments(visibleAssignments);
+      const snapshot: ExploreSnapshot = {
+        profile,
+        appMapEntries: Array.from(mapping.entries()),
+        exams: visibleExams,
+        assignments: visibleAssignments,
+      };
+      applySnapshot(snapshot);
+      writeScreenCache('scribe_explore', userId, snapshot);
     } catch (error: any) {
       console.error('Error fetching scribe explore data:', error.message);
     } finally {
@@ -308,7 +316,6 @@ export default function ScribeExploreView() {
       setRefreshing(false);
     }
   };
-
   const onRefresh = () => {
     setRefreshing(true);
     fetchSession();
@@ -875,12 +882,12 @@ export default function ScribeExploreView() {
   }
 
   return (
-    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+    <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
-      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
+      {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
 
       {/* Segment Switcher: Available Exams vs Available Assignments */}
-      <Animated.View entering={rise(0)} style={{ flexDirection: 'row', backgroundColor: '#ffffff', marginHorizontal: 24, marginTop: 16, padding: 4, borderRadius: 16, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3 }}>
+      <Animated.View entering={rise(0)} style={{ flexDirection: 'row', backgroundColor: '#ffffff', marginHorizontal: inShell ? 0 : 24, marginTop: 16, padding: 4, borderRadius: 16, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3 }}>
         <TouchableOpacity
           onPress={() => setActiveSegment('exams')}
           style={{
@@ -915,7 +922,7 @@ export default function ScribeExploreView() {
       </Animated.View>
 
       {/* SOS Emergency Reserve Duty Banner */}
-      <Animated.View entering={rise(1)} style={{ marginHorizontal: 24, marginTop: 12 }}>
+      <Animated.View entering={rise(1)} style={{ marginHorizontal: inShell ? 0 : 24, marginTop: 12 }}>
         <View style={{
           backgroundColor: 'rgba(239,68,68,0.06)',
           borderWidth: 1.5,
@@ -940,7 +947,7 @@ export default function ScribeExploreView() {
       </Animated.View>
 
       {/* Search Header Bar */}
-      <Animated.View entering={rise(2)} style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
+      <Animated.View entering={rise(2)} style={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
         
         {/* Search Input */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: searchFocused ? THEME.primary : THEME.cardBorder, paddingHorizontal: 14, height: 48, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: searchFocused ? 0.14 : 0.06, shadowRadius: 10, elevation: 2 }}>
@@ -966,7 +973,7 @@ export default function ScribeExploreView() {
       {/* Main Opportunities List & Scrollable Filters */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 10, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 10, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
         }
@@ -1099,7 +1106,7 @@ export default function ScribeExploreView() {
                     Opportunities Near You ({scribeProfile?.location})
                   </Text>
                 </View>
-                {nearbyExams.map(renderExamCard)}
+                <DesktopGrid>{nearbyExams.map(renderExamCard)}</DesktopGrid>
               </View>
             )}
 
@@ -1120,7 +1127,7 @@ export default function ScribeExploreView() {
                   </Text>
                 </View>
               ) : (
-                (scribeLocation && nearbyExams.length > 0 ? otherExams : filteredExams).map(renderExamCard)
+                <DesktopGrid>{(scribeLocation && nearbyExams.length > 0 ? otherExams : filteredExams).map(renderExamCard)}</DesktopGrid>
               )}
             </View>
           </>
@@ -1141,7 +1148,7 @@ export default function ScribeExploreView() {
                 </Text>
               </View>
             ) : (
-              filteredAssignments.map(renderAssignmentCard)
+              <DesktopGrid>{filteredAssignments.map(renderAssignmentCard)}</DesktopGrid>
             )}
           </View>
         )}

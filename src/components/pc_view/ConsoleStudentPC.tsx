@@ -1,16 +1,49 @@
+/**
+ * ConsoleStudentPC — desktop/web shell of the student portal.
+ *
+ * Renders the wide-screen layout: a full-width glass header (logo, breadcrumb, notification
+ * bell, profile pill with a dropdown) and a collapsible left sidebar (tab navigation, "New
+ * Scribe Request" button, log out, collapse toggle) beside a scrollable content area.
+ *
+ * Used in two ways:
+ * - As the whole desktop dashboard: app/console/student/index.tsx renders it on wide screens
+ *   with no children, and it shows each tab's PC view inside a keep-alive TabPane.
+ * - As a frame around a single page: app/console/student/request_form.tsx and
+ *   assignment_form.tsx pass their form as `children` with `activeTab="requests"`, and the
+ *   children replace the tab content.
+ *
+ * Loads no data itself (tab views fetch their own); the only backend call is
+ * `supabase.auth.signOut()` on log out, followed by navigation to `/auth/login`.
+ * Styling relies on web-only CSS (backdropFilter, boxShadow, backgroundImage gradients, hover
+ * states via Pressable), so this component is meant for react-native-web.
+ */
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
-import StudentHomePCView from './StudentHomePCView';
-import StudentRequestsPCView from './StudentRequestsPCView';
+// Home and Requests use the same full-featured screens as the phone app (chat, edit, delete,
+// assignments, ratings, SOS, past scribes, ...); DesktopShellProvider gives them a wide layout.
+import StudentHomeView from '../student/StudentHomeView';
+import StudentRequestsView from '../student/StudentRequestsView';
 import StudentProfilePCView from './StudentProfilePCView';
 import SharedNotificationsPCView from './SharedNotificationsPCView';
 import StudentPlanView from '../student/StudentPlanView';
 import SharedSettingsView from '../shared/SharedSettingsView';
+import { TabPane } from '@/components/ui/TabPane';
+import { DesktopShellProvider } from '@/components/ui/DesktopShell';
 
+/**
+ * Props for {@link ConsoleStudentPC}.
+ * - `userProfile`: the student's `profiles` row (name for the header pill; passed to tab views).
+ * - `requests`: student's requests forwarded to the Home and Requests tab views (default []).
+ * - `onRefresh`: callback forwarded to tab views so they can ask the parent to reload.
+ * - `activeTab` / `onSelectTab`: optional controlled tab state. When `activeTab` is given
+ *   without `onSelectTab`, the highlighted tab is fixed to that value.
+ * - `layoutMode` / `onChangeLayoutMode`: accepted but not currently used by this component.
+ * - `children`: when provided, rendered instead of the built-in tab views.
+ */
 interface ConsoleStudentPCProps {
   userProfile?: any;
   requests?: any[];
@@ -20,8 +53,15 @@ interface ConsoleStudentPCProps {
   layoutMode?: 'auto' | 'pc' | 'mobile';
   onChangeLayoutMode?: (mode: 'auto' | 'pc' | 'mobile') => void;
   children?: React.ReactNode;
+  /** Unread notifications; the bell shows a dot while this is above 0. */
+  unreadCount?: number;
+  /** Called when the Notifications tab is opened (the parent clears its unread count). */
+  onNotificationsOpened?: () => void;
 }
 
+/**
+ * Desktop student portal shell (see file header). Returns the full-screen layout.
+ */
 export default function ConsoleStudentPC({
   userProfile,
   requests = [],
@@ -31,20 +71,31 @@ export default function ConsoleStudentPC({
   layoutMode = 'auto',
   onChangeLayoutMode,
   children,
+  unreadCount = 0,
+  onNotificationsOpened,
 }: ConsoleStudentPCProps) {
+  // UI state: fallback tab (used when the parent does not control it), sidebar width,
+  // and the header's profile dropdown. `showLayoutMenu` is only ever reset, never opened.
   const [internalActiveTab, setInternalActiveTab] = useState('home');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
 
+  // The parent's tab wins when provided; otherwise use the internal one.
   const activeTab = externalActiveTab || internalActiveTab;
+  /**
+   * Switches tab (via the parent's `onSelectTab` if given, else internal state) and closes any
+   * open header menus.
+   */
   const setActiveTab = (tab: string) => {
     if (externalOnSelectTab) externalOnSelectTab(tab);
     else setInternalActiveTab(tab);
+    if (tab === 'notifications') onNotificationsOpened?.();
     setShowProfileDropdown(false);
     setShowLayoutMenu(false);
   };
 
+  /** Signs out (ignoring errors) and replaces the route with the login screen. */
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -52,6 +103,10 @@ export default function ConsoleStudentPC({
     router.replace('/auth/login');
   };
 
+  /**
+   * Sidebar entries. `id` matches the tab keys used below. 'settings' has no sidebar entry; it is
+   * reached from the profile dropdown.
+   */
   const navItems = [
     { id: 'home', label: 'Dashboard', icon: 'grid' as const },
     { id: 'requests', label: 'My Requests', icon: 'file-text' as const },
@@ -179,11 +234,14 @@ export default function ConsoleStudentPC({
             })}
           >
             <Feather name="bell" size={18} color={"#475569"} />
-            <View style={{
-              position: 'absolute', top: 7, right: 7,
-              width: 8, height: 8, borderRadius: 4,
-              backgroundColor: '#2563eb',
-            }} />
+            {/* Blue dot while there are unread notifications */}
+            {unreadCount > 0 && (
+              <View style={{
+                position: 'absolute', top: 7, right: 7,
+                width: 8, height: 8, borderRadius: 4,
+                backgroundColor: '#2563eb',
+              }} />
+            )}
           </Pressable>
 
           {/* 4. User Profile Pill Button (Compact Pill Shape with First Name Only + Arrow) */}
@@ -209,12 +267,13 @@ export default function ConsoleStudentPC({
               width: 30, height: 30, borderRadius: 15,
               backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center',
             }}>
+              {/* Avatar initial and first name; generic 'S' / 'Student' until the profile name is known */}
               <Text style={{ fontSize: 13, fontWeight: '900', color: '#ffffff' }}>
-                {userProfile?.full_name ? userProfile.full_name.charAt(0).toUpperCase() : 'A'}
+                {userProfile?.full_name ? userProfile.full_name.charAt(0).toUpperCase() : 'S'}
               </Text>
             </View>
             <Text style={{ fontSize: 13, fontWeight: '800', color: textPrimary }}>
-              {userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Aditya'}
+              {userProfile?.full_name ? userProfile.full_name.split(' ')[0] : 'Student'}
             </Text>
             <Feather name={showProfileDropdown ? 'chevron-up' : 'chevron-down'} size={14} color={textSecondary} />
           </Pressable>
@@ -235,6 +294,7 @@ export default function ConsoleStudentPC({
               shadowColor: '#000000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.15, shadowRadius: 24,
               elevation: 12, zIndex: 200,
             }}>
+              {/* Dropdown items: profile tab, settings tab, then log out */}
               <Pressable
                 onPress={() => setActiveTab('profile')}
                 style={({ hovered }: any) => ({
@@ -460,16 +520,19 @@ export default function ConsoleStudentPC({
               )}
 
               {/* Tab View Content */}
-              {children ? children : (
-                <>
-                  {activeTab === 'home' && <StudentHomePCView userProfile={userProfile} requests={requests} onRefresh={onRefresh} />}
-                  {activeTab === 'requests' && <StudentRequestsPCView requests={requests} onRefresh={onRefresh} />}
-                  {activeTab === 'plan' && <StudentPlanView />}
-                  {activeTab === 'profile' && <StudentProfilePCView userProfile={userProfile} onRefresh={onRefresh} />}
-                  {activeTab === 'settings' && <SharedSettingsView />}
-                  {activeTab === 'notifications' && <SharedNotificationsPCView userRole="student" />}
-                </>
-              )}
+              {/* Page-provided children replace the tabs; otherwise each tab view is kept alive in a TabPane */}
+              <DesktopShellProvider>
+                {children ? children : (
+                  <>
+                    <TabPane active={activeTab === 'home'}><StudentHomeView /></TabPane>
+                    <TabPane active={activeTab === 'requests'}><StudentRequestsView /></TabPane>
+                    <TabPane active={activeTab === 'plan'}><StudentPlanView /></TabPane>
+                    <TabPane active={activeTab === 'profile'}><StudentProfilePCView userProfile={userProfile} onRefresh={onRefresh} /></TabPane>
+                    <TabPane active={activeTab === 'settings'}><SharedSettingsView /></TabPane>
+                    <TabPane active={activeTab === 'notifications'}><SharedNotificationsPCView userRole="student" /></TabPane>
+                  </>
+                )}
+              </DesktopShellProvider>
 
             </View>
           </ScrollView>

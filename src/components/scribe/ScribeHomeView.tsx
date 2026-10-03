@@ -6,6 +6,10 @@ import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import PolicyModal from '@/components/modals/PolicyModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
+import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
+import { useTabActive } from '@/components/ui/TabPane';
+import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import Animated, {
   Easing,
   FadeInDown,
@@ -17,6 +21,7 @@ import Animated, {
   withRepeat,
   withSequence,
   withTiming,
+  cancelAnimation,
 } from 'react-native-reanimated';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
@@ -26,7 +31,7 @@ const getFirstName = (fullName: string | null | undefined, defaultVal: string) =
   return first.charAt(0).toUpperCase() + first.slice(1);
 };
 
-// Scribe accent palette for this screen. Change ACCENT to compare colours (e.g. ACCENT_PALETTES.green).
+// Scribe accent palette for this screen. Green matches the scribe portal; ACCENT_PALETTES.orange is the alternative.
 // `contrast` is the Applications stat colour, chosen so it never matches the accent.
 const ACCENT_PALETTES = {
   green: {
@@ -40,10 +45,25 @@ const ACCENT_PALETTES = {
     contrast: '#059669',
   },
 } as const;
-const ACCENT = ACCENT_PALETTES.orange;
+const ACCENT = ACCENT_PALETTES.green;
+
+/** Everything the scribe home shows, cached so the next visit paints instantly (see core/screenCache). */
+interface ScribeHomeSnapshot {
+  profile: any;
+  availableExams: any[];
+  scribeCommitments: any[];
+  pendingApplicationsCount: number;
+  completedExamsCount: number;
+  reviews: any[];
+  incomingInvitations: any[];
+}
 
 export default function ScribeHomeView() {
+  // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
+  const inShell = useInDesktopShell();
   const { t } = useLanguage();
+  // True while this tab is visible (TabPane keep-alive): refresh only then, and pause animations when hidden.
+  const isActive = useTabActive();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -121,12 +141,15 @@ export default function ScribeHomeView() {
   // Avatar tile floats gently.
   const floatY = useSharedValue(0);
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || !isActive) {
+      cancelAnimation(floatY);
+      return;
+    }
     floatY.set(withRepeat(withSequence(
       withTiming(-3, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
       withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
     ), -1));
-  }, [reduceMotion, floatY]);
+  }, [reduceMotion, isActive, floatY]);
   const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
 
   // SOS switch: knob slides and track recolours instead of jumping.
@@ -142,7 +165,7 @@ export default function ScribeHomeView() {
   // While on standby, the SOS bolt pulses softly.
   const sosPulse = useSharedValue(1);
   useEffect(() => {
-    if (reduceMotion || !isSosRegistered) {
+    if (reduceMotion || !isSosRegistered || !isActive) {
       sosPulse.set(withTiming(1, { duration: 150 }));
       return;
     }
@@ -150,7 +173,7 @@ export default function ScribeHomeView() {
       withTiming(1.18, { duration: 700, easing: Easing.inOut(Easing.quad) }),
       withTiming(1, { duration: 700, easing: Easing.inOut(Easing.quad) }),
     ), -1));
-  }, [isSosRegistered, reduceMotion, sosPulse]);
+  }, [isSosRegistered, reduceMotion, isActive, sosPulse]);
   const sosPulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: sosPulse.get() }] }));
 
   const openCallSheet = (exam: any) => {
@@ -162,29 +185,57 @@ export default function ScribeHomeView() {
 
   const closeCallSheet = () => setIsCallOpen(false);
 
+  // Refresh whenever the console is focused *and* this tab is the visible one (switching back to the tab
+  // flips isActive and triggers a quiet background refresh; hidden tabs don't fetch).
   useFocusEffect(
     useCallback(() => {
+      if (!isActive) return;
       fetchSession();
-    }, [])
+    }, [isActive])
   );
 
+  /** Puts a snapshot (cached or freshly fetched) on screen. */
+  const applySnapshot = (snap: ScribeHomeSnapshot) => {
+    setProfile(snap.profile);
+    if (snap.profile && snap.profile.is_sos_registered !== undefined && snap.profile.is_sos_registered !== null) {
+      setIsSosRegistered(snap.profile.is_sos_registered !== 0);
+    }
+    setAvailableExams(snap.availableExams);
+    setScribeCommitments(snap.scribeCommitments);
+    setPendingApplicationsCount(snap.pendingApplicationsCount);
+    setCompletedExamsCount(snap.completedExamsCount);
+    setReviews(snap.reviews);
+    setIncomingInvitations(snap.incomingInvitations);
+  };
+
+  /**
+   * Loads the scribe home.
+   * 1. Shows the last cached snapshot instantly (no spinner on repeat visits, even after an app restart).
+   * 2. Fetches the profile — it decides whether this scribe may see the dashboard yet.
+   * 3. Fetches everything else in parallel (all of it depends only on the scribe's id).
+   * 4. Puts the fresh data on screen and caches it for next time.
+   */
   const fetchSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+      const userId = session.user.id;
       setUser(session.user);
 
-      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      const cached = await readScreenCache<ScribeHomeSnapshot>('scribe_home', userId);
+      if (cached) {
+        applySnapshot(cached);
+        setLoading(false);
+      }
+
+      // 1. Profile (+ locally stored photo) — gates access to the dashboard
+      const [localPhoto, { data: profileData }] = await Promise.all([
+        AsyncStorage.getItem(`profile_photo_${userId}`),
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+      ]);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
-
-      // 1. Fetch Profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
 
       const hasIdProof = !!(profileData?.aadhar_number || profileData?.aadhar_image_proof || profileData?.location);
       const isApproved = profileData?.verification_status === 'approved' || hasIdProof;
@@ -195,29 +246,34 @@ export default function ScribeHomeView() {
       }
 
       if (profileData && hasIdProof && profileData.verification_status !== 'approved') {
-        supabase.from('profiles').update({ verification_status: 'approved' }).eq('id', session.user.id);
+        supabase.from('profiles').update({ verification_status: 'approved' }).eq('id', userId);
         profileData.verification_status = 'approved';
       }
 
-      setProfile(profileData);
-      if (profileData && profileData.is_sos_registered !== undefined && profileData.is_sos_registered !== null) {
-        setIsSosRegistered(profileData.is_sos_registered !== 0);
-      }
+      // 2. Everything else, in parallel
+      const [
+        { data: available },       // open exam requests
+        { data: studentReviews },  // ratings used to prioritise students
+        { data: pastMatches },     // students this scribe worked with before (boosted)
+        { data: rejectedApps },    // requests this scribe was rejected from (hidden)
+        { data: committed },       // confirmed commitments ("My Plans")
+        { data: apps },            // pending applications (count)
+        { data: completed },       // completed exams (count)
+        { data: reviewsData },     // reviews of this scribe
+        { data: invitations },     // private invitations awaiting a reply
+      ] = await Promise.all([
+        supabase.from('exam_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+        supabase.from('student_reviews').select('student_id, rating_overall'),
+        supabase.from('exam_requests').select('student_id').eq('scribe_id', userId),
+        supabase.from('scribe_applications').select('request_id').eq('scribe_id', userId).eq('status', 'rejected'),
+        supabase.from('exam_requests').select('*').eq('status', 'matched').eq('scribe_id', userId).order('created_at', { ascending: false }),
+        supabase.from('scribe_applications').select('id').eq('scribe_id', userId).eq('status', 'pending'),
+        supabase.from('exam_requests').select('id').eq('status', 'completed').eq('scribe_id', userId),
+        supabase.from('scribe_reviews').select('*').eq('scribe_id', userId),
+        supabase.from('scribe_applications').select('*').eq('scribe_id', userId).eq('status', 'invited'),
+      ]);
 
-      // 2. Fetch Available Exams (where status is pending), excluding exams this
-      // scribe was already rejected from — stays public for every other scribe.
-      const { data: available } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-
-      // Fetch all student reviews to calculate average ratings
-      const { data: studentReviews } = await supabase
-        .from('student_reviews')
-        .select('student_id, rating_overall');
-
-      // Map student_id -> { sum: number, count: number }
+      // Average rating per student (students with no reviews get the maximum, so new students aren't buried)
       const studentRatingsMap: { [studentId: string]: { sum: number; count: number } } = {};
       (studentReviews || []).forEach((r: any) => {
         if (!studentRatingsMap[r.student_id]) {
@@ -226,126 +282,59 @@ export default function ScribeHomeView() {
         studentRatingsMap[r.student_id].sum += r.rating_overall || 0;
         studentRatingsMap[r.student_id].count += 1;
       });
-
-      // Map student_id -> avg_rating (default 5.0 for students with no reviews so they start with high priority)
       const getStudentAvgRating = (studentId: string): number => {
         const stats = studentRatingsMap[studentId];
-        if (!stats || stats.count === 0) return 5.0; // New student / no rating gets maximum priority
+        if (!stats || stats.count === 0) return 5.0;
         return stats.sum / stats.count;
       };
 
-      // Fetch past matches to boost previously worked student requests
-      const { data: pastMatches } = await supabase
-        .from('exam_requests')
-        .select('student_id')
-        .eq('scribe_id', session.user.id);
-
       const pastStudentsSet = new Set((pastMatches || []).map((pm: any) => pm.student_id));
-
-      const { data: rejectedApps } = await supabase
-        .from('scribe_applications')
-        .select('request_id')
-        .eq('scribe_id', session.user.id)
-        .eq('status', 'rejected');
-
       const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
+
+      // Open exams this scribe can take, best matches first:
+      // SOS → private invite for this scribe → past student → student rating.
       const sortedAvailable = (available || [])
         .filter((exam: any) => {
-          // Exclude rejected opportunities
           if (rejectedRequestIds.has(exam.id)) return false;
-          // Exclude private invitations meant for other scribes
-          if (exam.private_scribe_id && exam.private_scribe_id !== session.user.id) return false;
+          if (exam.private_scribe_id && exam.private_scribe_id !== userId) return false;
           return true;
         })
         .sort((a: any, b: any) => {
-          // 0. Emergency SOS check (highest priority booster)
           const aEmergency = a.is_emergency === 'yes' ? 1 : 0;
           const bEmergency = b.is_emergency === 'yes' ? 1 : 0;
           if (aEmergency !== bEmergency) return bEmergency - aEmergency;
 
-          // 1. Private invite check (booster)
-          const aPrivate = a.private_scribe_id === session.user.id ? 1 : 0;
-          const bPrivate = b.private_scribe_id === session.user.id ? 1 : 0;
+          const aPrivate = a.private_scribe_id === userId ? 1 : 0;
+          const bPrivate = b.private_scribe_id === userId ? 1 : 0;
           if (aPrivate !== bPrivate) return bPrivate - aPrivate;
 
-          // 2. Past student check (booster)
           const aPast = pastStudentsSet.has(a.student_id) ? 1 : 0;
           const bPast = pastStudentsSet.has(b.student_id) ? 1 : 0;
           if (aPast !== bPast) return bPast - aPast;
 
-          // 3. Fallback to student average rating
-          const ratingA = getStudentAvgRating(a.student_id);
-          const ratingB = getStudentAvgRating(b.student_id);
-          return ratingB - ratingA;
+          return getStudentAvgRating(b.student_id) - getStudentAvgRating(a.student_id);
         });
 
-      setAvailableExams(sortedAvailable);
-
-      // 3. Fetch Scribe's Confirmed Commitments
-      const { data: committed } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('status', 'matched')
-        .eq('scribe_id', session.user.id)
-        .order('created_at', { ascending: false });
-
-      setScribeCommitments(committed || []);
-
-      // 4. Fetch Scribe's Pending Applications Count
-      const { data: apps } = await supabase
-        .from('scribe_applications')
-        .select('id')
-        .eq('scribe_id', session.user.id)
-        .eq('status', 'pending');
-      
-      setPendingApplicationsCount(apps ? apps.length : 0);
-
-      // 5. Fetch Scribe's Completed Exam Requests
-      const { data: completed } = await supabase
-        .from('exam_requests')
-        .select('id')
-        .eq('status', 'completed')
-        .eq('scribe_id', session.user.id);
-
-      setCompletedExamsCount(completed ? completed.length : 0);
-
-      // 6. Fetch Scribe's Reviews
-      const { data: reviewsData } = await supabase
-        .from('scribe_reviews')
-        .select('*')
-        .eq('scribe_id', session.user.id);
-
-      setReviews(reviewsData || []);
-
-      // 7. Fetch Incoming Invitations for Scribe
-      const { data: invitations } = await supabase
-        .from('scribe_applications')
-        .select('*')
-        .eq('scribe_id', session.user.id)
-        .eq('status', 'invited');
-
+      // Attach the exam/assignment each invitation refers to (in parallel)
       const enrichedInvitations = await Promise.all(
         (invitations || []).map(async (invite: any) => {
-          let requestDetails = null;
-          if (invite.type === 'assignment') {
-            const { data } = await supabase
-              .from('assignment_requests')
-              .select('*')
-              .eq('id', invite.request_id)
-              .single();
-            requestDetails = data;
-          } else {
-            const { data } = await supabase
-              .from('exam_requests')
-              .select('*')
-              .eq('id', invite.request_id)
-              .single();
-            requestDetails = data;
-          }
-          return { ...invite, details: requestDetails };
+          const table = invite.type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+          const { data } = await supabase.from(table).select('*').eq('id', invite.request_id).single();
+          return { ...invite, details: data };
         })
       );
-      setIncomingInvitations(enrichedInvitations.filter(inv => inv.details !== null));
+
+      const snapshot: ScribeHomeSnapshot = {
+        profile: profileData,
+        availableExams: sortedAvailable,
+        scribeCommitments: committed || [],
+        pendingApplicationsCount: apps ? apps.length : 0,
+        completedExamsCount: completed ? completed.length : 0,
+        reviews: reviewsData || [],
+        incomingInvitations: enrichedInvitations.filter(inv => inv.details !== null),
+      };
+      applySnapshot(snapshot);
+      writeScreenCache('scribe_home', userId, snapshot);
 
     } catch (err: any) {
       console.log('Error fetching volunteer session:', err.message);
@@ -543,7 +532,10 @@ export default function ScribeHomeView() {
 
   return (
     <>
-      <ScrollView style={{ flex: 1, paddingHorizontal: 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+      {/* Soft colour orb for depth behind the cards */}
+      {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
+      <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Welcome & Profile Header Section */}
       <Animated.View entering={rise(0)}>
       <View style={{
@@ -551,23 +543,24 @@ export default function ScribeHomeView() {
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 16,
-        backgroundColor: '#fff',
+        backgroundColor: THEME.hero,
+        ...gradient(THEME.heroGradient),
         borderRadius: 24,
         padding: 16,
         borderWidth: 1,
-        borderColor: '#e2e8f0',
-        shadowColor: '#64748b',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 2,
+        borderColor: THEME.softBorder,
+        shadowColor: THEME.shadow,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 18,
+        elevation: 4,
       }}>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#94a3b8', letterSpacing: 0.5 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: THEME.accentText, letterSpacing: 0.5 }}>
               Scribe Portal
             </Text>
-            <Ionicons name="school" size={12} color="#94a3b8" />
+            <Ionicons name="school" size={12} color={THEME.accentText} />
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 24, fontWeight: '900', color: TEXT, marginTop: 4, letterSpacing: -0.5 }}>
             {t('hello_user', { name: getFirstName(profile?.full_name, 'Scribe') })}
@@ -583,9 +576,9 @@ export default function ScribeHomeView() {
             borderTopRightRadius: 10,
             borderBottomLeftRadius: 14,
             borderBottomRightRadius: 22,
-            backgroundColor: ACCENT.tint12,
+            backgroundColor: '#ffffff',
             borderWidth: 2,
-            borderColor: ACCENT.tint25,
+            borderColor: '#ffffff',
             alignItems: 'center',
             justifyContent: 'center',
             shadowColor: ACCENT.bright,
@@ -688,7 +681,7 @@ export default function ScribeHomeView() {
               Incoming Invitations ({incomingInvitations.length})
             </Text>
           </View>
-          {incomingInvitations.map((invite) => {
+          <DesktopGrid>{incomingInvitations.map((invite) => {
             const isAssign = invite.type === 'assignment';
             const details = invite.details || {};
             const isExpanded = expandedInviteIds.has(invite.id);
@@ -710,6 +703,9 @@ export default function ScribeHomeView() {
                   overflow: 'hidden'
                 }}
               >
+                {/* Status accent strip */}
+                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: '#db2777' }} />
+
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleInviteCard(invite.id)}
@@ -816,7 +812,7 @@ export default function ScribeHomeView() {
                 )}
               </View>
             );
-          })}
+          })}</DesktopGrid>
         </View>
       )}
 
@@ -827,15 +823,15 @@ export default function ScribeHomeView() {
       <View style={{
         backgroundColor: '#ffffff',
         borderRadius: 24,
-        borderWidth: 1, borderColor: '#e2e8f0',
+        borderWidth: 1, borderColor: THEME.cardBorder,
         paddingVertical: 14,
         paddingHorizontal: 8,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
         marginBottom: 20,
-        shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
+        shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.08, shadowRadius: 16, elevation: 3,
       }}>
         {/* Contributions Stats (Blue) */}
         <View style={{ flex: 1, alignItems: 'center' }}>
@@ -880,10 +876,15 @@ export default function ScribeHomeView() {
       {/* My Contributions Block */}
       <Animated.View entering={rise(4)}>
       <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Contributions</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="award" size={15} color={THEME.accentText} />
+          </View>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Contributions</Text>
+        </View>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Card 1: Hours Contributed */}
-          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}>
+          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: THEME.cardBorder, borderRadius: 24, padding: 18, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Feather name="clock" size={16} color={ACCENT.main} />
               <View style={{ backgroundColor: ACCENT.tint08, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -894,7 +895,7 @@ export default function ScribeHomeView() {
           </View>
 
           {/* Card 2: Requests Completed */}
-          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}>
+          <View style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: THEME.cardBorder, borderRadius: 24, padding: 18, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Feather name="award" size={16} color="#d97706" />
               <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
@@ -921,9 +922,9 @@ export default function ScribeHomeView() {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        shadowColor: '#64748b',
+        shadowColor: THEME.shadow,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.04,
+        shadowOpacity: 0.06,
         shadowRadius: 10,
         elevation: 2
       }}>
@@ -971,10 +972,15 @@ export default function ScribeHomeView() {
       {/* Upcoming Confirmed Exams (My Plans) */}
       <Animated.View entering={rise(6)}>
       <View style={{ marginBottom: 24 }}>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>My Plans</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="calendar" size={15} color={THEME.accentText} />
+          </View>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Plans</Text>
+        </View>
 
         {scribeCommitments.length > 0 ? (
-          scribeCommitments.map((exam) => {
+          <DesktopGrid>{scribeCommitments.map((exam) => {
             const isEmergency = exam.is_emergency === 'yes';
             const isExpanded = expandedMatchIds.has(exam.id);
 
@@ -985,8 +991,8 @@ export default function ScribeHomeView() {
                   backgroundColor: '#ffffff', 
                   borderRadius: 20, 
                   borderWidth: isEmergency ? 2 : 1.5, 
-                  borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
-                  shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+                  borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
+                  shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
                   shadowOffset: { width: 0, height: 6 }, 
                   shadowOpacity: isEmergency ? 0.12 : 0.07, 
                   shadowRadius: 16, 
@@ -995,6 +1001,9 @@ export default function ScribeHomeView() {
                   overflow: 'hidden'
                 }}
               >
+                {/* Status accent strip */}
+                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: isEmergency ? '#dc2626' : '#16a34a' }} />
+
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleMatchCard(exam.id)}
@@ -1092,19 +1101,19 @@ export default function ScribeHomeView() {
                       {/* Call */}
                       <TouchableOpacity 
                         onPress={() => openCallSheet(exam)}
-                        style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                        style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                       >
-                        <Feather name="phone" size={12} color="#334155" />
-                        <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                        <Feather name="phone" size={13} color={THEME.accentText} />
+                        <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                       </TouchableOpacity>
 
                       {/* Chat */}
                       <TouchableOpacity 
                         onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                        style={{ flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                        style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                       >
-                        <Feather name="message-square" size={12} color="#334155" />
-                        <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                        <Feather name="message-square" size={13} color={THEME.accentText} />
+                        <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1112,9 +1121,9 @@ export default function ScribeHomeView() {
                 )}
               </View>
             );
-          })
+          })}</DesktopGrid>
         ) : (
-          <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: THEME.cardBorder, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '600', color: '#94a3b8' }}>
               No confirmed upcoming exam commitments.
             </Text>
@@ -1128,12 +1137,18 @@ export default function ScribeHomeView() {
       <Animated.View entering={rise(7)}>
       <View style={{ marginBottom: 24 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14 }}>My Achievements</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="star" size={15} color={THEME.accentText} />
+          </View>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Achievements</Text>
+          </View>
           <TouchableOpacity
             onPress={() => router.push('/console/scribe/achievements' as any)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>View All</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: THEME.accentText }}>View All</Text>
+            <Feather name="chevron-right" size={13} color={THEME.accentText} />
           </TouchableOpacity>
         </View>
 
@@ -1142,7 +1157,7 @@ export default function ScribeHomeView() {
           <TouchableOpacity 
             onPress={() => setShowAchievementsModal(true)}
             activeOpacity={0.85}
-            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
+            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: THEME.cardBorder, borderRadius: 24, padding: 18, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Ionicons name="trophy-outline" size={16} color="#d97706" />
@@ -1159,7 +1174,7 @@ export default function ScribeHomeView() {
           <TouchableOpacity 
             onPress={() => setShowAchievementsModal(true)}
             activeOpacity={0.85}
-            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 24, padding: 18, shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
+            style={{ flex: 1, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: THEME.cardBorder, borderRadius: 24, padding: 18, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 2 }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Ionicons name="ribbon-outline" size={16} color="#2563eb" />
@@ -1179,14 +1194,19 @@ export default function ScribeHomeView() {
       {/* Available Opportunities List */}
       <Animated.View entering={rise(8)}>
       <View>
-        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 14, marginBottom: 12 }}>{t('available_opportunities')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="search" size={15} color={THEME.accentText} />
+          </View>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>{t('available_opportunities')}</Text>
+        </View>
 
         {availableExams.length === 0 ? (
           <View style={{
             backgroundColor: '#ffffff',
             padding: 24, borderRadius: 24,
-            borderWidth: 1.5, borderColor: '#e2e8f0',
-            shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 },
+            borderWidth: 1.5, borderColor: THEME.cardBorder,
+            shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 },
             shadowOpacity: 0.08, shadowRadius: 16, elevation: 3,
             alignItems: 'center', justifyContent: 'center'
           }}>
@@ -1194,7 +1214,7 @@ export default function ScribeHomeView() {
             <Text style={{ fontFamily: 'Roboto', color: '#94a3b8', fontSize: 12, marginTop: 8, textAlign: 'center' }}>{t('no_opportunities_found')}</Text>
           </View>
         ) : (
-          availableExams.map((exam) => {
+          <DesktopGrid>{availableExams.map((exam) => {
             const isExpanded = expandedAvailableIds.has(exam.id);
             const isEmergency = exam.is_emergency === 'yes';
 
@@ -1205,8 +1225,8 @@ export default function ScribeHomeView() {
                   backgroundColor: '#ffffff', 
                   borderRadius: 20, 
                   borderWidth: isEmergency ? 2 : 1.5, 
-                  borderColor: isEmergency ? '#fca5a5' : '#e2e8f0', 
-                  shadowColor: isEmergency ? '#dc2626' : '#64748b', 
+                  borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
+                  shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
                   shadowOffset: { width: 0, height: 6 }, 
                   shadowOpacity: isEmergency ? 0.12 : 0.07, 
                   shadowRadius: 16, 
@@ -1215,6 +1235,9 @@ export default function ScribeHomeView() {
                   overflow: 'hidden'
                 }}
               >
+                {/* Status accent strip */}
+                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: isEmergency ? '#dc2626' : exam.private_scribe_id ? '#db2777' : THEME.primary }} />
+
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleAvailableCard(exam.id)}
@@ -1334,21 +1357,25 @@ export default function ScribeHomeView() {
                       }}
                       style={{ 
                         width: '100%', 
-                        backgroundColor: exam.private_scribe_id ? '#db2777' : ACCENT.tint08, 
-                        paddingVertical: 11, 
+                        backgroundColor: exam.private_scribe_id ? '#db2777' : THEME.solid,
+                        ...(exam.private_scribe_id ? {} : gradient(THEME.buttonGradient)),
+                        paddingVertical: 12, 
                         borderRadius: 12, 
                         alignItems: 'center', 
                         justifyContent: 'center', 
                         flexDirection: 'row', 
                         gap: 6,
-                        borderWidth: exam.private_scribe_id ? 0 : 1,
-                        borderColor: ACCENT.tint22
+                        shadowColor: exam.private_scribe_id ? '#db2777' : THEME.shadow,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 8,
+                        elevation: 2,
                       }}
                     >
-                      <Feather name={exam.private_scribe_id ? "check-circle" : "file-text"} size={12} color={exam.private_scribe_id ? "#fff" : ACCENT.main} />
-                      <Text style={{ 
-                        fontFamily: 'Roboto', 
-                        color: exam.private_scribe_id ? '#fff' : ACCENT.dark, 
+                      <Feather name={exam.private_scribe_id ? "check-circle" : "file-text"} size={13} color="#ffffff" />
+                      <Text style={{
+                        fontFamily: 'Roboto',
+                        color: '#ffffff', 
                         fontWeight: '800', 
                         fontSize: 12 
                       }}>
@@ -1360,7 +1387,7 @@ export default function ScribeHomeView() {
                 )}
               </View>
             );
-          })
+          })}</DesktopGrid>
         )}
       </View>
 
@@ -1373,12 +1400,12 @@ export default function ScribeHomeView() {
         style={{
           backgroundColor: '#fff',
           borderWidth: 1,
-          borderColor: '#e2e8f0',
+          borderColor: THEME.cardBorder,
           padding: 20,
           borderRadius: 24,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.03,
+          shadowColor: THEME.shadow,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.07,
           shadowRadius: 10,
           elevation: 1.5,
           marginTop: 10,
@@ -1499,6 +1526,7 @@ export default function ScribeHomeView() {
       </Modal>
 
     </ScrollView>
+      </View>
 
       {/* Guidelines Policy Modal */}
       <PolicyModal

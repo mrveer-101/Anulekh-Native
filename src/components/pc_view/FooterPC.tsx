@@ -1,12 +1,34 @@
+/**
+ * FooterPC — dark site footer for the desktop/web ("PC view") landing page.
+ *
+ * Rendered at the bottom of `components/pc_view/LandingPC.tsx`, which passes
+ * its `scrollToSection` helper so in-page links can scroll instead of route.
+ * Purely presentational: loads no data. Contains a four-column grid (brand &
+ * mission, platform links, emergency/SOS info, partners & accessibility) and a
+ * copyright bar. Hover effects rely on react-native-web's `hovered` state
+ * passed to Pressable's style/children functions (no effect on native).
+ */
 import React from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
+/**
+ * Props for FooterPC.
+ * `onNavigateSection` — optional callback that scrolls the parent landing page
+ * to a section by id (currently only `'how-it-works'`). If omitted, the
+ * "How It Works" link does nothing.
+ */
 interface FooterPCProps {
   onNavigateSection?: (sectionId: string) => void;
 }
 
+/**
+ * Desktop landing-page footer.
+ * Navigation side effects: "Home" -> `/`, "Student Portal" / "Volunteer
+ * Scribe" -> `/landing/induction`, "Login Account" -> `/auth/login`.
+ * The year in the copyright line is computed at render time.
+ */
 export default function FooterPC({ onNavigateSection }: FooterPCProps) {
   return (
     <View style={{
@@ -73,6 +95,7 @@ export default function FooterPC({ onNavigateSection }: FooterPCProps) {
               PLATFORM
             </Text>
             <View style={{ gap: 12 }}>
+              {/* Link list: each entry either pushes a route or asks the parent to scroll to a section */}
               {[
                 { label: 'Home', action: () => router.push('/') },
                 { label: 'How It Works', action: () => onNavigateSection?.('how-it-works') },
@@ -117,6 +140,7 @@ export default function FooterPC({ onNavigateSection }: FooterPCProps) {
               <Text style={{ fontSize: 13, color: '#94a3b8', lineHeight: 19 }}>
                 Emergency scribe dispatch within 3 minutes for last-minute exam cancellations.
               </Text>
+              {/* Helpline badge: hover styling only — no onPress handler is attached */}
               <Pressable
                 style={({ hovered }: any) => ({
                   backgroundColor: hovered ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)',
@@ -166,6 +190,7 @@ export default function FooterPC({ onNavigateSection }: FooterPCProps) {
             © {new Date().getFullYear()} Anulekh Accessibility Foundation. All rights reserved.
           </Text>
 
+          {/* "Made with love" credit pill */}
           <View style={{
             flexDirection: 'row', alignItems: 'center', gap: 6,
             backgroundColor: 'rgba(30, 41, 59, 0.6)',

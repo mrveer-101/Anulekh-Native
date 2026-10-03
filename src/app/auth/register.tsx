@@ -1,3 +1,24 @@
+/**
+ * Account registration screen. Route: `/auth/register` (optional `?role=student|scribe`).
+ *
+ * Reached from the landing induction page (`?role=student` / `?role=scribe`) and from the Sign In
+ * screen's Register links. The user picks a role (preselected from `?role=` when given), enters
+ * name, phone, an optional email and a password, and must accept that role's Terms & Conditions
+ * (shown in PolicyModal).
+ *
+ * Submit (handleRegister):
+ *   1. POST /api/auth/verify-otp-signup, called directly with fetch. OTP verification is paused,
+ *      so fixed '123456' codes are sent; the backend creates the `users` and `profiles` rows.
+ *   2. Updates (or, if that fails, inserts) the user's `profiles` row with name, role and phone via
+ *      the `supabase` shim (core/supabase.ts, which calls the Rust/Axum backend's POST /api/query;
+ *      it is not real Supabase).
+ *   3. Shows an "Account Created" alert and sends the user to `/auth/login?role=...`. It does not
+ *      sign them in.
+ *
+ * A "Double OTP Verification" overlay (email + SMS codes) is still in the JSX but is never opened.
+ * Reanimated drives the entrance, error-shake, button-press and role-colour animations (all
+ * skipped when Reduce Motion is on). Styling is inline `style` objects.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -36,34 +57,46 @@ import Animated, {
 // RN's types don't list outlineStyle 'none', but react-native-web passes it through to CSS.
 const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
+/** Registration screen component (see file header). Takes no props; reads `?role=` from the route. */
 export default function RegisterScreen() {
+  // Role is preselected from `?role=`; otherwise null, so the user has to pick one.
   const params = useLocalSearchParams<{ role?: string }>();
   const [role, setRole]               = useState<'student' | 'scribe' | null>(
     params.role === 'scribe' ? 'scribe' : params.role === 'student' ? 'student' : null
   );
+  // Form fields and submit state.
   const [fullName, setFullName]       = useState('');
   const [email, setEmail]             = useState('');
   const [password, setPassword]       = useState('');
   const [showPass, setShowPass]       = useState(false);
   const [loading, setLoading]         = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  // Phone (required) and the double-OTP overlay state. The overlay is never opened while OTP
+  // verification is paused, so the OTP codes / loading / error are not used at the moment.
   const [phone, setPhone] = useState('');
   const [emailOtpCode, setEmailOtpCode] = useState('');
   const [mobileOtpCode, setMobileOtpCode] = useState('');
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpError, setOtpError] = useState('');
+  // Terms checkbox and the PolicyModal that shows the terms text.
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
 
+  // Email is optional and stays hidden until "+ Add Email ID" is tapped.
   const [showEmailField, setShowEmailField] = useState(false);
 
+  // Role-based theme: green for scribes, blue otherwise (including before a role is picked).
   const isStudent   = role === 'student';
   const isScribe    = role === 'scribe';
   const accentColor = isScribe ? '#16a34a' : '#2563eb';
   const accentBg    = isScribe ? 'rgba(22,163,74,0.08)' : 'rgba(37,99,235,0.08)';
   const accentBorder= isScribe ? 'rgba(22,163,74,0.22)' : 'rgba(37,99,235,0.22)';
 
+  /**
+   * Rough password strength from length only.
+   * @returns 0 = empty, 1 = 1-4 chars, 2 = 5-7, 3 = 8-9, 4 = 10 or more.
+   */
   const getStrength = (p: string) => {
     if (p.length >= 10) return 4;
     if (p.length >= 8) return 3;
@@ -71,12 +104,14 @@ export default function RegisterScreen() {
     if (p.length >= 1) return 1;
     return 0;
   };
+  // Meter colour and label for strengths 1-4 (index = strength - 1).
   const strengthColors = ['#ef4444', '#f97316', '#eab308', '#22c55e'];
   const strengthLabels = ['Too short', 'Weak', 'Fair', 'Strong'];
 
   // ── Motion & focus polish ──
   // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
   const reduceMotion = useReducedMotion();
+  /** Returns the given entering animation, or undefined (no animation) when Reduce Motion is on. */
   const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
 
   // Focused input gets an accent border, white background and tinted icon.
@@ -114,7 +149,13 @@ export default function RegisterScreen() {
     backgroundColor: interpolateColor(roleProgress.get(), [0, 1], ['rgba(37,99,235,0.20)', 'rgba(22,163,74,0.20)']),
   }));
 
+  /**
+   * Validates the form, creates the account (POST /api/auth/verify-otp-signup), makes sure the
+   * `profiles` row has name, role and phone, then sends the user to Sign In. Errors are shown in
+   * the banner via friendlyAuthError.
+   */
   const handleRegister = async () => {
+    // Validation: role chosen, required fields filled, password length, terms accepted.
     if (!role) {
       setErrorMessage('Please select your role: Student or Scribe.');
       return;
@@ -132,6 +173,7 @@ export default function RegisterScreen() {
       return;
     }
 
+    // Normalise the phone to international format, defaulting to India (+91).
     let formattedPhone = phone.trim();
     // Default to +91 (India) if it is a standard 10-digit number
     if (/^\d{10}$/.test(formattedPhone)) {
@@ -148,10 +190,13 @@ export default function RegisterScreen() {
     setLoading(true);
     setErrorMessage('');
 
+    // Email is optional: without one, a placeholder "<digits>@anulekh.app" address is built from the phone.
     const finalEmail = email.trim() || `${formattedPhone.replace(/[^0-9]/g, '')}@anulekh.app`;
 
     try {
       // Direct registration without OTP modal (OTP verification paused for testing)
+      // The backend does not check OTPs yet, so fixed '123456' codes are sent. It creates the
+      // `users` + `profiles` rows but does not start a session.
       const res = await fetch(`${API_URL}/api/auth/verify-otp-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,6 +211,7 @@ export default function RegisterScreen() {
         }),
       });
 
+      // Read as text first so a non-JSON error body still gives a readable message.
       const resText = await res.text();
       let resData: any = {};
       try {
@@ -179,6 +225,7 @@ export default function RegisterScreen() {
       }
 
       if (resData.user) {
+        // The signup endpoint only stores full_name and role, so the phone is written to `profiles` here.
         // Ensure profile record has phone and role saved
         const { error: updateError } = await supabase.from('profiles').update({
           full_name: fullName.trim(),
@@ -198,6 +245,7 @@ export default function RegisterScreen() {
           });
         }
 
+        // Success: confirm, then go to Sign In with the same role (registration does not log the user in).
         if (Platform.OS === 'web') {
           alert(`🎉 Account Created!\n\n${role === 'scribe' ? 'Scribe' : 'Student'} account created successfully.`);
           router.replace(`/auth/login?role=${role}`);
@@ -216,10 +264,14 @@ export default function RegisterScreen() {
     }
   };
 
+  /** Used by the (currently never shown) OTP overlay's Verify button; identical to handleRegister. */
   const handleVerifyOtpAndSignUp = handleRegister;
 
+  // Current strength score for the meter.
   const strength = getStrength(password);
 
+  // Layout: role-coloured background orbs, then a scrollable column (top row, header, error banner,
+  // role picker, form card, terms checkbox, create button). The OTP overlay and PolicyModal sit outside it.
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
       <StatusBar style="dark" />
@@ -228,6 +280,7 @@ export default function RegisterScreen() {
       <Animated.View style={[{ position: 'absolute', top: -90, left: -70, width: 300, height: 300, borderRadius: 150 }, orbStyle]} />
       <View style={{ position: 'absolute', bottom: 60, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: 'rgba(234,88,12,0.16)' }} />
 
+      {/* Safe area + keyboard avoidance so fields stay visible while typing */}
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <ScrollView
@@ -238,6 +291,7 @@ export default function RegisterScreen() {
             {/* Back & Top Action Row */}
             <Animated.View entering={enter(FadeIn.duration(400))}>
             <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              {/* Back button: replace (not push) so auth screens don't pile up in history */}
               <TouchableOpacity
                 onPress={() => router.replace('/landing')}
                 accessible={true}
@@ -290,6 +344,7 @@ export default function RegisterScreen() {
                   <FontAwesome5 name="user-plus" size={24} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </Animated.View>
               </View>
+              {/* Subtitle changes with the selected role */}
               <Text style={{ fontSize: 15, color: '#64748b', marginTop: 6, lineHeight: 22 }}>
                 {role === 'student' ? 'Join as a student seeking a scribe' : role === 'scribe' ? 'Join as a volunteer scribe' : 'Select your account type to get started'}
               </Text>
@@ -324,6 +379,7 @@ export default function RegisterScreen() {
               shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.06, shadowRadius: 10, elevation: 2,
             }}>
+              {/* One button per role; tapping sets the role, which also switches the accent colour */}
               {(['student', 'scribe'] as const).map((r) => {
                 const isSelected = role === r;
                 const activeBg = r === 'student' ? '#2563eb' : '#16a34a';
@@ -353,6 +409,7 @@ export default function RegisterScreen() {
                       elevation: isSelected ? 4 : 1,
                     }}
                   >
+                    {/* Re-keyed on selection so the icon replays its zoom-in when this role is chosen */}
                     <Animated.View
                       key={isSelected ? 'selected' : 'idle'}
                       entering={isSelected ? enter(ZoomIn.springify().damping(12)) : undefined}
@@ -424,6 +481,7 @@ export default function RegisterScreen() {
                   <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
                     Phone
                   </Text>
+                  {/* "+ Add Email ID" chip, hidden once the email field is showing */}
                   {!showEmailField && (
                     <TouchableOpacity
                       onPress={() => setShowEmailField(true)}
@@ -481,6 +539,7 @@ export default function RegisterScreen() {
                     <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' }}>
                       Email <Text style={{ color: '#94a3b8', textTransform: 'none', fontWeight: '500' }}>(Optional)</Text>
                     </Text>
+                    {/* Remove: hides the email field and clears its value */}
                     <TouchableOpacity
                       onPress={() => { setShowEmailField(false); setEmail(''); }}
                       accessible={true}
@@ -546,6 +605,7 @@ export default function RegisterScreen() {
                     accessibilityLabel="Password"
                     accessibilityHint="Create a password with at least 6 characters"
                   />
+                  {/* Show / hide password toggle */}
                   <TouchableOpacity
                     onPress={() => setShowPass(!showPass)}
                     accessible={true}
@@ -568,6 +628,7 @@ export default function RegisterScreen() {
                   style={{ marginTop: -6 }}
                 >
                   <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+                    {/* 4-segment meter: segments up to the score are filled in that score's colour */}
                     {[1, 2, 3, 4].map((i) => (
                       <View
                         key={i}
@@ -599,6 +660,7 @@ export default function RegisterScreen() {
               paddingHorizontal: 4,
               gap: 10,
             }}>
+              {/* Custom checkbox */}
               <TouchableOpacity
                 onPress={() => {
                   setAgreedToTerms(!agreedToTerms);
@@ -627,6 +689,7 @@ export default function RegisterScreen() {
                 )}
               </TouchableOpacity>
               
+              {/* Label; the underlined part opens the role's terms in PolicyModal */}
               <Text style={{ flex: 1, fontSize: 13, color: '#475569', lineHeight: 18 }}>
                 I agree to the{' '}
                 <Text
@@ -645,6 +708,7 @@ export default function RegisterScreen() {
 
             {/* CTA */}
             <Animated.View entering={enter(FadeInUp.delay(300).duration(450))}>
+            {/* Inner wrapper carries the press-scale animation. The button is slate grey until a role is chosen. */}
             <Animated.View style={ctaPressStyle}>
             <TouchableOpacity
               onPress={handleRegister}
@@ -679,6 +743,7 @@ export default function RegisterScreen() {
             </TouchableOpacity>
             </Animated.View>
 
+            {/* Link to Sign In */}
             <TouchableOpacity
               onPress={() => router.push(`/auth/login?role=${role}`)}
               disabled={loading}
@@ -698,6 +763,7 @@ export default function RegisterScreen() {
       </SafeAreaView>
 
       {/* ── OTP Verification Modal Overlay ── */}
+      {/* Not shown at the moment: showOtpModal is never set to true while OTP verification is paused */}
       {showOtpModal && (
         <View style={{
           position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -712,6 +778,7 @@ export default function RegisterScreen() {
             shadowOpacity: 0.15, shadowRadius: 24, elevation: 12,
             borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)',
           }}>
+            {/* Icon + title */}
             <View style={{ alignItems: 'center', marginBottom: 16 }}>
               <View style={{
                 width: 50, height: 50, borderRadius: 16,
@@ -729,6 +796,7 @@ export default function RegisterScreen() {
               </Text>
             </View>
 
+            {/* OTP error message */}
             {otpError ? (
               <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 12 }}>
                 {otpError}
@@ -742,6 +810,7 @@ export default function RegisterScreen() {
                 📧 Email OTP (sent to {email})
               </Text>
               
+              {/* An invisible TextInput stretched over the six digit boxes captures typing; the boxes only display it */}
               <View style={{ position: 'relative', height: 54, width: '100%', justifyContent: 'center' }}>
                 <TextInput
                   value={emailOtpCode}
@@ -791,6 +860,7 @@ export default function RegisterScreen() {
                 📱 SMS OTP (sent to {phone})
               </Text>
               
+              {/* Same invisible-input + digit-box pattern as the email OTP */}
               <View style={{ position: 'relative', height: 54, width: '100%', justifyContent: 'center' }}>
                 <TextInput
                   value={mobileOtpCode}
@@ -834,6 +904,7 @@ export default function RegisterScreen() {
               </View>
             </View>
 
+            {/* Verify + Cancel buttons */}
             <View style={{ gap: 8 }}>
               <TouchableOpacity
                 onPress={handleVerifyOtpAndSignUp}

@@ -1,3 +1,29 @@
+/**
+ * Route: /console/student/assignment_form[?id=<requestId>]
+ *
+ * Form for a student to post (or, when `id` is given, edit) an *assignment* writing
+ * request — homework / lab reports / term papers a volunteer writes up — as opposed
+ * to exam-scribe requests, which use request_form.tsx.
+ *
+ * Fields: subject (required), title (defaults to subject), academic level
+ * (School / College), page count, deadline (required, picked in a custom
+ * calendar + time modal and stored as the string "YYYY-MM-DD hh:mm AM|PM"),
+ * description, and optional reference attachments (PDFs/docs/images).
+ *
+ * Data (via the `supabase` shim in core/supabase.ts, which calls the Rust/Axum
+ * backend's /api/query endpoint — not real Supabase):
+ *   - reads the student's `profiles` row (name used for attachment file names)
+ *   - edit mode: reads the existing `assignment_requests` row
+ *   - save: inserts or updates `assignment_requests` with status 'pending'
+ * Attachments are not uploaded to storage: each file is read into a base64 data
+ * URI and saved inline in the `attachments` column. If that save fails (e.g. the
+ * payload is too large) it retries with path-only references, and finally saves
+ * without the column, listing file names at the end of the description.
+ *
+ * Layout: at >= 768 px width it renders inside the desktop shell ConsoleStudentPC
+ * (Requests tab highlighted); otherwise a mobile screen with its own header.
+ * After a successful save it returns to /console/student with the Requests tab open.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +35,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
 
+/**
+ * A reference file attached to the request while the form is open.
+ * `uri` is the picker's local URI (also used as the React key / removal id),
+ * `name` the normalised file name (see formatAttachmentFileName), `mimeType` drives
+ * the icon, and `size` (bytes) is shown when known.
+ */
 interface Attachment {
   uri: string;
   name: string;
@@ -18,16 +50,24 @@ interface Attachment {
   dataUri?: string;
 }
 
+/**
+ * Assignment request create/edit screen (default export for the route; no props).
+ * Reads the optional `id` search param to switch into edit mode.
+ */
 export default function AssignmentRequestForm() {
+  // Responsive switch: tablets/desktop browsers get the PC console layout.
   const { width: windowWidth } = useWindowDimensions();
   const isDesktop = windowWidth >= 768;
 
+  // `?id=` present => editing an existing assignment_requests row.
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
 
+  // `loading` covers both the initial fetch and saving; `profile` is the student's profiles row.
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
 
+  // Form field state.
   const [subject, setSubject] = useState('');
   const [title, setTitle] = useState('');
   const [academicLevel, setAcademicLevel] = useState('College');
@@ -35,8 +75,10 @@ export default function AssignmentRequestForm() {
   const [description, setDescription] = useState('');
   const [deadline, setDeadline] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  // True while picked files are being read into base64; saving is blocked meanwhile.
   const [convertingFiles, setConvertingFiles] = useState(false);
 
+  // Deadline picker modal state: visible month/year, chosen day and 12-hour time.
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
@@ -45,10 +87,16 @@ export default function AssignmentRequestForm() {
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [selectedAmPm, setSelectedAmPm] = useState('PM');
 
+  /** Options for the Academic Level toggle (stored as-is in `academic_level`). */
   const ACADEMIC_LEVELS = ['School', 'College'];
 
+  // Load the profile (and the request being edited, if any) once on mount.
   useEffect(() => { fetchProfile(); }, []);
 
+  /**
+   * Loads the student's `profiles` row and, in edit mode, the `assignment_requests`
+   * row identified by `params.id`, pre-filling every form field. Errors are only logged.
+   */
   const fetchProfile = async () => {
     setLoading(true);
     try {
@@ -57,6 +105,7 @@ export default function AssignmentRequestForm() {
       const { data: profileData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       setProfile(profileData);
 
+      // Edit mode: copy the saved request into the form.
       if (isEditing) {
         const { data: requestData } = await supabase.from('assignment_requests').select('*').eq('id', params.id).single();
         if (requestData) {
@@ -100,6 +149,14 @@ export default function AssignmentRequestForm() {
     });
   };
 
+  /**
+   * Builds a normalised attachment name: `<user>_<basename>_<pdf|image|doc|file>.<ext>`,
+   * lower-cased with every non-alphanumeric character replaced by "_". Files without an
+   * extension are given ".jpg".
+   * @param userName - student's official or full name (falls back to "student").
+   * @param originalName - file name from the picker.
+   * @param mimeType - MIME type, used to choose the type tag.
+   */
   const formatAttachmentFileName = (userName: string, originalName: string, mimeType: string): string => {
     const sanitizedUser = (userName || 'student').toLowerCase().replace(/[^a-z0-9]/g, '_');
     const ext = originalName.includes('.') ? originalName.split('.').pop()?.toLowerCase() || 'jpg' : 'jpg';
@@ -114,6 +171,12 @@ export default function AssignmentRequestForm() {
     return `${sanitizedUser}_${sanitizedBase}_${fileType}.${ext}`;
   };
 
+  /**
+   * Renames each picked file and reads it into a base64 data URI, then appends the
+   * results to `attachments`. A file that cannot be read is still added, without a
+   * data URI (shown as "Processing…" in the mobile list).
+   * @param newFiles - files returned by the document or image picker.
+   */
   const addFiles = async (newFiles: Omit<Attachment, 'dataUri'>[]) => {
     setConvertingFiles(true);
     const converted: Attachment[] = [];
@@ -133,6 +196,7 @@ export default function AssignmentRequestForm() {
     setConvertingFiles(false);
   };
 
+  /** Opens the system document picker (any file type, multiple selection) and adds the chosen files. */
   const pickDocument = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], multiple: true, copyToCacheDirectory: true });
@@ -142,6 +206,10 @@ export default function AssignmentRequestForm() {
     } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick file.'); }
   };
 
+  /**
+   * Asks for photo-library permission, lets the user pick several images, and adds
+   * them. The MIME type is guessed from the URI's extension.
+   */
   const pickImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -156,14 +224,17 @@ export default function AssignmentRequestForm() {
     } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick image.'); }
   };
 
+  /** Removes an attachment by its URI (mobile list; the desktop list removes by index). */
   const removeAttachment = (uri: string) => setAttachments((prev) => prev.filter((a) => a.uri !== uri));
 
+  /** Feather icon name plus colours for an attachment row: red for PDF, purple for images, blue otherwise. */
   const getFileIcon = (mimeType: string) => {
     if (mimeType.includes('pdf')) return { name: 'file-text' as const, color: '#ef4444', bg: '#fef2f2', border: '#fecaca' };
     if (mimeType.includes('image')) return { name: 'image' as const, color: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' };
     return { name: 'file' as const, color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' };
   };
 
+  /** Human-readable file size (B / KB / MB); empty string when the size is unknown. */
   const formatSize = (bytes?: number) => {
     if (!bytes) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -171,7 +242,14 @@ export default function AssignmentRequestForm() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  /**
+   * Validates the form and inserts (or, in edit mode, updates) the
+   * `assignment_requests` row with status 'pending'. Tries up to three payloads
+   * (inline data URIs -> path references -> no attachments column) before giving up.
+   * On success shows an alert and replaces the route with /console/student?tab=requests.
+   */
   const handleSave = async () => {
+    // Validation: subject and deadline are required, and file reading must have finished.
     if (!subject.trim()) { Alert.alert('Error', 'Subject is required.'); return; }
     if (!deadline.trim()) { Alert.alert('Error', 'Deadline is required.'); return; }
     if (convertingFiles) { Alert.alert('Please Wait', 'Files are still being processed.'); return; }
@@ -181,6 +259,7 @@ export default function AssignmentRequestForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('You must be logged in.');
 
+      // Title is optional in the UI; fall back to the subject so the request always has one.
       const username = profile?.official_name || profile?.full_name || 'student';
       const formattedTitle = title.trim() || subject.trim();
 
@@ -192,6 +271,7 @@ export default function AssignmentRequestForm() {
           return `${formattedName}::${relativePath}::${a.dataUri || a.uri}`;
         });
 
+      // Columns common to every save attempt. Note: editing also resets status to 'pending'.
       const basePayload = {
         student_id: session.user.id,
         student_name: profile?.official_name || profile?.full_name || 'Student',
@@ -204,6 +284,7 @@ export default function AssignmentRequestForm() {
         status: 'pending',
       };
 
+      // Single save helper: UPDATE by id when editing, INSERT a new row otherwise.
       const save = async (payload: any) =>
         isEditing
           ? supabase.from('assignment_requests').update(payload).eq('id', params.id)
@@ -233,6 +314,7 @@ export default function AssignmentRequestForm() {
 
       if (res.error) throw new Error(res.error.message || 'Failed to save.');
 
+      // Success: confirm and return to the student console's Requests tab.
       Alert.alert('Success', isEditing ? 'Assignment request updated!' : 'Assignment request posted!');
       router.replace({ pathname: '/console/student' as any, params: { tab: 'requests' } });
     } catch (err: any) {
@@ -244,17 +326,25 @@ export default function AssignmentRequestForm() {
   };
 
   /* ─── Calendar ─── */
-  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  /** Month names and weekday headers for the custom deadline calendar. */
+  const MONTHS =['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  /** Number of days in month `m` (0-based) of year `y` (day 0 of the next month = last day of this one). */
   const getDaysInMonth = (m: number, y: number) => new Date(y, m + 1, 0).getDate();
+  /** Weekday (0 = Sunday) of the 1st of month `m`, used to offset the calendar grid. */
   const getFirstDayOfMonth = (m: number, y: number) => new Date(y, m, 1).getDay();
 
+  /** Moves the calendar one month back or forward (wrapping the year) and clears the selected day. */
   const changeMonth = (dir: 'next' | 'prev') => {
     if (dir === 'prev') { if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1); } else setCalendarMonth(m => m - 1); }
     else { if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1); } else setCalendarMonth(m => m + 1); }
     setSelectedDay(null);
   };
 
+  /**
+   * Writes the chosen day and time into `deadline` as "YYYY-MM-DD hh:mm AM|PM"
+   * (day and month zero-padded) and closes the modal. Past dates are not rejected.
+   */
   const handleConfirmDateTime = () => {
     if (!selectedDay) { Alert.alert('Required', 'Please select a day.'); return; }
     const d = selectedDay < 10 ? `0${selectedDay}` : selectedDay;
@@ -263,6 +353,10 @@ export default function AssignmentRequestForm() {
     setShowDatePicker(false);
   };
 
+  /**
+   * Builds the calendar grid cells: blank spacers up to the month's first weekday,
+   * then one tappable cell per day (selected day highlighted). Each cell is ~1/7 width.
+   */
   const renderCalendarDays = () => {
     const days = getDaysInMonth(calendarMonth, calendarYear);
     const first = getFirstDayOfMonth(calendarMonth, calendarYear);
@@ -280,14 +374,17 @@ export default function AssignmentRequestForm() {
     return slots;
   };
 
+  // Initial load: full-screen spinner until the profile arrives.
   if (loading && !profile) {
     return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
+  // ── Desktop layout: the form rendered inside the PC console shell ──
   if (isDesktop) {
     return (
       <ConsoleStudentPC activeTab="requests">
         <View style={{ maxWidth: 880, width: '100%', alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 24, padding: 36, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
+          {/* Title row with Cancel (goes back, or to the console if there is no history) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
             <View>
               <Text style={{ fontSize: 22, fontWeight: '800', color: '#0f172a' }}>{isEditing ? 'Edit Assignment Request' : 'New Assignment Request'}</Text>
@@ -373,6 +470,7 @@ export default function AssignmentRequestForm() {
               </View>
             </View>
 
+            {/* Submit (desktop): only disabled while saving; handleSave itself blocks during file conversion */}
             <TouchableOpacity onPress={handleSave} disabled={loading} style={[s.saveBtn, { cursor: 'pointer' as any }]}>
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEditing ? 'Update Assignment' : 'Submit Assignment Request'}</Text>}
             </TouchableOpacity>
@@ -423,6 +521,7 @@ export default function AssignmentRequestForm() {
     );
   }
 
+  // ── Mobile layout ──
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
@@ -473,6 +572,7 @@ export default function AssignmentRequestForm() {
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
+              {/* Page count stepper: minus (never below 1), digits-only input, plus */}
               <TouchableOpacity
                 onPress={() => {
                   const current = Math.max(1, (parseInt(pageCount) || 1) - 1);
@@ -548,6 +648,7 @@ export default function AssignmentRequestForm() {
             </View>
           )}
 
+          {/* One row per attachment; "Ready" once its base64 data URI exists */}
           {attachments.map((file) => {
             const icon = getFileIcon(file.mimeType);
             const ready = !!file.dataUri;
@@ -572,6 +673,7 @@ export default function AssignmentRequestForm() {
             );
           })}
 
+          {/* Picker buttons: documents and photo library */}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: attachments.length > 0 ? 8 : 0 }}>
             <TouchableOpacity onPress={pickDocument} style={s.pickerBtn} activeOpacity={0.7}>
               <Feather name="file-text" size={14} color="#ef4444" />
@@ -618,6 +720,7 @@ export default function AssignmentRequestForm() {
               {renderCalendarDays()}
             </View>
 
+            {/* Time entry: hour accepts 1-12 and minute 0-59 (input ignores other values), plus AM/PM toggle */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Set Deadline Time</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 16, padding: 10, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20 }}>
               <View style={{ flex: 1, alignItems: 'center' }}>

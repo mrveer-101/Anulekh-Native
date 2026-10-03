@@ -1,3 +1,27 @@
+/**
+ * Scribe applications for one of the student's requests.
+ * Route: `/console/student/view_applications?id=<request id>` (optional `&type=assignment`).
+ *
+ * Opened from StudentRequestsView (the request cards' applications button). Lists the scribes whose
+ * `scribe_applications` row for this request is still 'pending', each enriched with the scribe's
+ * `profiles` row, achievement badges (from counts of their completed `exam_requests` /
+ * `assignment_requests`) and an average rating from `scribe_reviews`. The student can search by name,
+ * open a scribe's profile + reviews, and accept or reject an application.
+ *
+ * Accepting marks that application 'accepted' and the request's other applications 'rejected', sets the
+ * request to 'matched' with the chosen `scribe_id`, inserts `notifications` for the accepted scribe, the
+ * student and the other listed applicants (plus every urgent-call scribe when the request was an
+ * emergency), then shows a success overlay and navigates back. Rejecting marks one application
+ * 'rejected', notifies that scribe and reloads the list.
+ *
+ * All data goes through the `supabase` shim (core/supabase.ts), a custom client for the Rust/Axum
+ * backend's `POST /api/query`, not real Supabase. The request table is `exam_requests`, or
+ * `assignment_requests` when `type=assignment`.
+ *
+ * Notes: no current caller passes `type=assignment`; StudentRequestsPCView passes `request_id=` and
+ * StudentHomeView / StudentPlanView pass no id, so those entry points do not identify a request.
+ * Styling mixes NativeWind `className` utilities and inline styles (no StyleSheet).
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,7 +29,9 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
+import { useInDesktopFrame } from '@/components/ui/DesktopShell';
 
+/** One `scribe_applications` row as shown on this screen, plus data added by fetchApplications. */
 interface Application {
   id: number;
   request_id: number;
@@ -13,8 +39,10 @@ interface Application {
   scribe_name: string;
   status: string;
   created_at: string;
+  // Computed on this screen by fetchApplications (not stored on the application row).
   rating?: number;
   achievements?: string[];
+  /** The applicant's `profiles` row (only the fields this screen shows). */
   profile?: {
     full_name: string;
     phone: string;
@@ -27,9 +55,17 @@ interface Application {
   };
 }
 
+/**
+ * Applications screen (default export for the route): header, applicant cards with accept/reject,
+ * confirmation modal, success overlay, scribe profile modal and a copy of the console's bottom tab bar.
+ */
 export default function ViewApplicationsPage() {
+  // Inside the desktop page frame the phone header bar and tab bar are hidden (the frame has its own brand bar).
+  const inDesktopFrame = useInDesktopFrame();
+  // Route params: `id` is the request id; `type=assignment` switches to assignment_requests.
   const params = useLocalSearchParams<{ id: string; type?: string }>();
   
+  // Page loading flag, id of the application being accepted/rejected, the request row and its pending applications.
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState<number | null>(null);
   const [exam, setExam] = useState<any>(null);
@@ -50,11 +86,16 @@ export default function ViewApplicationsPage() {
   // Scribe name search query state
   const [searchQuery, setSearchQuery] = useState('');
 
+  /**
+   * Opens the scribe profile modal for `app` and loads every `scribe_reviews` row for that scribe.
+   * Errors just show an empty review list.
+   */
   const handleOpenScribeProfile = async (app: Application) => {
     setViewingScribe(app);
     setProfileModalVisible(true);
     setLoadingReviews(true);
     try {
+      // Load all reviews students have left for this scribe.
       const { data, error } = await supabase
         .from('scribe_reviews')
         .select('*')
@@ -72,15 +113,22 @@ export default function ViewApplicationsPage() {
     }
   };
 
+  // Load the request and its applications on mount and whenever the request id changes.
   useEffect(() => {
     fetchApplications();
   }, [params.id]);
 
+  /**
+   * Loads the request row, then its pending `scribe_applications`, and enriches each with the scribe's
+   * profile, achievement badges and average rating. Errors are only logged; always clears `loading`.
+   */
   const fetchApplications = async () => {
     try {
+      // Pick the request table from the type param.
       const type = (params.type as string) === 'assignment' ? 'assignment' : 'exam';
       const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
       
+      // Load the request itself (its subject is shown in the title bar and it is used when accepting).
       const { data: requestData } = await supabase
         .from(table)
         .select('*')
@@ -102,12 +150,14 @@ export default function ViewApplicationsPage() {
         // Enrich each application with Scribe profile, achievements, and ratings
         const enrichedApps = await Promise.all(
           (apps || []).map(async (app: any) => {
+            // The applicant's profile.
             const { data: profile } = await supabase
               .from('profiles')
               .select('*')
               .eq('id', app.scribe_id)
               .single();
 
+            // Completed exams and assignments, counted to award achievement badges.
             const { data: completedExams } = await supabase
               .from('exam_requests')
               .select('id')
@@ -123,6 +173,7 @@ export default function ViewApplicationsPage() {
             const examCount = completedExams ? completedExams.length : 0;
             const asgCount = completedAsgs ? completedAsgs.length : 0;
 
+            // Badge thresholds: 5 / 15 / 30 completed exams, 1 / 5 completed assignments.
             const achievements: string[] = [];
             if (examCount >= 5) achievements.push('Bronze Volunteer');
             if (examCount >= 15) achievements.push('Silver Volunteer');
@@ -130,6 +181,7 @@ export default function ViewApplicationsPage() {
             if (asgCount >= 1) achievements.push('Assignment Ally');
             if (asgCount >= 5) achievements.push('Submission Hero');
             
+            // Rating = mean over reviews of each review's average of its five category scores (0 when unreviewed).
             const { data: reviews } = await supabase
               .from('scribe_reviews')
               .select('*')
@@ -167,21 +219,29 @@ export default function ViewApplicationsPage() {
     }
   };
 
+  /** Opens the confirmation modal to accept `app`. */
   const triggerAccept = (app: Application) => {
     setSelectedApp(app);
     setActionType('accept');
     setConfirmModalVisible(true);
   };
 
+  /** Opens the confirmation modal to reject `app`. */
   const triggerReject = (app: Application) => {
     setSelectedApp(app);
     setActionType('reject');
     setConfirmModalVisible(true);
   };
 
+  /**
+   * Runs the confirmed accept or reject for `selectedApp` (see the file header for every write).
+   * Accept ends with the success overlay and a navigation back after 2.5 s; reject reloads the list.
+   * Errors are only logged to the console; the modal state is reset either way.
+   */
   const handleConfirmAction = async () => {
     if (!selectedApp || !exam || !actionType) return;
     
+    // Close the modal and show a spinner on this card's buttons.
     setConfirmModalVisible(false);
     setActioning(selectedApp.id);
 
@@ -299,6 +359,7 @@ export default function ViewApplicationsPage() {
             created_at: new Date().toISOString()
           });
 
+        // Reload so the rejected applicant drops off the list.
         fetchApplications();
       }
     } catch (err: any) {
@@ -310,6 +371,7 @@ export default function ViewApplicationsPage() {
     }
   };
 
+  // Full-screen spinner until the first load finishes.
   if (loading) {
     return (
       <View className="flex-1 bg-white items-center justify-center">
@@ -318,11 +380,13 @@ export default function ViewApplicationsPage() {
     );
   }
 
+  // Main page: header, title bar, search, applicant cards, modals and the bottom tab bar.
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <StatusBar style="dark" />
 
-      {/* Top Header Bar (matches dashboard look) */}
+      {/* Top Header Bar (matches dashboard look; phones only) */}
+      {!inDesktopFrame && (
       <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)' }}>
         <View style={{
           height: 60,
@@ -350,6 +414,7 @@ export default function ViewApplicationsPage() {
           </View>
 
           {/* Right Profile Initials */}
+          {/* Static "S" badge; opens the console's Account (settings) tab */}
           <TouchableOpacity
             onPress={() => router.replace('/console/student?tab=settings')}
             style={{
@@ -362,9 +427,11 @@ export default function ViewApplicationsPage() {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      )}
       
       {/* Sub Header for Page Title */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center shadow-sm">
+        {/* Back: previous screen, or the student console when there is no history */}
         <TouchableOpacity 
           onPress={() => {
             if (router.canGoBack()) {
@@ -404,6 +471,7 @@ export default function ViewApplicationsPage() {
         </View>
       )}
 
+      {/* Applicant list filtered by the name search; empty state when nothing matches */}
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }}>
         {applications.filter(app => app.scribe_name.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
           <View className="bg-white p-8 rounded-3xl border border-slate-100 items-center justify-center mt-10">
@@ -418,9 +486,11 @@ export default function ViewApplicationsPage() {
             </Text>
           </View>
         ) : (
+          // One card per matching applicant.
           applications
             .filter(app => app.scribe_name.toLowerCase().includes(searchQuery.toLowerCase()))
             .map((app) => {
+              // Disables this card's buttons while its accept/reject is in flight.
               const isWorking = actioning === app.id;
               return (
                 <View key={app.id} className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm mb-4">
@@ -460,6 +530,7 @@ export default function ViewApplicationsPage() {
                     </Text>
                   </View>
 
+                  {/* Languages: profiles.languages may be an array, a JSON string or plain text */}
                   <View className="flex-row items-center">
                     <Feather name="globe" size={12} color="#64748b" className="mr-2" />
                     <Text className="text-slate-600 text-xs">
@@ -547,6 +618,7 @@ export default function ViewApplicationsPage() {
       >
         <View className="flex-1 bg-slate-950/60 justify-center items-center px-6">
           <View className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100">
+            {/* Icon, title and message change with accept vs reject */}
             <View className="items-center mb-4">
               <View className={`w-12 h-12 rounded-full items-center justify-center mb-3 ${
                 actionType === 'accept' ? 'bg-blue-50' : 'bg-red-550 bg-red-50'
@@ -568,6 +640,7 @@ export default function ViewApplicationsPage() {
               </Text>
             </View>
 
+            {/* Cancel / Confirm (Confirm runs handleConfirmAction) */}
             <View className="flex-row space-x-3.5 mt-2">
               <TouchableOpacity 
                 onPress={() => setConfirmModalVisible(false)}
@@ -589,6 +662,7 @@ export default function ViewApplicationsPage() {
       </Modal>
 
       {/* 2. MATCHED SUCCESS OVERLAY */}
+      {/* Shown for 2.5 s after an accept, then the screen navigates back */}
       {showSuccessOverlay && (
         <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
           <View className="bg-white/95 p-8 rounded-3xl items-center border border-slate-200/50 shadow-2xl w-80">
@@ -651,6 +725,7 @@ export default function ViewApplicationsPage() {
                     {viewingScribe?.profile?.education_level || 'N/A'}
                   </Text>
                 </View>
+                {/* Languages: same array / JSON string / plain text handling as on the card */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Feather name="globe" size={13} color="#2563eb" />
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
@@ -677,6 +752,7 @@ export default function ViewApplicationsPage() {
                     {viewingScribe?.profile?.location || 'N/A'}
                   </Text>
                 </View>
+                {/* Flags stored as strings: first_time 'yes', verification_status 'approved' */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Feather name="award" size={13} color="#2563eb" />
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
@@ -697,6 +773,7 @@ export default function ViewApplicationsPage() {
               <View>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Reviews</Text>
                 
+                {/* Spinner while loading, empty message, or one card per review (stars use rating_overall, default 5) */}
                 {loadingReviews ? (
                   <ActivityIndicator size="small" color="#2563eb" style={{ marginVertical: 10 }} />
                 ) : viewingReviews.length === 0 ? (
@@ -746,7 +823,8 @@ export default function ViewApplicationsPage() {
         </View>
       </Modal>
 
-      {/* Bottom Nav Bar (matches dashboard look) */}
+      {/* Bottom Nav Bar (matches dashboard look; phones only) */}
+      {!inDesktopFrame && (
       <SafeAreaView edges={['bottom']} style={{
         backgroundColor: 'rgba(255,255,255,0.82)',
         borderTopLeftRadius: 20,
@@ -764,6 +842,7 @@ export default function ViewApplicationsPage() {
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
         }}>
+          {/* Tabs go back to the student console with ?tab=...; "Requests" is shown as active */}
           {[
             { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
             { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
@@ -806,6 +885,7 @@ export default function ViewApplicationsPage() {
           })}
         </View>
       </SafeAreaView>
+      )}
 
     </View>
   );

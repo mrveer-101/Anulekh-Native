@@ -1,25 +1,57 @@
+/**
+ * Scribe Achievements & Certificates screen — route `/console/scribe/achievements`.
+ *
+ * Opened from the scribe home dashboard (components/scribe/ScribeHomeView.tsx).
+ * Shows the signed-in scribe's milestone badges with progress bars, a small
+ * stats card, and their volunteering certificate.
+ *
+ * Data (via the `supabase` shim, which calls the Rust/Axum backend):
+ * - the auth session (current user id),
+ * - `profiles` row of the scribe (for the display name),
+ * - `exam_requests` with status 'completed' assigned to this scribe (only the count is used).
+ *
+ * Badge progress is computed on the client from that count. The Emergency,
+ * Assignment Ally and Submission Hero badges are placeholders (always locked,
+ * progress 0). The certificate button opens the backend-rendered page at
+ * `/api/certificates/view/:scribe_id` in the browser; if the URL cannot be
+ * opened, the link is shown in an alert instead.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 
+/**
+ * Screen component (default export used by expo-router). Takes no props.
+ * Loads data once on mount; shows a full-screen spinner until loading ends.
+ */
 export default function ScribeAchievementsPage() {
+  // Loaded data: auth user, profile row and number of completed exams.
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [completedExamsCount, setCompletedExamsCount] = useState(0);
 
+  // Load once when the screen mounts.
   useEffect(() => {
     fetchData();
   }, []);
 
+  /**
+   * Fetches the session, the scribe's profile and their completed-exam count.
+   * Reads `profiles` and `exam_requests`. Errors are only logged; the screen
+   * then renders with defaults (0 completed, generic name). Always clears
+   * `loading` at the end, including when there is no session.
+   */
   const fetchData = async () => {
     try {
+      // 1. Current user from the auth session; nothing to load when signed out.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       setUser(session.user);
 
+      // 2. Scribe's profile row (display name on badges and certificate).
       const { data: prof } = await supabase
         .from('profiles')
         .select('*')
@@ -27,6 +59,7 @@ export default function ScribeAchievementsPage() {
         .single();
       setProfile(prof);
 
+      // 3. Exams this scribe has completed; only the row count drives the badges.
       const { data: completed } = await supabase
         .from('exam_requests')
         .select('id')
@@ -41,6 +74,13 @@ export default function ScribeAchievementsPage() {
     }
   };
 
+  /**
+   * Milestone badge definitions, rebuilt every render from `completedExamsCount`.
+   * Each entry: `key`, display `title` / `desc`, Ionicons `icon` name, accent
+   * `color`, progress `current` / `max`, and whether it is `unlocked`.
+   * The exam-count thresholds (5 / 15 / 30) match the ones the student-side
+   * view_applications screen uses. The last three badges are not wired to data yet.
+   */
   const badgesList = [
     { key: 'bronze', title: 'Bronze Volunteer', desc: 'Completed 5 successful scribing assignments', icon: 'award', color: '#cd7f32', current: Math.min(completedExamsCount, 5), max: 5, unlocked: completedExamsCount >= 5 },
     { key: 'silver', title: 'Silver Volunteer', desc: 'Completed 15 successful scribing assignments', icon: 'shield-checkmark', color: '#94a3b8', current: Math.min(completedExamsCount, 15), max: 15, unlocked: completedExamsCount >= 15 },
@@ -52,6 +92,7 @@ export default function ScribeAchievementsPage() {
 
   const earnedBadgesCount = badgesList.filter(b => b.unlocked).length;
 
+  // Full-screen spinner while fetchData is running.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' }}>
@@ -60,6 +101,8 @@ export default function ScribeAchievementsPage() {
     );
   }
 
+  // Certificate details: a display ID derived from the user id, and the backend URL that renders
+  // the certificate (EXPO_PUBLIC_API_URL, falling back to the hosted Axum server).
   const scribeName = profile?.full_name || 'Volunteer Scribe';
   const certId = `ANULEKH-CERT-${user?.id?.substring(0, 8).toUpperCase()}-2026`;
   const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
@@ -91,6 +134,7 @@ export default function ScribeAchievementsPage() {
             </View>
           </View>
 
+          {/* Stat tiles: badges earned, completed exams, and estimated hours (3 per completed exam) */}
           <View style={{ flexDirection: 'row', gap: 10, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
             <View style={{ flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#d97706' }}>{earnedBadgesCount} / {badgesList.length}</Text>
@@ -116,6 +160,7 @@ export default function ScribeAchievementsPage() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#d97706' }}>4 Unlocked</Text>
           </View>
 
+          {/* One card per badge; locked badges are dimmed and have no coloured border */}
           <View style={{ gap: 12 }}>
             {badgesList.map((badge) => (
               <View
@@ -195,6 +240,7 @@ export default function ScribeAchievementsPage() {
               </View>
             </View>
 
+            {/* Certificate details: ID, recipient name and verification host */}
             <View style={{ backgroundColor: '#f8fafc', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 14, gap: 6 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '600' }}>Certificate ID:</Text>
@@ -210,6 +256,7 @@ export default function ScribeAchievementsPage() {
               </View>
             </View>
 
+            {/* Opens the backend-rendered certificate; falls back to showing the link in an alert */}
             <TouchableOpacity
               onPress={() => {
                 Linking.openURL(certUrl).catch(() => {

@@ -1,3 +1,20 @@
+/**
+ * SharedSettingsView — the "Account" (settings) tab shared by the student and scribe portals.
+ *
+ * Rendered inside `<TabPane active={activeTab === 'settings'}>` (keep-alive tab body, see
+ * components/ui/TabPane.tsx) by app/console/student/index.tsx, app/console/scribe/index.tsx and their
+ * desktop counterparts components/pc_view/ConsoleStudentPC.tsx and ConsoleScribePC.tsx. The colour theme
+ * follows the account's role (STUDENT_THEME or SCRIBE_THEME from core/portalTheme.ts).
+ *
+ * Sections: profile header with a device-local photo, editable "Basic Information" (with scribe-only
+ * languages / availability / first-time options), app language picker, a demo card for test push
+ * notifications, and Save / Sign Out / Delete Account buttons.
+ *
+ * Data: `supabase` is the custom shim in core/supabase.ts that sends queries to the Rust/Axum backend
+ * (`POST /api/query`); it is not real Supabase. Reads and updates the user's `profiles` row; account
+ * deletion calls the backend directly at `POST /api/auth/delete-account`. The profile photo and the
+ * welcome flags live only in AsyncStorage.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
 import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
@@ -10,9 +27,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { triggerTestNotification } from '@/core/notifications';
 import { announceForAccessibility } from '@/core/a11y';
 import { gradient, portalCardStyle, PortalTheme, SCRIBE_THEME, STUDENT_THEME } from '@/core/portalTheme';
+import { useInDesktopShell } from '@/components/ui/DesktopShell';
 
+// ---- Shared style helper and small presentational components used by the cards below ----
+
+/** Union of valid Feather icon names, used to type the icon props below. */
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
+/**
+ * Shared TextInput style for the form fields.
+ * @param editable false gives the greyed read-only variant (phone, email).
+ */
 const inputStyle = (editable = true) => ({
   backgroundColor: editable ? '#f8fafc' : '#f1f5f9',
   borderWidth: 1.5,
@@ -82,8 +107,16 @@ function Chip({ theme, label, selected, onPress }: { theme: PortalTheme; label: 
   );
 }
 
+/**
+ * Account tab for both portals. Takes no props: the user comes from the session and the role from
+ * their `profiles` row (which also picks the colour theme and shows the scribe-only options).
+ */
 export default function SharedSettingsView() {
+  // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
+  const inShell = useInDesktopShell();
+  // Translation: current language, language switcher and the t() string lookup.
   const { lang, changeLanguage, t } = useLanguage();
+  // Session user and the always-visible header / basic fields.
   const [user, setUser] = useState<any>(null);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -93,6 +126,7 @@ export default function SharedSettingsView() {
   // Expanded Detail fields
   const [isExpanded, setIsExpanded] = useState(false);
   const [dob, setDob] = useState('');
+  // gender is local only: it is neither loaded from nor saved to the profile.
   const [gender, setGender] = useState('male');
   const [location, setLocation] = useState('');
   const [occupation, setOccupation] = useState('');
@@ -107,6 +141,7 @@ export default function SharedSettingsView() {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
   const [availabilitySlots, setAvailabilitySlots] = useState<string[]>([]);
 
+  // Loading/saving flags, language dropdown and test-notification status.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
@@ -118,6 +153,11 @@ export default function SharedSettingsView() {
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(index * 70).duration(420));
 
+  /**
+   * Fires a demo local notification (core/notifications `triggerTestNotification`) and shows the
+   * result, or the error, in a status line that clears itself after 5 seconds.
+   * @param type Which demo notification to send.
+   */
   const handleSendTestNotification = async (type: 'match' | 'sos' | 'reminder') => {
     setNotifTriggering(true);
     setNotifStatusText('Triggering notification...');
@@ -134,10 +174,15 @@ export default function SharedSettingsView() {
     }
   };
 
+  // Load once on mount. The keep-alive TabPane keeps this view mounted, so revisiting the tab does not refetch.
   useEffect(() => {
     fetchUserData();
   }, []);
 
+  /**
+   * Loads the signed-in user's `profiles` row into the form, or redirects to /auth/login when there is
+   * no session. The profile photo comes from AsyncStorage (`profile_photo_<userId>`), not the backend.
+   */
   const fetchUserData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -148,11 +193,13 @@ export default function SharedSettingsView() {
       setUser(session.user);
       setEmail(session.user.email || '');
 
+      // The photo is device-local only (see handleSelectPhoto).
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
 
+      // The user's profile row from the backend.
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -166,6 +213,7 @@ export default function SharedSettingsView() {
         setRole(profile.role || '');
 
         // Populate extra details
+        // Missing values fall back to demo placeholders, which are saved back if the user taps Save.
         setDob(profile.dob || '2005-02-03');
         setLocation(profile.location || 'Ahmedabad, Gujarat');
         setOccupation(profile.occupation || 'Working Professional');
@@ -176,12 +224,14 @@ export default function SharedSettingsView() {
 
         // Scribe specific fields
         setFirstTime(profile.first_time === 'yes');
+        // languages is stored as a JSON array string; a plain non-JSON string is treated as one language.
         try {
           const parsedLangs = typeof profile.languages === 'string' ? JSON.parse(profile.languages) : (profile.languages || []);
           setSelectedLanguages(Array.isArray(parsedLangs) ? parsedLangs : []);
         } catch {
           setSelectedLanguages(typeof profile.languages === 'string' ? [profile.languages] : []);
         }
+        // availability_slots is stored as a comma-separated string.
         const slotsStr = profile.availability_slots || '';
         setAvailabilitySlots(slotsStr.split(',').map((s: string) => s.trim()).filter(Boolean));
       }
@@ -191,6 +241,10 @@ export default function SharedSettingsView() {
       setLoading(false);
     }
   };
+  /**
+   * Reads a local image URI and returns it as a base64 `data:` URI.
+   * @param uri File/blob URI returned by expo-image-picker.
+   */
   const toDataUri = async (uri: string): Promise<string> => {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -202,13 +256,19 @@ export default function SharedSettingsView() {
     });
   };
 
+  /**
+   * Lets the user pick a square photo from the library, converts it to a data URI and stores it in
+   * AsyncStorage under `profile_photo_<userId>`. It is shown in the header but never sent to the backend.
+   */
   const handleSelectPhoto = async () => {
     try {
+      // Photo-library permission is required before opening the picker.
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
         return;
       }
+      // Square crop at reduced quality keeps the stored data URI small.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -217,6 +277,7 @@ export default function SharedSettingsView() {
       });
       if (result.canceled || !result.assets?.length) return;
       const asset = result.assets[0];
+      // Show it immediately and remember it on this device.
       const dataUri = await toDataUri(asset.uri);
       setProfilePhoto(dataUri);
       if (user) {
@@ -227,7 +288,13 @@ export default function SharedSettingsView() {
     }
   };
 
+  /**
+   * Validates name and phone, then updates the user's `profiles` row with the editable fields.
+   * Scribes also save `first_time` ('yes'/'no'), `languages` (JSON array string) and
+   * `availability_slots` (comma-separated). Gender is not saved.
+   */
   const handleSaveSettings = async () => {
+    // Name and phone are required.
     if (!fullName.trim() || !phone.trim()) {
       Alert.alert(t('error'), t('enter_name') + ' & ' + t('enter_phone'));
       return;
@@ -235,6 +302,7 @@ export default function SharedSettingsView() {
 
     setUpdating(true);
     try {
+      // Fields common to both roles.
       const updateData: any = {
         full_name: fullName.trim(),
         phone: phone.trim(),
@@ -245,6 +313,7 @@ export default function SharedSettingsView() {
         aadhar_number: aadharNumber.trim(),
       };
 
+      // Scribe-only fields, serialised in the formats the profiles table stores.
       if (role === 'scribe') {
         updateData.first_time = firstTime ? 'yes' : 'no';
         updateData.languages = JSON.stringify(selectedLanguages);
@@ -265,6 +334,10 @@ export default function SharedSettingsView() {
     }
   };
 
+  /**
+   * Confirms, clears the one-time welcome flags, signs out (the shim removes the local session and wipes
+   * the screen caches) and returns to /landing.
+   */
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -281,6 +354,10 @@ export default function SharedSettingsView() {
     ]);
   };
 
+  /**
+   * Confirms, then asks the backend to delete the account (`POST /api/auth/delete-account` with
+   * `{ user_id }`), clears all AsyncStorage, signs out and returns to /landing.
+   */
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account Permanently',
@@ -293,6 +370,8 @@ export default function SharedSettingsView() {
           onPress: async () => {
             try {
               if (user?.id) {
+                // The shim has no apiHost field, so this resolves to the Render backend URL.
+                // The response is not checked: local data is cleared either way.
                 await fetch(`${supabase.auth ? (supabase as any).apiHost || 'https://anulekh-axum.onrender.com' : 'https://anulekh-axum.onrender.com'}/api/auth/delete-account`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -312,6 +391,7 @@ export default function SharedSettingsView() {
     );
   };
 
+  // Spinner until the profile has loaded.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40, backgroundColor: '#f0f4ff' }}>
@@ -320,14 +400,17 @@ export default function SharedSettingsView() {
     );
   }
 
+  // The status line turns red when the last test notification failed.
   const notifIsError = !!notifStatusText && notifStatusText.startsWith('Notification error');
 
+  // Layout: themed gradient page -> header card -> Basic Information -> Language -> Notifications demo -> actions.
   return (
-    <View style={[{ flex: 1, backgroundColor: theme.page }, gradient(theme.pageGradient)]}>
+    <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: theme.page }, gradient(theme.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
-      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: theme.orb }} />
+      {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: theme.orb }} />}
 
-    <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    {/* Scrollable column of cards; each card rises in with rise(index) */}
+    <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
       {/* Profile Header Card (soft gradient banner) */}
       <Animated.View entering={rise(0)} style={[{
@@ -419,6 +502,7 @@ export default function SharedSettingsView() {
 
       {/* Editable Account Information Card */}
       <Animated.View entering={rise(1)} style={portalCardStyle(theme)}>
+        {/* Title row; the Details pill toggles the extra fields below */}
         <SectionHeader
           theme={theme}
           icon="user"
@@ -442,6 +526,7 @@ export default function SharedSettingsView() {
           }
         />
 
+        {/* Form fields: name is editable, phone is read-only */}
         <View style={{ gap: 14 }}>
           {/* Full Name */}
           <View>
@@ -558,6 +643,7 @@ export default function SharedSettingsView() {
               <View style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 14, gap: 10 }}>
                 <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Verification Documents</Text>
 
+                {/* Shows the stored file names only; "View" is a simulated preview */}
                 {[aadharImageProof || 'government_id_proof.jpg', certificationProof || 'educational_certificate.pdf'].map((fileName) => (
                   <View key={fileName} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.soft, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.softBorder }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
@@ -598,6 +684,7 @@ export default function SharedSettingsView() {
                   <View>
                     <FieldLabel theme={theme} icon="globe" label="Preferred Scribe Languages" />
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {/* Tapping a chip toggles that language in selectedLanguages */}
                       {['English', 'Hindi', 'Gujarati'].map(langOption => {
                         const isSelected = selectedLanguages.includes(langOption);
                         return (
@@ -623,6 +710,7 @@ export default function SharedSettingsView() {
                   <View style={{ marginTop: 2 }}>
                     <FieldLabel theme={theme} icon="clock" label="Availability Slots" />
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {/* Tapping a chip toggles that slot in availabilitySlots */}
                       {['Morning', 'Afternoon', 'Evening'].map(slotOption => {
                         const isSelected = availabilitySlots.includes(slotOption);
                         return (
@@ -657,6 +745,7 @@ export default function SharedSettingsView() {
         <SectionHeader theme={theme} icon="globe" title={t('language_display')} />
         <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 12, marginTop: -6 }}>{t('select_language_desc')}</Text>
 
+        {/* Dropdown trigger showing the current language */}
         <TouchableOpacity
           onPress={() => {
             setIsLangDropdownOpen(!isLangDropdownOpen);
@@ -672,6 +761,7 @@ export default function SharedSettingsView() {
           <Feather name={isLangDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color={isLangDropdownOpen ? theme.accentText : '#64748b'} importantForAccessibility="no" accessibilityElementsHidden={true} />
         </TouchableOpacity>
 
+        {/* Language options; choosing one calls changeLanguage (core/translation) and closes the list */}
         {isLangDropdownOpen && (
           <View style={{ marginTop: 8, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: theme.softBorder, borderRadius: 14, shadowColor: theme.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 3, overflow: 'hidden' }}>
             {(['English', 'Hindi', 'Gujarati'] as LanguageType[]).map((l) => (
@@ -717,6 +807,7 @@ export default function SharedSettingsView() {
           Test native push banners, vibrations, and heads-up alerts on your Android device / browser.
         </Text>
 
+        {/* Three demo buttons that fire local notifications via handleSendTestNotification */}
         <View style={{ gap: 10 }}>
           {/* Test Scribe Matched Alert */}
           <TouchableOpacity
@@ -815,6 +906,7 @@ export default function SharedSettingsView() {
           </TouchableOpacity>
         </View>
 
+        {/* Status line for the last test notification (auto-clears after 5 s) */}
         {notifStatusText && (
           <View
             accessible={true}
@@ -837,8 +929,9 @@ export default function SharedSettingsView() {
         )}
       </Animated.View>
 
-      {/* Primary Action Button (Save changes) */}
+      {/* Save, Sign Out and Delete Account share one entry animation */}
       <Animated.View entering={rise(4)}>
+      {/* Primary Action Button (Save changes) */}
       <TouchableOpacity
         onPress={handleSaveSettings}
         disabled={updating}

@@ -1,3 +1,27 @@
+/**
+ * ScribePlanView — the scribe's "Plan & Schedule" tab.
+ *
+ * Rendered inside the desktop scribe console (components/pc_view/ConsoleScribePC.tsx, 'plan'
+ * tab, wrapped in a keep-alive TabPane). Shows the scribe's confirmed work as a month calendar
+ * plus a filterable list of cards.
+ *
+ * Data (via the `supabase` shim, which calls the Rust/Axum backend), loaded once on mount and on
+ * pull-to-refresh:
+ * - the scribe's own `profiles` row (shown in the declaration letter),
+ * - `exam_requests` with status 'matched' and scribe_id = this scribe,
+ * - `assignment_requests` with status 'matched' and scribe_id = this scribe, mapped into the same
+ *   card shape as exams (deadline -> exam_date, description -> exam_venue, `is_assignment: true`).
+ *
+ * Behaviour:
+ * - Tapping a calendar day filters the list to that date (tap again to clear); days with a plan
+ *   are highlighted orange. The All / Upcoming / Completed filter is date-based only
+ *   ("Completed" = date before today), not based on the request status.
+ * - Exam cards offer Call (bottom sheet with the student's number and a `tel:` dial button),
+ *   Chat (navigates to `/console/common/chat?requestId=..&type=exam|assignment`) and a formal
+ *   scribe declaration modal. Assignment cards only offer Chat.
+ * - Text goes through `t()` from the translation context; some fallback strings are hard-coded
+ *   in Gujarati.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
@@ -5,8 +29,13 @@ import { router } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 
+/**
+ * Scribe Plan & Schedule tab (see file header). Takes no props; reads the signed-in scribe from
+ * the auth session.
+ */
 export default function ScribePlanView() {
   const { t } = useLanguage();
+  // Loaded data: combined exam + assignment plans and the scribe's profile.
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [plans, setPlans] = useState<any[]>([]);
@@ -27,10 +56,17 @@ export default function ScribePlanView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
+  // Load plans once on mount (refreshing is manual via pull-to-refresh).
   useEffect(() => {
     fetchPlans();
   }, []);
 
+  /**
+   * Loads the scribe's profile and all matched exam and assignment requests assigned to them,
+   * normalises assignments into the exam card shape and stores the merged list in `plans`.
+   * Reads `profiles`, `exam_requests`, `assignment_requests`. Errors are logged only; the
+   * spinner and refresh indicator are always cleared. Does nothing when signed out.
+   */
   const fetchPlans = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -62,6 +98,8 @@ export default function ScribePlanView() {
 
       if (assignmentsErr) throw assignmentsErr;
 
+      // Reshape assignments to reuse the exam card UI: deadline acts as the date and the
+      // description is shown in the "venue" slot as instructions.
       const mappedAssignments = (assignments || []).map((assign: any) => ({
         id: assign.id,
         subject: assign.subject || 'Assignment',
@@ -85,24 +123,36 @@ export default function ScribePlanView() {
     }
   };
 
+  /** Pull-to-refresh handler: shows the refresh spinner and reloads plans. */
   const onRefresh = () => {
     setRefreshing(true);
     fetchPlans();
   };
 
+  /**
+   * Opens the call bottom sheet for an exam plan. The number is revealed straight away
+   * (`showMaskedNumber` = true), so the "View number" button is effectively unused.
+   */
   const openCallSheet = (exam: any) => {
     setCallExam(exam);
     setShowMaskedNumber(true);
     setIsCallOpen(true);
   };
 
+  /** Closes the call bottom sheet. */
   const closeCallSheet = () => setIsCallOpen(false);
 
+  /** Moves the calendar by `offset` months (-1 = previous, +1 = next). */
   const changeMonth = (offset: number) => {
     const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
     setCurrentMonth(next);
   };
 
+  /**
+   * Builds the calendar grid for `date`'s month.
+   * @returns leading `null` placeholders for the weekdays before the 1st (week starts Sunday),
+   *   followed by a Date for every day of the month.
+   */
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -118,6 +168,10 @@ export default function ScribePlanView() {
     return days;
   };
 
+  /**
+   * True when any plan's `exam_date` starts with this day's local `YYYY-MM-DD` string
+   * (dates are stored as text, optionally followed by a time).
+   */
   const hasPlanOnDate = (day: Date) => {
     if (!day) return false;
     const year = day.getFullYear();
@@ -128,17 +182,23 @@ export default function ScribePlanView() {
   };
 
   // Sort and filter logic
+  // Earliest date first; plans without a date sort to the end.
   const sortedPlans = [...plans].sort((a, b) => {
     const dateA = a.exam_date ? a.exam_date.split(' ')[0] : '9999-12-31';
     const dateB = b.exam_date ? b.exam_date.split(' ')[0] : '9999-12-31';
     return dateA.localeCompare(dateB);
   });
 
+  // Narrow to the tapped calendar day, if any.
   let filteredPlans = sortedPlans;
   if (selectedDate) {
     filteredPlans = filteredPlans.filter(p => p.exam_date && p.exam_date.startsWith(selectedDate));
   }
 
+  /**
+   * True when the date part of `dateStr` is today or later (compared at UTC midnight).
+   * Plans with no date count as upcoming.
+   */
   const checkUpcoming = (dateStr: string) => {
     if (!dateStr) return true;
     const cleanDate = dateStr.split(' ')[0];
@@ -147,6 +207,7 @@ export default function ScribePlanView() {
     return examTime >= todayTime;
   };
 
+  // Apply the All / Upcoming / Completed segment (date-based, see checkUpcoming).
   filteredPlans = filteredPlans.filter(p => {
     if (activeFilter === 'upcoming') {
       return checkUpcoming(p.exam_date);
@@ -157,6 +218,7 @@ export default function ScribePlanView() {
     return true;
   });
 
+  // First load: full-area spinner.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
@@ -244,6 +306,7 @@ export default function ScribePlanView() {
                   if (!day) {
                     return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
                   }
+                  // Cell styling priority: selected (green) > has a plan (orange) > today (green outline).
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
                   const hasPlan = hasPlanOnDate(day);
@@ -366,6 +429,7 @@ export default function ScribePlanView() {
           })}
         </View>
 
+        {/* ── PLAN CARDS (or empty state when nothing matches the filters) ── */}
         {filteredPlans.length === 0 ? (
           <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
             <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(5,150,105,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)' }}>
@@ -379,6 +443,7 @@ export default function ScribePlanView() {
         ) : (
           filteredPlans.map((exam) => (
             <View key={exam.id} style={{ backgroundColor: '#ffffff', padding: 18, borderRadius: 24, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, marginBottom: 14 }}>
+              {/* Card title: subject, level and "matched" status pill */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
@@ -389,6 +454,7 @@ export default function ScribePlanView() {
                 </View>
               </View>
 
+              {/* Details: student, date/deadline, venue/instructions, language (exams only) */}
               <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 10, marginBottom: 12, gap: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Feather name="user" size={12} color="#059669" style={{ marginRight: 8 }} />
@@ -650,6 +716,7 @@ export default function ScribePlanView() {
             </View>
 
             {/* Phone number display */}
+            {/* Falls back to a placeholder number when the plan row has no `phone` */}
             {showMaskedNumber ? (
               <View style={{
                 backgroundColor: '#fff',

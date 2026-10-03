@@ -1,14 +1,46 @@
+/**
+ * HeaderPC — sticky top navigation bar for the desktop (wide-screen web)
+ * landing page.
+ *
+ * Rendered by components/pc_view/LandingPC.tsx, which app/landing/index.tsx
+ * shows instead of the mobile landing layout on wide screens. Contains:
+ *  - the Anulekh logo + tagline (click → "/"),
+ *  - in-page section links (How It Works, Features & SOS, NGOs, FAQ) that ask
+ *    the parent to scroll its ScrollView to that section,
+ *  - "Log In" (→ /auth/login) and "Get Started" (→ /landing/induction) buttons.
+ *
+ * Purely presentational: loads no data. Hover effects rely on react-native-web's
+ * `hovered` Pressable state, and `position: 'sticky'` / `cursor` are web-only
+ * styles (cast to `any` because React Native's types don't include them).
+ */
 import React from 'react';
 import { View, Text, Pressable, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
+/**
+ * Props for HeaderPC.
+ *
+ * @property activeTab         Intended to highlight the current section; currently
+ *                             accepted but not used by the component.
+ * @property onNavigateSection Called with a section id ('how-it-works', 'features',
+ *                             'ngos', 'faq') when a nav link is clicked; the parent
+ *                             scrolls to that section.
+ */
 interface HeaderPCProps {
   activeTab?: string;
   onNavigateSection?: (sectionId: string) => void;
 }
 
+/**
+ * Desktop landing-page header bar.
+ *
+ * @param props See {@link HeaderPCProps}.
+ * @returns A 76px-high sticky row: brand on the left, section links in the
+ *          middle, auth buttons on the right. Navigates with expo-router.
+ */
 export default function HeaderPC({ activeTab = 'home', onNavigateSection }: HeaderPCProps) {
+  // Outer bar: translucent white, stays pinned to the top while the landing page scrolls (web).
   return (
     <View style={{
       height: 76,
@@ -68,6 +100,7 @@ export default function HeaderPC({ activeTab = 'home', onNavigateSection }: Head
 
       {/* ── Desktop Navigation Links (with Smooth Hover Effects) ── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 32 }}>
+        {/* Section ids must match the ones LandingPC's scrollToSection() understands */}
         {[
           { id: 'how-it-works', label: 'How It Works' },
           { id: 'features', label: 'Features & SOS' },
@@ -101,6 +134,7 @@ export default function HeaderPC({ activeTab = 'home', onNavigateSection }: Head
 
       {/* ── Auth Actions (Log In & Get Started with Hover States) ── */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+        {/* Secondary button: existing users sign in */}
         <Pressable
           onPress={() => router.push('/auth/login')}
           style={({ hovered }: any) => ({
@@ -121,6 +155,7 @@ export default function HeaderPC({ activeTab = 'home', onNavigateSection }: Head
           )}
         </Pressable>
 
+        {/* Primary call-to-action: new users start the onboarding/induction flow */}
         <Pressable
           onPress={() => router.push('/landing/induction')}
           style={({ hovered }: any) => ({

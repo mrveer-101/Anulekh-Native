@@ -1,3 +1,23 @@
+/**
+ * Scribe Dashboard — route `/console/scribe` (the volunteer scribe's home console).
+ *
+ * Reached after login / profile completion for users whose role is 'scribe'
+ * (see `app/auth/login.tsx`, `app/console/index.tsx`, `app/index.tsx`).
+ *
+ * Layout:
+ *  - Width >= 768px (desktop / large web): renders `ConsoleScribePC` instead.
+ *  - Otherwise: a mobile shell with a header (logo, notifications bell,
+ *    avatar), a tab body built from keep-alive `TabPane`s (Home, Search /
+ *    Explore, Requests / Commitments, Account / Settings, Notifications) and
+ *    a bottom tab bar. The initial tab can be set via the `?tab=` param.
+ *
+ * Data (via the `supabase` shim — a custom client for the Rust/Axum backend,
+ * not real Supabase): the session, the scribe's `profiles` row and the count
+ * of unread `notifications`. Uses AsyncStorage for a locally cached profile
+ * photo (`profile_photo_<userId>`) and a one-time welcome toast flag
+ * (`scribe_welcome_shown`). Redirects to `/landing` if there is no session.
+ * Tab switches are announced to screen readers.
+ */
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -25,9 +45,21 @@ import SharedSettingsView from '@/components/shared/SharedSettingsView';
 import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
 import { useWindowDimensions } from 'react-native';
 import ConsoleScribePC from '@/components/pc_view/ConsoleScribePC';
+import { TabPane } from '@/components/ui/TabPane';
 
+/**
+ * Every tab id the console understands. Note: only home, explore,
+ * commitments, settings and notifications have a TabPane below; 'plan' and
+ * 'profile' are accepted ids (e.g. from `?tab=`) but render no content.
+ */
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 
+/**
+ * Bottom-bar tabs in display order, with Ionicons names for the selected /
+ * unselected state. `label` is an English fallback; the bar actually shows a
+ * translated label looked up from the tab id (nav_home, nav_explore, ...).
+ * Notifications is not in the bar — it is opened from the header bell.
+ */
 const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { id: 'home',        iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
   { id: 'explore',     iconActive: 'search',        iconInactive: 'search-outline',        label: 'Search' },
@@ -44,6 +76,10 @@ const ACCENT_BD  = 'rgba(22,163,74,0.22)';
 const TEXT       = '#0f172a';
 const MUTED      = '#64748b';
 
+/**
+ * Scribe console screen (default export for expo-router). No props; reads the
+ * optional `tab` search param to pre-select a tab.
+ */
 export default function ScribeDashboard() {
   const { width: windowWidth } = useWindowDimensions();
 
@@ -69,6 +105,7 @@ export default function ScribeDashboard() {
     setMounted(true);
   }, []);
 
+  // Web only: track browser resizes so the layout can switch between mobile and desktop live.
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleResize = () => setScreenWidth(window.innerWidth);
@@ -82,28 +119,43 @@ export default function ScribeDashboard() {
   const isDesktop = currentWidth >= 768;
 
   // ── HELPER FUNCTIONS ───────────────────────────────────────────────────
+  /**
+   * Count the user's unread notifications (`notifications` rows with
+   * `is_read = 0`) and store the count for the header bell's red dot.
+   * @param uid the signed-in user's id.
+   */
   const fetchUnread = async (uid: string) => {
     const { data } = await supabase
       .from('notifications').select('id').eq('user_id', uid).eq('is_read', 0);
     setUnread(data?.length ?? 0);
   };
 
+  /**
+   * Bootstrap the dashboard: verify the session, load the `profiles` row,
+   * kick off the unread-notification count (not awaited), restore the cached
+   * profile photo and decide whether to show the one-time welcome toast.
+   * Any failure, or no session, sends the user to `/landing`. Also passed to
+   * the desktop view as its `onRefresh` callback.
+   */
   const fetchSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/landing'); return; }
 
+      // Full profile row for the header avatar, welcome name and desktop view.
       const { data: profileData } = await supabase
         .from('profiles').select('*').eq('id', session.user.id).single();
 
       setProfile(profileData);
       fetchUnread(session.user.id);
 
+      // Profile photos are cached on-device (per user id) rather than read from the profile row.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
 
+      // Welcome toast is shown only once per device (flag is not per user).
       const shown = await AsyncStorage.getItem('scribe_welcome_shown');
       if (!shown) {
         setShowWelcome(true);
@@ -116,14 +168,17 @@ export default function ScribeDashboard() {
     }
   };
 
+  // Initial data load on mount.
   useEffect(() => { fetchSession(); }, []);
 
+  // Deep-link support: `?tab=<id>` selects a tab (value is cast, not validated).
   useEffect(() => {
     if (params.tab) {
       setActiveTab(params.tab as Tab);
     }
   }, [params.tab]);
 
+  // Welcome toast animation: fade in (0.4s), hold (2.6s), fade out (0.6s), then unmount.
   useEffect(() => {
     if (!showWelcome) return;
     Animated.sequence([
@@ -133,6 +188,8 @@ export default function ScribeDashboard() {
     ]).start(() => setShowWelcome(false));
   }, [showWelcome]);
 
+  // Re-read the cached profile photo whenever the screen regains focus or the
+  // tab changes, so a newly saved photo shows up in the header.
   useFocusEffect(
     useCallback(() => {
       if (profile?.id) {
@@ -143,6 +200,7 @@ export default function ScribeDashboard() {
     }, [profile?.id, activeTab])
   );
 
+  // Full-screen spinner until the session / profile check finishes.
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
@@ -153,15 +211,20 @@ export default function ScribeDashboard() {
     );
   }
 
+  // Wide screens get the separate desktop console (which manages its own tabs).
   if (isDesktop) {
     return (
       <ConsoleScribePC
         userProfile={profile}
         onRefresh={fetchSession}
+        unreadCount={unreadNotifs}
+        onNotificationsOpened={() => setUnread(0)}
       />
     );
   }
 
+  // Mobile layout. On web the root is pinned to the viewport height so only
+  // the tab body scrolls, keeping the header and bottom bar fixed.
   return (
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
@@ -211,6 +274,7 @@ export default function ScribeDashboard() {
           {/* Right Action Icons: Notifications + Profile */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
 
+            {/* Notifications bell: opens the notifications tab and clears the local unread dot */}
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               activeOpacity={0.75}
@@ -240,6 +304,7 @@ export default function ScribeDashboard() {
               )}
             </TouchableOpacity>
 
+            {/* Avatar: cached photo or first initial; opens the Account (settings) tab */}
             <TouchableOpacity
               onPress={() => setActiveTab('settings')}
               activeOpacity={0.8}
@@ -266,11 +331,12 @@ export default function ScribeDashboard() {
 
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        {activeTab === 'home'          && <ScribeHomeView />}
-        {activeTab === 'explore'       && <ScribeExploreView />}
-        {activeTab === 'commitments'   && <ScribeCommitmentsView />}
-        {activeTab === 'settings'      && <SharedSettingsView />}
-        {activeTab === 'notifications' && <SharedNotificationsView />}
+        {/* Each tab mounts on first visit and then stays alive (hidden) — see TabPane */}
+        <TabPane active={activeTab === 'home'}><ScribeHomeView /></TabPane>
+        <TabPane active={activeTab === 'explore'}><ScribeExploreView /></TabPane>
+        <TabPane active={activeTab === 'commitments'}><ScribeCommitmentsView /></TabPane>
+        <TabPane active={activeTab === 'settings'}><SharedSettingsView /></TabPane>
+        <TabPane active={activeTab === 'notifications'}><SharedNotificationsView /></TabPane>
       </View>
 
       {/* ── BOTTOM NAV — top corners rounded ── */}
@@ -293,8 +359,10 @@ export default function ScribeDashboard() {
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
         }}>
+          {/* One button per tab; icon and text are hidden from screen readers because the button carries the label */}
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
+            // Map tab id -> translation key ('commitments' uses nav_applied, i.e. "Applied").
             const translationKey = tab.id === 'home' ? 'nav_home' :
                                    tab.id === 'explore' ? 'nav_explore' :
                                    tab.id === 'commitments' ? 'nav_applied' : 'nav_account';

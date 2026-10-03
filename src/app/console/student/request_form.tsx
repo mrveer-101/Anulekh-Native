@@ -1,3 +1,28 @@
+/**
+ * Exam scribe request form. Route: `/console/student/request_form` (optional `?id=<exam_requests id>`).
+ *
+ * Students open it from the student console (StudentHomeView, StudentRequestsView, my_requests and the
+ * desktop ConsoleStudentPC / StudentHomePCView). StudentRequestsView passes `?id=` to edit an existing
+ * request. A new request first shows an entry-choice screen:
+ *   - "Request Assignment" -> `/console/student/assignment_form`;
+ *   - "Auto-Fill (ADMIT Card)" -> pick a photo/PDF hall ticket, send it to the backend
+ *     `POST {API_URL}/api/ai/parse-hall-ticket` (Gemini extracts subject, date, venue, exam type),
+ *     fill the form and submit straight away if every field was read;
+ *   - "Manual Fill Form" -> the form itself.
+ * The form collects exam type + sub-topic, languages, subject, date/time (custom calendar modal), venue
+ * (typed, GPS reverse-geocode via expo-location, or a simulated map picker with mock locations), an
+ * optional admit card, a pre-booking flag and extra subjects (bulk creation, create mode only).
+ *
+ * Data: reads the student's `profiles` row and, when editing, the `exam_requests` row; on submit it
+ * updates that row or inserts one `exam_requests` row per subject (status 'pending'), then returns to
+ * the console's Requests tab. All DB access goes through the `supabase` shim (core/supabase.ts), a custom
+ * client for the Rust/Axum backend's `POST /api/query`, not real Supabase.
+ *
+ * Notes: the admit card is saved only as the picked file NAME in `admit_card_proof`; the file is sent to
+ * the AI parser but not stored. On desktop (>= 768px) only the entry-choice screen uses the
+ * ConsoleStudentPC frame; the form always uses the mobile layout with a copy of the bottom tab bar.
+ * Styling mixes NativeWind `className` utilities and inline styles (no StyleSheet).
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, Platform, Animated, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,12 +37,16 @@ import { supabase } from '@/core/supabase';
 import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
 import { announceForAccessibility } from '@/core/a11y';
 
+/** Base URL of the Rust/Axum backend; used here only for the hall-ticket AI parser endpoint. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
+/** Exam categories shown in the segmented "Exam Type" control. */
 const EXAM_TYPES = ['School', 'University', 'Competitive', 'Government'];
+/** Languages the student can pick (multi-select); saved comma-joined in `exam_language`. */
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
 // Sub-topics database based on Exam Type
+/** Suggested sub-topics per exam type for the searchable dropdown; a custom typed value is also allowed. */
 const SUB_TOPICS: { [key: string]: string[] } = {
   School: ['Class 10 Board Exam', 'Class 12 Board Exam', 'Half Yearly Exam', 'Final Term Exam', 'Unit Test / Monthly Assessment'],
   University: ['Semester End Exam', 'Mid-Term Assessment', 'Practical Lab Exam', 'Backlog / KT Exam', 'Viva Voce'],
@@ -26,12 +55,18 @@ const SUB_TOPICS: { [key: string]: string[] } = {
 };
 
 // Old requests stored "College" before it was renamed to "University" — treat them as equivalent everywhere.
+/**
+ * @param type Exam type label as stored or parsed.
+ * @returns "University" for the legacy "College" label, otherwise `type` unchanged.
+ */
 const normalizeExamTypeLabel = (type: string) => (type === 'College' ? 'University' : type);
 
+/** Month names and two-letter weekday headers for the custom calendar modal. */
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 // Mock map locations for the Map Picker
+/** Hard-coded venues listed in the simulated map picker (there is no real map or places search). */
 const MOCK_LOCATIONS = [
   { id: '1', name: 'St. Xavier\'s College', address: 'Mahapalika Marg, Dhobi Talao, Chhatrapati Shivaji Terminus Area, Fort, Mumbai, Maharashtra 400001' },
   { id: '2', name: 'Mumbai University (Kalina Campus)', address: 'Vidya Nagari, Kalina, Santacruz East, Mumbai, Maharashtra 400098' },
@@ -40,10 +75,18 @@ const MOCK_LOCATIONS = [
   { id: '5', name: 'Vyas Education Library', address: 'University Road, Jagnath Plot, Rajkot, Gujarat 360001' }
 ];
 
+/**
+ * Request-a-scribe screen (default export for the route).
+ *
+ * Shows the entry-choice screen while `entryMode === 'choice'`; otherwise the request form plus its
+ * date/time picker, venue picker and "reading hall ticket" overlay modals.
+ */
 export default function ScribeRequestForm() {
+  // Layout: desktop-width screens get the PC console frame for the entry-choice screen.
   const { width: windowWidth } = useWindowDimensions();
   const isDesktop = windowWidth >= 768;
 
+  // Edit mode is driven by the `id` query param (set by StudentRequestsView).
   const params = useLocalSearchParams<{ id?: string }>();
   const isEditing = !!params.id;
 
@@ -51,6 +94,7 @@ export default function ScribeRequestForm() {
   // Editing an existing request skips straight to the form.
   const [entryMode, setEntryMode] = useState<'choice' | 'form'>(isEditing ? 'form' : 'choice');
 
+  // Submit spinner and the logged-in student's profile (its fields are copied into each request).
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
 
@@ -58,9 +102,11 @@ export default function ScribeRequestForm() {
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('University');
   const [subTopic, setSubTopic] = useState('');
+  // searchQuery is the sub-topic text box; subTopic is set once a suggestion or custom value is chosen.
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubTopicOpen, setIsSubTopicOpen] = useState(false);
   const [examLanguages, setExamLanguages] = useState<string[]>(['English']);
+  // Admit card reference saved with the request, the file name shown in the UI, and the AI-parse overlay flag.
   const [admitCardImage, setAdmitCardImage] = useState<string | null>(null);
   const [admitCardFileName, setAdmitCardFileName] = useState<string | null>(null);
   const [isParsingHallTicket, setIsParsingHallTicket] = useState(false);
@@ -71,6 +117,7 @@ export default function ScribeRequestForm() {
   const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
   const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  // Time parts edited in the picker (12-hour clock).
   const [selectedHour, setSelectedHour] = useState('10');
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [selectedAmPm, setSelectedAmPm] = useState('AM');
@@ -146,24 +193,32 @@ export default function ScribeRequestForm() {
   }, [params.id]);
 
   // Calendar Helpers
+  /** Number of days in a month (0-based month): day 0 of the next month is this month's last day. */
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
 
+  /** Weekday index (0 = Sunday) of the month's 1st day, used to pad the calendar grid. */
   const getFirstDayOfMonth = (month: number, year: number) => {
     return new Date(year, month, 1).getDay();
   };
 
+  /**
+   * Confirms the date/time modal: formats the choice as "DD/MM/YYYY | HH:MM AM" and writes it to the
+   * primary exam or to the extra-subject row in `activeExtraIndex`. Requires a selected day.
+   */
   const handleConfirmDateTime = () => {
     if (!selectedDay) {
       Alert.alert('Selection Required', 'Please select a day on the calendar.');
       return;
     }
+    // Zero-pad day and month; this string is what gets saved in exam_requests.exam_date.
     const formattedDay = selectedDay < 10 ? `0${selectedDay}` : selectedDay;
     const formattedMonth = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
     const dateStr = `${formattedDay}/${formattedMonth}/${calendarYear}`;
     const timeStr = `${selectedHour}:${selectedMinute} ${selectedAmPm}`;
     const value = `${dateStr} | ${timeStr}`;
+    // Write to whichever exam opened the picker.
     if (activeExtraIndex === -1) {
       setExamDate(value);
     } else {
@@ -173,28 +228,39 @@ export default function ScribeRequestForm() {
   };
 
   // Bulk Exam helpers
+  /** Appends an empty extra-exam row. */
   const addExtraSubject = () => {
     setExtraSubjects([...extraSubjects, { subject: '', examDate: '', examVenue: '' }]);
   };
 
+  /** Sets one field of the extra-exam row at `index`. */
   const updateExtraSubject = (index: number, field: 'subject' | 'examDate' | 'examVenue', value: string) => {
     setExtraSubjects(prev => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   };
 
+  /** Removes the extra-exam row at `index`. */
   const removeExtraSubject = (index: number) => {
     setExtraSubjects(prev => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Fills a venue from the device's GPS position (expo-location + reverse geocoding).
+   *
+   * @param extraIndex -1 for the primary exam, otherwise the extra-subject row to fill. It is also stored
+   *                   in `activeExtraIndex` so only that row's locate button shows a spinner.
+   */
   const handleGetCurrentLocation = async (extraIndex: number = -1) => {
     setIsLocating(true);
     setActiveExtraIndex(extraIndex);
     try {
+      // Ask for foreground location permission; the student types the address if it is denied.
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Permission to access location was denied. Please enter address manually.');
         return;
       }
 
+      // Get the current coordinates, then turn them into a street address.
       const locationData = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
@@ -217,6 +283,7 @@ export default function ScribeRequestForm() {
 
         const addressString = parts.join(', ');
         
+        // Write into the primary venue or the extra-exam row.
         if (extraIndex === -1) {
           setExamVenue(addressString);
         } else {
@@ -232,6 +299,7 @@ export default function ScribeRequestForm() {
     }
   };
 
+  /** Moves the calendar one month back or forward (wrapping the year) and clears the selected day. */
   const changeMonth = (direction: 'next' | 'prev') => {
     if (direction === 'prev') {
       if (calendarMonth === 0) {
@@ -251,15 +319,22 @@ export default function ScribeRequestForm() {
     setSelectedDay(null);
   };
 
+  /**
+   * Builds the calendar grid for the shown month: blank cells up to the first weekday, then one
+   * tappable cell per day (the selected day is highlighted).
+   * @returns Array of cell elements rendered inside the date picker modal.
+   */
   const renderCalendarDays = () => {
     const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
     const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
     const totalSlots = [];
 
+    // Leading blanks so day 1 lands under the right weekday.
     for (let i = 0; i < firstDay; i++) {
       totalSlots.push(<View key={`empty-${i}`} className="w-[14%] h-8 items-center justify-center" />);
     }
 
+    // One button per day of the month.
     for (let day = 1; day <= daysInMonth; day++) {
       const isSelected = selectedDay === day;
       totalSlots.push(
@@ -279,6 +354,7 @@ export default function ScribeRequestForm() {
   };
 
   // Filter sub-topics based on search query
+  /** @returns Sub-topics of the current exam type containing the search text (case-insensitive), or all of them. */
   const getFilteredSubTopics = () => {
     const list = SUB_TOPICS[examType] || [];
     if (!searchQuery.trim()) return list;
@@ -286,7 +362,12 @@ export default function ScribeRequestForm() {
   };
 
   // Reads a picked file's URI into a base64 string, on both web and native.
+  /**
+   * @param uri File URI from the image or document picker.
+   * @returns The file contents as base64, without the `data:...;base64,` prefix.
+   */
   const readFileAsBase64 = async (uri: string): Promise<string> => {
+    // Web: the URI is a blob URL, so read it with FileReader and strip the data-URL prefix.
     if (Platform.OS === 'web') {
       const response = await fetch(uri);
       const blob = await response.blob();
@@ -300,6 +381,7 @@ export default function ScribeRequestForm() {
         reader.readAsDataURL(blob);
       });
     }
+    // Native: read the file straight from disk.
     return await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
@@ -307,11 +389,18 @@ export default function ScribeRequestForm() {
 
   // Sends the picked hall ticket to the backend, which asks Gemini to extract exam details,
   // fills the form, then submits the request immediately — no manual review step.
+  /**
+   * @param uri      Picked file URI.
+   * @param mimeType File type sent to the backend (e.g. image/jpeg, application/pdf).
+   * @param fileName Saved as the admit card reference and shown in the upload box.
+   */
   const analyzeHallTicket = async (uri: string, mimeType: string, fileName: string) => {
+    // Shows the full-screen scanning overlay until the analysis finishes.
     setIsParsingHallTicket(true);
     try {
       const fileBase64 = await readFileAsBase64(uri);
 
+      // POST the file to the backend AI parser.
       const res = await fetch(`${API_URL}/api/ai/parse-hall-ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -323,9 +412,11 @@ export default function ScribeRequestForm() {
         throw new Error(result.error || 'Failed to analyze hall ticket.');
       }
 
+      // Attach the file name as the admit card reference.
       setAdmitCardImage(fileName);
       setAdmitCardFileName(fileName);
 
+      // Parsed values; an unknown exam type keeps the current selection and a missing time defaults to 10:00 AM.
       const filledSubject = result.subject || '';
       const filledVenue = result.exam_venue || '';
       const filledType = (result.exam_type && EXAM_TYPES.includes(result.exam_type)) ? result.exam_type : examType;
@@ -334,6 +425,7 @@ export default function ScribeRequestForm() {
         ? `${result.exam_date} | ${result.exam_time ? result.exam_time : '10:00 AM'}`
         : '';
 
+      // Copy whatever was read into the form.
       if (filledSubject) setSubject(filledSubject);
       if (filledVenue) setExamVenue(filledVenue);
       setExamType(filledType);
@@ -350,6 +442,7 @@ export default function ScribeRequestForm() {
         return;
       }
 
+      // Everything was read: submit now, passing the values directly because state updates are not applied yet.
       await handleSubmit({
         subject: filledSubject,
         examVenue: filledVenue,
@@ -359,6 +452,7 @@ export default function ScribeRequestForm() {
         admitCardImage: fileName,
       });
     } catch (err: any) {
+      // On failure keep the file attached so the student can finish the form by hand.
       setAdmitCardImage(fileName);
       setAdmitCardFileName(fileName);
       Alert.alert('Auto-Fill Failed', err.message || 'Could not read details from this file. Your hall ticket was still attached — please fill the fields manually.');
@@ -367,6 +461,7 @@ export default function ScribeRequestForm() {
     }
   };
 
+  /** Asks whether to upload the hall ticket as a photo or a PDF, then opens the matching picker. */
   const handlePickAdmitCard = () => {
     Alert.alert(
       'Upload Hall Ticket',
@@ -379,6 +474,7 @@ export default function ScribeRequestForm() {
     );
   };
 
+  /** Picks a hall ticket image from the photo library (after asking permission) and sends it for analysis. */
   const pickAdmitCardImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -394,12 +490,14 @@ export default function ScribeRequestForm() {
 
     if (result.canceled || !result.assets?.[0]) return;
 
+    // Fall back to a generic type and a timestamped name when the picker provides none.
     const asset = result.assets[0];
     const mimeType = asset.mimeType || 'image/jpeg';
     const fileName = asset.fileName || `hall_ticket_${Date.now()}.jpg`;
     await analyzeHallTicket(asset.uri, mimeType, fileName);
   };
 
+  /** Picks a hall ticket PDF with the document picker and sends it for analysis. */
   const pickAdmitCardPdf = async () => {
     const result = await DocumentPicker.getDocumentAsync({
       type: 'application/pdf',
@@ -416,6 +514,7 @@ export default function ScribeRequestForm() {
 
   // Entry-choice screen: "Auto-Fill from Admit Card" jumps straight to the picker,
   // then lands on the (now pre-filled) form once analysis completes.
+  /** Switches to the form view and opens the hall-ticket picker. */
   const startAutoFillEntry = () => {
     setEntryMode('form');
     handlePickAdmitCard();
@@ -423,6 +522,14 @@ export default function ScribeRequestForm() {
 
   // Accepts optional overrides so a caller (e.g. the AI auto-fill flow) can submit immediately
   // with freshly-parsed values instead of waiting a render cycle for state to catch up.
+  /**
+   * Validates the form and saves the request(s) to `exam_requests`.
+   *
+   * Edit mode updates row `params.id`; create mode inserts the primary exam plus one row per extra subject.
+   * On success it shows an alert and replaces the route with the student console's Requests tab.
+   *
+   * @param overrides Freshly parsed values to use in place of the form state (from the auto-fill flow).
+   */
   const handleSubmit = async (overrides?: {
     subject: string;
     examVenue: string;
@@ -431,11 +538,13 @@ export default function ScribeRequestForm() {
     examDate: string;
     admitCardImage: string;
   }) => {
+    // The profile supplies the student's name, DOB, phones and Aadhaar for the payload.
     if (!profile) {
       Alert.alert('Error', 'Your profile details could not be loaded. Please try again.');
       return;
     }
 
+    // Use each override when given, otherwise the form state (a typed but unselected sub-topic counts too).
     const finalSubject = overrides?.subject ?? subject;
     const finalVenue = overrides?.examVenue ?? examVenue;
     const finalExamType = overrides?.examType ?? examType;
@@ -445,6 +554,7 @@ export default function ScribeRequestForm() {
 
     // Admit card upload is optional
 
+    // Every primary field and at least one language are required.
     if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || examLanguages.length === 0) {
       Alert.alert(
         'Missing Fields',
@@ -467,6 +577,7 @@ export default function ScribeRequestForm() {
     setLoading(true);
 
     try {
+      // The session gives the student id stored on each request.
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
@@ -488,6 +599,7 @@ export default function ScribeRequestForm() {
         status: 'pending'
       };
 
+      // The primary exam's full row.
       const requestPayload = {
         ...sharedPayload,
         subject: finalSubject.trim(),
@@ -495,6 +607,7 @@ export default function ScribeRequestForm() {
         exam_venue: finalVenue.trim(),
       };
 
+      // Edit: update the existing row in place.
       if (isEditing) {
         const { error } = await supabase
           .from('exam_requests')
@@ -515,6 +628,7 @@ export default function ScribeRequestForm() {
           })),
         ];
 
+        // Insert one row at a time; the first error stops the loop and is shown to the student.
         for (const row of allRows) {
           const { error } = await supabase.from('exam_requests').insert(row);
           if (error) throw error;
@@ -542,9 +656,11 @@ export default function ScribeRequestForm() {
   // Entry-choice screen: ask whether to fill the request manually or auto-fill from an admit card.
   if (entryMode === 'choice') {
     if (isDesktop) {
+      // Desktop: card-style chooser inside the PC console frame.
       return (
         <ConsoleStudentPC activeTab="requests">
           <View style={{ maxWidth: 880, width: '100%', alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 24, padding: 36, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
+            {/* Header: title + Cancel (back to the student console) */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
               <View>
                 <Text style={{ fontSize: 22, fontWeight: '800', color: '#0f172a' }}>Select Request Type</Text>
@@ -581,6 +697,7 @@ export default function ScribeRequestForm() {
             <View>
               <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 16 }}>Exam Scribe Request</Text>
 
+              {/* Auto-fill from admit card: opens the form and the file picker */}
               <TouchableOpacity
                 onPress={startAutoFillEntry}
                 activeOpacity={0.85}
@@ -596,6 +713,7 @@ export default function ScribeRequestForm() {
                 <Feather name="chevron-right" size={24} color="#ffffff" />
               </TouchableOpacity>
 
+              {/* Manual entry: opens the empty form */}
               <TouchableOpacity
                 onPress={() => setEntryMode('form')}
                 activeOpacity={0.85}
@@ -616,6 +734,7 @@ export default function ScribeRequestForm() {
       );
     }
 
+    // Mobile: full-height page with header, option list and a copy of the console's bottom tab bar.
     return (
       <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
         <StatusBar style="dark" />
@@ -645,6 +764,7 @@ export default function ScribeRequestForm() {
           </View>
         </SafeAreaView>
 
+        {/* Request type options */}
         <ScrollView className="flex-1 px-6 pt-6 pb-8" contentContainerStyle={{ paddingBottom: 40 }}>
           <Text
             accessible={true}
@@ -688,6 +808,7 @@ export default function ScribeRequestForm() {
               Exam Request
             </Text>
 
+            {/* Auto-fill option */}
             <TouchableOpacity
               onPress={startAutoFillEntry}
               activeOpacity={0.85}
@@ -707,6 +828,7 @@ export default function ScribeRequestForm() {
               <Feather name="chevron-right" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </TouchableOpacity>
 
+            {/* Manual option (also announced to screen readers) */}
             <TouchableOpacity
               onPress={() => {
                 setEntryMode('form');
@@ -749,6 +871,7 @@ export default function ScribeRequestForm() {
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
           }}>
+            {/* Tabs go back to the student console with ?tab=...; "Requests" is shown as active */}
             {[
               { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
               { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
@@ -791,6 +914,7 @@ export default function ScribeRequestForm() {
     );
   }
 
+  // Form view (manual entry, after auto-fill, or editing).
   return (
     <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
@@ -798,6 +922,7 @@ export default function ScribeRequestForm() {
       {/* Page Header (with back button) */}
       <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 }}>
         <View style={{ paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center' }}>
+          {/* Back: a new request returns to the entry choice; editing returns to the previous screen */}
           <TouchableOpacity
             onPress={() => {
               if (!isEditing) { setEntryMode('choice'); return; }
@@ -814,6 +939,7 @@ export default function ScribeRequestForm() {
         </View>
       </SafeAreaView>
 
+      {/* Scrollable form card */}
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
         <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
           
@@ -977,6 +1103,7 @@ export default function ScribeRequestForm() {
             )}
 
             <View className="space-y-3">
+              {/* Subject / paper name */}
               <View>
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Subject / Paper Name *</Text>
                 <TextInput
@@ -1025,6 +1152,7 @@ export default function ScribeRequestForm() {
                     accessibilityHint="Enter examination center location address"
                     className="flex-1 text-sm text-slate-800 mr-2 py-1"
                   />
+                  {/* GPS auto-detect and simulated map picker buttons */}
                   <View className="flex-row gap-2">
                     <TouchableOpacity
                       onPress={() => handleGetCurrentLocation(-1)}
@@ -1073,6 +1201,7 @@ export default function ScribeRequestForm() {
                       : 'border-slate-200 bg-slate-50/60 active:border-blue-400'
                   }`}
                 >
+                  {/* Shows the attached file name once picked, otherwise the upload prompt */}
                   {admitCardImage ? (
                     <View className="items-center">
                       <Feather
@@ -1114,6 +1243,7 @@ export default function ScribeRequestForm() {
                   Sitting multiple papers? Add them here — each becomes a separate request scribes can apply to.
                 </Text>
 
+                {/* One card per extra exam: subject, date/time and venue (same pickers, targeted via activeExtraIndex) */}
                 {extraSubjects.map((row, index) => (
                   <View key={index} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2.5">
                     <View className="flex-row items-center justify-between mb-2">
@@ -1175,6 +1305,7 @@ export default function ScribeRequestForm() {
                   </View>
                 ))}
 
+                {/* Add another extra exam row */}
                 <TouchableOpacity
                   onPress={addExtraSubject}
                   className="w-full border-2 border-dashed border-blue-200 bg-blue-50/40 rounded-xl py-2.5 flex-row items-center justify-center active:bg-blue-50"
@@ -1250,6 +1381,7 @@ export default function ScribeRequestForm() {
                 <TextInput 
                   value={selectedHour}
                   onChangeText={(text) => {
+                    // Accept only 1-12 (or empty while typing).
                     const h = parseInt(text);
                     if (!text || (h >= 1 && h <= 12)) setSelectedHour(text);
                   }}
@@ -1267,6 +1399,7 @@ export default function ScribeRequestForm() {
                 <TextInput 
                   value={selectedMinute}
                   onChangeText={(text) => {
+                    // Accept only 0-59 (or empty while typing).
                     const m = parseInt(text);
                     if (!text || (m >= 0 && m <= 59)) setSelectedMinute(text);
                   }}
@@ -1375,6 +1508,7 @@ export default function ScribeRequestForm() {
                   <TouchableOpacity
                     key={loc.id}
                     onPress={() => {
+                      // Fill the primary venue or the extra-exam row that opened the picker, then announce it.
                       const value = loc.name + ', ' + loc.address;
                       if (activeExtraIndex === -1) {
                         setExamVenue(value);
@@ -1404,6 +1538,7 @@ export default function ScribeRequestForm() {
       </Modal>
 
       {/* 3. FULL-SCREEN OVERLAY: Hall Ticket Analysis in progress */}
+      {/* Cannot be dismissed by the user (empty onRequestClose); it closes when the analysis finishes */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1438,6 +1573,7 @@ export default function ScribeRequestForm() {
           borderTopLeftRadius: 20,
           borderTopRightRadius: 20,
         }}>
+          {/* Same tab list as the entry-choice screen; "Requests" is active */}
           {[
             { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
             { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
@@ -1482,10 +1618,16 @@ export default function ScribeRequestForm() {
 
 // Full-screen scanning animation shown while the hall ticket is being analyzed:
 // a pulsing document icon with an animated scan-line sweep.
+/**
+ * Pulsing document icon with a looping scan line, shown in the "Reading your hall ticket" overlay.
+ * Both animation loops start on mount and stop on unmount.
+ */
 function HallTicketScanningAnimation() {
+  // Animated values: icon scale (0.85-1) and scan-line progress (0-1).
   const pulseAnim = React.useRef(new Animated.Value(0.85)).current;
   const scanAnim = React.useRef(new Animated.Value(0)).current;
 
+  // Start the pulse and scan loops; stop them when the overlay closes.
   useEffect(() => {
     const pulseLoop = Animated.loop(
       Animated.sequence([
@@ -1507,6 +1649,7 @@ function HallTicketScanningAnimation() {
     };
   }, []);
 
+  // Map scan progress to a vertical sweep across the 100px tile.
   const scanTranslateY = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [-46, 46] });
 
   return (
@@ -1518,6 +1661,7 @@ function HallTicketScanningAnimation() {
         transform: [{ scale: pulseAnim }],
       }}
     >
+      {/* Document icon with the moving scan line on top */}
       <Feather name="file-text" size={44} color="#60a5fa" />
       <Animated.View
         style={{

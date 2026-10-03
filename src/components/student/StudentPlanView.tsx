@@ -1,13 +1,36 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * StudentPlanView — the "Plan" tab of the student portal.
+ *
+ * Rendered inside a keep-alive <TabPane> by the student console on phones
+ * (app/console/student/index.tsx) and on desktop (components/pc_view/ConsoleStudentPC.tsx).
+ * Lists the student's confirmed plans — matched or completed exam and assignment requests, plus
+ * pending SOS (emergency) requests — with a month calendar that marks exam days, All / Upcoming /
+ * Completed filters, expandable plan cards (call, chat, declaration, SOS applications), and two
+ * modals: the scribe declaration certificate and the "call your scribe" bottom sheet.
+ *
+ * Data (read-only): `profiles` (own row, plus matched scribes via core/profileLookup
+ * `getProfilesByIds`), `exam_requests` and `assignment_requests`. Queries go through the `supabase`
+ * object from core/supabase.ts, a custom shim that sends `POST /api/query` to the Rust/Axum backend
+ * (not real Supabase). Navigates to view_applications and common/chat.
+ */
+import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, ScrollView, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { parseExamDate, isExamPast } from '@/core/examDate';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, STUDENT_THEME as THEME } from '@/core/portalTheme';
+import { useInDesktopShell } from '@/components/ui/DesktopShell';
+import { useTabActive } from '@/components/ui/TabPane';
+import { readScreenCache, writeScreenCache } from '@/core/screenCache';
+import { getProfilesByIds } from '@/core/profileLookup';
 
+/**
+ * One plan row: an `exam_requests` or `assignment_requests` row, tagged with `requestType` (which table
+ * it came from) and, once matched, the scribe's profile attached as `scribeProfile`.
+ */
 interface ExamRequest {
   id: number;
   subject: string;
@@ -31,8 +54,27 @@ interface ExamRequest {
   };
 }
 
+/** Everything the Plan tab shows, cached so the next visit paints instantly (see core/screenCache). */
+interface StudentPlanSnapshot {
+  profile: any;
+  plans: any[];
+}
+
+/**
+ * Student portal Plan tab.
+ *
+ * Follows the stale-while-revalidate pattern of core/screenCache: the cached `StudentPlanSnapshot`
+ * is painted first, then fresh data replaces it and is cached again. It refreshes only while its tab
+ * is visible (`useTabActive` + `useFocusEffect`), and on pull-to-refresh in the phone layout.
+ */
 export default function StudentPlanView() {
+  // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
+  const inShell = useInDesktopShell();
   const { t } = useLanguage();
+  // True while this tab is visible (TabPane keep-alive) — data refreshes only then.
+  const isActive = useTabActive();
+  // Loaded plans, first-load spinner, pull-to-refresh flag and the student's own profile (shown
+  // as the candidate on the declaration).
   const [plans, setPlans] = useState<ExamRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +85,7 @@ export default function StudentPlanView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'upcoming' | 'completed'>('all');
   const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
+  // Expanded cards are keyed "<requestType>-<id>" because exam and assignment ids can collide.
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
 
   // Declaration Modal State
@@ -54,80 +97,81 @@ export default function StudentPlanView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
+  /** Puts a snapshot (cached or freshly fetched) on screen. */
+  const applySnapshot = (snap: StudentPlanSnapshot) => {
+    setStudentProfile(snap.profile);
+    setPlans(snap.plans);
+  };
+
+  /**
+   * Loads the Plan tab: cached snapshot first, then profile + exam + assignment requests in parallel,
+   * then the matched scribes' profiles in one de-duplicated batch.
+   */
   const fetchPlans = async () => {
     try {
+      // Nothing to load without a signed-in session.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+      const userId = session.user.id;
 
-      // Fetch Student Profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      setStudentProfile(profile);
+      // Stale-while-revalidate: paint the last cached snapshot straight away (no spinner) while fresh
+      // data loads below.
+      const cached = await readScreenCache<StudentPlanSnapshot>('student_plan', userId);
+      if (cached) {
+        applySnapshot(cached);
+        setLoading(false);
+      }
 
-      // Fetch student's exam requests
-      const { data: examData } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('student_id', session.user.id)
-        .order('created_at', { ascending: false });
+      // Profile, exam requests and assignment requests in parallel (requests newest first).
+      const [{ data: profile }, { data: examData }, { data: asgData }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('exam_requests').select('*').eq('student_id', userId).order('created_at', { ascending: false }),
+        supabase.from('assignment_requests').select('*').eq('student_id', userId).order('created_at', { ascending: false }),
+      ]);
 
-      // Fetch student's assignment requests
-      const { data: asgData } = await supabase
-        .from('assignment_requests')
-        .select('*')
-        .eq('student_id', session.user.id)
-        .order('created_at', { ascending: false });
-
+      // Tag each row with its source table so exams and assignments can share one list.
       const taggedExams = (examData || []).map((e: any) => ({ ...e, requestType: 'exam' }));
       const taggedAsgs = (asgData || []).map((a: any) => ({ ...a, requestType: 'assignment' }));
 
-      const combined = [...taggedExams, ...taggedAsgs];
-
-      // Include matched, completed, and pending SOS requests
-      const activePlans = combined.filter((item: any) => {
+      // Plans = matched, completed and pending-SOS requests, with the matched scribe's profile attached
+      const activePlans = [...taggedExams, ...taggedAsgs].filter((item: any) => {
         return item.status === 'matched' || item.status === 'completed' || (item.status === 'pending' && item.is_emergency === 'yes');
       });
+      const scribes = await getProfilesByIds(activePlans.map((item: any) => item.scribe_id));
+      const enriched = activePlans.map((item: any) => ({
+        ...item,
+        scribeProfile: (item.scribe_id && scribes.get(item.scribe_id)) || undefined,
+      }));
 
-      // Enrich plans with Scribe profiles
-      const enriched = await Promise.all(
-        activePlans.map(async (exam: any) => {
-          let scribeProfile = null;
-          if (exam.scribe_id) {
-            const { data: scribe } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', exam.scribe_id)
-              .single();
-            scribeProfile = scribe;
-          }
-          return {
-            ...exam,
-            scribeProfile: scribeProfile || undefined
-          };
-        })
-      );
-
-      setPlans(enriched);
+      // Build the fresh snapshot, put it on screen and cache it for the next visit.
+      const snapshot: StudentPlanSnapshot = { profile, plans: enriched };
+      applySnapshot(snapshot);
+      writeScreenCache('student_plan', userId, snapshot);
+    // Errors are only logged; whatever is on screen (e.g. the cached snapshot) stays.
     } catch (error: any) {
       console.error('Error fetching student plans:', error.message);
     } finally {
+      // Clear both the first-load spinner and the pull-to-refresh indicator.
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchPlans();
-  }, []);
-
+  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
+  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  useFocusEffect(
+    useCallback(() => {
+      if (!isActive) return;
+      fetchPlans();
+    }, [isActive])
+  );
+  /** Pull-to-refresh handler (phone layout): shows the refresh spinner and reloads. */
   const onRefresh = () => {
     setRefreshing(true);
     fetchPlans();
   };
 
+  /** Formats a timestamp as e.g. "05 Oct 2026" (en-IN); used for the request's creation date. */
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
@@ -137,12 +181,19 @@ export default function StudentPlanView() {
     });
   };
 
+  /**
+   * Opens the call bottom sheet for a plan's scribe.
+   * For privacy the scribe's contact is only unlocked on the exam day: the date part of `exam_date`
+   * (before any "|" time suffix) must equal today's date (UTC, via toISOString), otherwise an alert
+   * explains when it unlocks.
+   */
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
       Alert.alert("Contact Info Locked 🔒", "Contact details are only unlocked on the day of the exam for privacy protection.");
       return;
     }
     
+    // Compare only the date part of exam_date with today's date.
     const dateStr = exam.exam_date.split('|')[0].trim();
     const todayStr = new Date().toISOString().split('T')[0];
     
@@ -151,13 +202,19 @@ export default function StudentPlanView() {
       return;
     }
 
+    // Each opening starts with the phone number hidden behind "View number".
     setCallExam(exam);
     setShowMaskedNumber(false);
     setIsCallOpen(true);
   };
 
+  /** Closes the call bottom sheet. */
   const closeCallSheet = () => setIsCallOpen(false);
 
+  /**
+   * Opens the system dialer for the number. The error alerts here are hard-coded Gujarati
+   * ("calling is not possible from this device" / "error starting the call").
+   */
   const dialNumber = async (phoneNumber: string) => {
     const url = `tel:${phoneNumber}`;
     try {
@@ -172,11 +229,16 @@ export default function StudentPlanView() {
     }
   };
 
+  /** Moves the calendar by `offset` months (-1 = previous, +1 = next). */
   const changeMonth = (offset: number) => {
     const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
     setCurrentMonth(next);
   };
 
+  /**
+   * Builds the cells of a month grid (Sunday-first): leading nulls up to the weekday of the 1st,
+   * then one local-midnight Date per day of the month.
+   */
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -192,6 +254,7 @@ export default function StudentPlanView() {
     return days;
   };
 
+  /** True if any plan's exam (exam_date parsed by core/examDate) falls on this calendar day. */
   const hasPlanOnDate = (day: Date) => {
     if (!day) return false;
     return plans.some(p => {
@@ -201,6 +264,7 @@ export default function StudentPlanView() {
     });
   };
 
+  /** All plans whose exam falls on this calendar day (used to colour SOS days red). */
   const getPlansOnDate = (day: Date) => {
     if (!day) return [];
     return plans.filter(p => {
@@ -211,12 +275,14 @@ export default function StudentPlanView() {
   };
 
   // Sort and filter logic
+  // Soonest exam first; plans whose exam_date cannot be parsed go last.
   const sortedPlans = [...plans].sort((a, b) => {
     const dA = parseExamDate(a.exam_date)?.getTime() || 9999999999999;
     const dB = parseExamDate(b.exam_date)?.getTime() || 9999999999999;
     return dA - dB;
   });
 
+  // A selected calendar day (local "YYYY-MM-DD") narrows the list to plans on that day.
   let filteredPlans = sortedPlans;
   if (selectedDate) {
     filteredPlans = filteredPlans.filter(p => {
@@ -227,11 +293,13 @@ export default function StudentPlanView() {
     });
   }
 
+  /** A plan counts as completed when marked 'completed' or once its exam date/time has passed. */
   const checkIsCompleted = (item: ExamRequest) => {
     if (item.status === 'completed') return true;
     return isExamPast(item.exam_date);
   };
 
+  // Then apply the All / Upcoming / Completed filter.
   filteredPlans = filteredPlans.filter(p => {
     const isCompleted = checkIsCompleted(p);
     if (activeFilter === 'upcoming') {
@@ -243,12 +311,18 @@ export default function StudentPlanView() {
     return true;
   });
 
+  // Wide screens (>= 768 px) show the list and the calendar side by side.
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
   // Blocks and plan cards rise in one after another (off with Reduce Motion).
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
 
+  /**
+   * Month calendar card: previous / next month buttons, a month title that collapses the grid, a
+   * weekday row and a day grid marking exam days (red = SOS, orange = other plans, blue = today).
+   * Tapping a day filters the list to it; tapping the selected day again clears the filter.
+   */
   const renderCalendarBlock = () => (
     <View style={{
       backgroundColor: '#ffffff',
@@ -265,6 +339,7 @@ export default function StudentPlanView() {
     }}>
       {/* Header: Month Selector with Interactive Expand/Collapse Header */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
+        {/* Previous month */}
         <TouchableOpacity 
           onPress={() => changeMonth(-1)} 
           style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
@@ -272,6 +347,7 @@ export default function StudentPlanView() {
           <Feather name="chevron-left" size={18} color="#2563eb" />
         </TouchableOpacity>
         
+        {/* Month title; tapping it collapses / expands the grid */}
         <TouchableOpacity 
           onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
           activeOpacity={0.7}
@@ -294,6 +370,7 @@ export default function StudentPlanView() {
           <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#2563eb" />
         </TouchableOpacity>
 
+        {/* Next month */}
         <TouchableOpacity 
           onPress={() => changeMonth(1)} 
           style={{ padding: 8, backgroundColor: 'rgba(37,99,235,0.08)', borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)', borderRadius: 12 }}
@@ -302,6 +379,7 @@ export default function StudentPlanView() {
         </TouchableOpacity>
       </View>
 
+      {/* Weekday row and day grid are hidden while the calendar is collapsed */}
       {!isCalendarCollapsed && (
         <>
           {/* Weekdays Row */}
@@ -316,14 +394,19 @@ export default function StudentPlanView() {
           {/* Days Grid */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
             {getDaysInMonth(currentMonth).map((day, idx) => {
+              // Blank cells before the 1st of the month.
               if (!day) {
                 return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
               }
+              // Local "YYYY-MM-DD" key, the same format stored in selectedDate.
               const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
               const isSelected = selectedDate === dateString;
               const hasPlan = hasPlanOnDate(day);
+              // Compares UTC dates (toISOString) of the cell's local midnight and of now, so in zones ahead
+              // of UTC (e.g. IST) the "today" highlight can land on a neighbouring day.
               const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
+              // Cell colours, in priority order: selected > has a plan (SOS red, else orange) > today > plain.
               let cellBg = 'transparent';
               let cellTextColor = '#334155';
               let cellBorder = {};
@@ -353,6 +436,7 @@ export default function StudentPlanView() {
                 cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
               }
 
+              // Tapping selects the day as a list filter; tapping the selected day clears it.
               return (
                 <TouchableOpacity
                   key={idx}
@@ -381,6 +465,7 @@ export default function StudentPlanView() {
                   }}>
                     {day.getDate()}
                   </Text>
+                  {/* Dot under days that have a plan */}
                   {hasPlan && (
                     <View style={{
                       width: 5,
@@ -399,6 +484,10 @@ export default function StudentPlanView() {
     </View>
   );
 
+  /**
+   * Segmented All / Upcoming / Completed filter. The `isActive` inside means "this filter is
+   * selected" and shadows the tab-visibility flag of the same name.
+   */
   const renderFilterBlock = () => (
     <View style={{
       flexDirection: 'row',
@@ -453,6 +542,7 @@ export default function StudentPlanView() {
     </View>
   );
 
+  /** Card shown when no plans match the current filters. */
   const renderEmptyState = () => (
     <View style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
       <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(37,99,235,0.08)', ...gradient(THEME.heroGradient), alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: 'rgba(37,99,235,0.18)' }}>
@@ -465,12 +555,19 @@ export default function StudentPlanView() {
     </View>
   );
 
+  /**
+   * One plan card: header with subject and status pill, a summary bar (scribe, exam date, Details
+   * button) and, when expanded, the full details and actions.
+   * @param item  The plan (exam or assignment request).
+   * @param index Position in the list, used to stagger the rise-in animation.
+   */
   const renderPlanCard = (item: ExamRequest, index = 0) => {
     const itemKey = `${item.requestType || 'exam'}-${item.id}`;
     const isEmergency = item.is_emergency === 'yes';
     const isConfirmed = item.status === 'matched' || !!item.scribe_id;
     const isExpanded = expandedPlanIds.has(itemKey);
 
+    // Expand / collapse this card (state lives in expandedPlanIds, keyed by itemKey).
     const toggleExpand = () => {
       setExpandedPlanIds(prev => {
         const next = new Set(prev);
@@ -480,6 +577,7 @@ export default function StudentPlanView() {
       });
     };
 
+    // Border and shadow colours: red for SOS, green for confirmed, blue otherwise.
     let borderColor = '#bfdbfe';
     let shadowColor = '#2563eb';
     let borderWidth = 1.5;
@@ -517,12 +615,14 @@ export default function StudentPlanView() {
         {/* Card Header */}
         <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <View style={{ flex: 1, marginRight: 8 }}>
+            {/* Subject, falling back to "પરીક્ષા" (Gujarati for "exam") */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{item.subject || 'પરીક્ષા'}</Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
               Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
             </Text>
           </View>
           
+          {/* Status pill */}
           <View style={{
             paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20,
             backgroundColor: isEmergency ? '#fef2f2' : 'rgba(5,150,105,0.08)',
@@ -541,6 +641,7 @@ export default function StudentPlanView() {
         {/* Collapsed Preview Summary Bar */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
+            {/* Scribe name (not shown for SOS requests) */}
             {!isEmergency && item.scribeProfile?.full_name && (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
@@ -549,6 +650,7 @@ export default function StudentPlanView() {
                 </Text>
               </View>
             )}
+            {/* Exam date: only the first space-separated part of exam_date */}
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
               <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#475569', fontWeight: '600' }}>
@@ -582,6 +684,7 @@ export default function StudentPlanView() {
         {/* Expanded Detailed View */}
         {isExpanded && (
           <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            {/* SOS warning banner */}
             {isEmergency && (
               <View style={{ 
                 backgroundColor: '#fef2f2', 
@@ -597,6 +700,7 @@ export default function StudentPlanView() {
               </View>
             )}
 
+            {/* Detail rows: scribe, date, venue, language */}
             <View style={{ gap: 8, marginBottom: 14 }}>
               {!isEmergency && (
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -628,9 +732,10 @@ export default function StudentPlanView() {
 
             {/* Controls */}
             <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              {/* SOS plans link to the applications list; others get Call / Chat and the declaration */}
               {isEmergency ? (
                 <TouchableOpacity
-                  onPress={() => router.push('/console/student/view_applications' as any)}
+                  onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
                   style={{ 
                     width: '100%', 
                     backgroundColor: '#dc2626', 
@@ -648,6 +753,7 @@ export default function StudentPlanView() {
               ) : (
                 <>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {/* Call (unlocks on exam day, see openCallSheet) */}
                     <TouchableOpacity
                       onPress={() => openCallSheet(item)}
                       style={{ 
@@ -667,6 +773,7 @@ export default function StudentPlanView() {
                       <Text style={{ fontFamily: 'Roboto', color: '#059669', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                     </TouchableOpacity>
 
+                    {/* Chat with the scribe (the chat route is always opened with type=exam) */}
                     <TouchableOpacity
                       onPress={() => {
                         router.push(`/console/common/chat?id=${item.id}&type=exam` as any);
@@ -689,6 +796,7 @@ export default function StudentPlanView() {
                     </TouchableOpacity>
                   </View>
 
+                  {/* Opens the declaration certificate modal for this plan */}
                   <TouchableOpacity
                     onPress={() => {
                       setSelectedExam(item);
@@ -723,6 +831,7 @@ export default function StudentPlanView() {
     );
   };
 
+  // First load with no cached snapshot yet: full-screen spinner.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
@@ -731,11 +840,16 @@ export default function StudentPlanView() {
     );
   }
 
+  // Page: themed gradient background (STUDENT_THEME + gradient() from core/portalTheme) with a
+  // decorative orb, the plan list / calendar, and the two modals. All styling is inline.
   return (
-    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
-      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
+    <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+      {/* Soft colour orb for depth behind the cards */}
+      {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
+      {/* Desktop: two columns in a ScrollView (no pull-to-refresh). Phone: a FlatList with the
+          calendar and filters as its header, plus pull-to-refresh */}
       {isDesktop ? (
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: inShell ? 0 : 24, paddingBottom: 40 }}>
           <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
             {/* Left 50%: Filter Block + List of Plans */}
             <View style={{ flex: 1 }}>
@@ -792,6 +906,7 @@ export default function StudentPlanView() {
 
             {/* Declaration Content */}
             <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
+              {/* Letterhead */}
               <View style={{ alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 20, color: '#2563eb' }}>Anulekh Portal</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 }}>{t('official_cert_letter')}</Text>
@@ -808,6 +923,7 @@ export default function StudentPlanView() {
 
               {/* 2. Candidate & Scribe Details */}
               <View style={{ gap: 10 }}>
+                {/* Candidate */}
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{studentProfile?.full_name}</Text>
@@ -817,6 +933,7 @@ export default function StudentPlanView() {
 
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
 
+                {/* Scribe (placeholder occupation / education when missing) */}
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{selectedExam?.scribeProfile?.full_name}</Text>
@@ -853,6 +970,7 @@ export default function StudentPlanView() {
               >
                 <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '700', fontSize: 13 }}>{t('close')}</Text>
               </TouchableOpacity>
+              {/* Placeholder: download only shows an alert for now */}
               <TouchableOpacity 
                 onPress={() => Alert.alert(t('download'), t('download_declaration'))}
                 style={{ flex: 1, backgroundColor: '#2563eb', paddingVertical: 11, borderRadius: 12, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}
@@ -948,6 +1066,7 @@ export default function StudentPlanView() {
                 </Text>
               </View>
               <View>
+                {/* Falls back to "લખિયો" (Gujarati for "scribe") */}
                 <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: '#0f172a' }}>
                   {callExam?.scribeProfile?.full_name ?? 'લખિયો'}
                 </Text>
@@ -962,6 +1081,8 @@ export default function StudentPlanView() {
             </View>
 
             {/* Phone number display */}
+            {/* Masked until "View number" is tapped; falls back to a placeholder number when the scribe
+                profile has no phone */}
             {showMaskedNumber ? (
               <View style={{
                 backgroundColor: '#fff',
@@ -991,6 +1112,7 @@ export default function StudentPlanView() {
             )}
 
             {/* Exam context */}
+            {/* Reads "Subject: <subject> exam volunteer" in Gujarati */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
               વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના સ્વયંસેવક
             </Text>

@@ -1,3 +1,23 @@
+/**
+ * Scribe request-details / apply screen. Route: `/console/scribe/apply?id=<requestId>&type=exam|assignment`
+ * (`type` defaults to 'exam').
+ *
+ * Opened from the scribe Explore tab (components/scribe/ScribeExploreView.tsx) when a scribe taps an
+ * exam or assignment request, and from the invitations list on the scribe Home tab
+ * (components/scribe/ScribeHomeView.tsx).
+ *
+ * Data (via the `supabase` shim, which calls the Rust/Axum backend rather than real Supabase):
+ *   - reads  `profiles` (the signed-in scribe), `exam_requests` or `assignment_requests` (the request),
+ *            `scribe_applications` (this scribe's existing application for the request, if any)
+ *   - writes `scribe_applications` (new 'pending' application, or invite -> 'accepted' / 'rejected'),
+ *            the request row (status 'matched' + scribe_id when an invite is accepted) and
+ *            `notifications` (an in-app notice to the student for every action).
+ *
+ * Rules: applying requires `profiles.verification_status === 'approved'` and ticking the guidelines
+ * checkbox (which can open PolicyModal). The bottom action area switches between "Apply",
+ * "Pending", "Invited (Accept / Decline)" and "Assigned" depending on the application state.
+ * Assignment attachments can be previewed in a modal. Not signed in -> redirect to `/auth/login`.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,22 +27,37 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import PolicyModal from '@/components/modals/PolicyModal';
 
+/**
+ * Request details page where a scribe applies to (or responds to an invitation for) an exam or
+ * assignment request. Reads `id` and `type` from the route query string. See the file header for
+ * the tables touched.
+ */
 export default function ScribeApplyDetailsPage() {
+  // Route params: `id` is the request's primary key; `type` picks the table ('assignment' vs exam).
   const params = useLocalSearchParams<{ id: string; type?: string }>();
   const type = params.type || 'exam';
   
+  // Loading / in-flight flags.
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // `exam` holds the request row for either type (exam_requests or assignment_requests); `profile` is the scribe.
   const [exam, setExam] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
+  // This scribe's non-rejected application for the request (status: 'pending' | 'invited' | 'accepted' ...).
   const [hasApplied, setHasApplied] = useState(false);
   const [appStatus, setAppStatus] = useState<string | null>(null);
   const [appId, setAppId] = useState<number | null>(null);
+  // UI state: success overlay after applying, attachment being previewed, guidelines agreement + modal.
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState<any>(null);
   const [agreedGuidelines, setAgreedGuidelines] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
+  /**
+   * Decodes `exam.attachments`, an array of `"<filename>::<data URI>"` strings, into
+   * `{ uri, name, mimeType, dataUri }` objects. The MIME type is guessed from the file extension
+   * (pdf, otherwise `image/<ext>`). Malformed entries (no `::`) are dropped.
+   */
   const parsedAttachments = React.useMemo(() => {
     if (!exam || !exam.attachments || !Array.isArray(exam.attachments)) return [];
     return exam.attachments.map((entry: string) => {
@@ -36,12 +71,20 @@ export default function ScribeApplyDetailsPage() {
     }).filter(Boolean) as any[];
   }, [exam]);
 
+  // (Re)load whenever the route points at a different request.
   useEffect(() => {
     fetchExamAndProfile();
   }, [params.id, params.type]);
 
+  /**
+   * Loads everything the screen needs: the scribe's `profiles` row, the request row from
+   * `exam_requests` / `assignment_requests`, and any existing `scribe_applications` row for this
+   * scribe + request + type. Rejected applications are ignored so the scribe may re-apply.
+   * Also re-run after accepting an invite to refresh the action area. Clears `loading` when done.
+   */
   const fetchExamAndProfile = async () => {
     try {
+      // Must be signed in; otherwise go to login.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/auth/login');
@@ -104,9 +147,16 @@ export default function ScribeApplyDetailsPage() {
     }
   };
 
+  /**
+   * "Apply as Scribe / Writer" handler. Validates that the scribe is verified and has agreed to the
+   * guidelines, inserts a 'pending' row into `scribe_applications` (the student approves it
+   * manually), inserts a `notifications` row for the student, then shows the success overlay
+   * for 3 s and replaces the route with `/console/scribe`.
+   */
   const handleApply = async () => {
     if (!profile) return;
 
+    // Gate 1: only admin-approved (verified) scribes may apply.
     if (profile.verification_status !== 'approved') {
       Alert.alert(
         'Verification Required',
@@ -115,6 +165,7 @@ export default function ScribeApplyDetailsPage() {
       return;
     }
 
+    // Gate 2: the guidelines checkbox must be ticked.
     if (!agreedGuidelines) {
       Alert.alert(
         'Policy Agreement Required',
@@ -166,6 +217,11 @@ export default function ScribeApplyDetailsPage() {
     }
   };
 
+  /**
+   * Accepts a student's invitation (an application row with status 'invited'). Requires the
+   * guidelines agreement, then: sets the application to 'accepted', marks the request row
+   * 'matched' with this scribe's id, notifies the student via `notifications`, and reloads.
+   */
   const handleAcceptInviteDirect = async () => {
     if (!appId || !exam) return;
 
@@ -179,6 +235,7 @@ export default function ScribeApplyDetailsPage() {
 
     setSubmitting(true);
     try {
+      // 1. Mark this scribe's application as accepted.
       const { error: appErr } = await supabase
         .from('scribe_applications')
         .update({ status: 'accepted' })
@@ -186,6 +243,7 @@ export default function ScribeApplyDetailsPage() {
 
       if (appErr) throw appErr;
 
+      // 2. Lock the request to this scribe.
       const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
       const { error: reqErr } = await supabase
         .from(table)
@@ -194,6 +252,7 @@ export default function ScribeApplyDetailsPage() {
 
       if (reqErr) throw reqErr;
 
+      // 3. Tell the student (best effort; the result isn't checked).
       await supabase
         .from('notifications')
         .insert({
@@ -213,6 +272,11 @@ export default function ScribeApplyDetailsPage() {
     }
   };
 
+  /**
+   * Declines a student's invitation: sets the application to 'rejected', notifies the student via
+   * `notifications`, then navigates back. `submitting` is only reset on failure because the screen
+   * is left on success.
+   */
   const handleRejectInviteDirect = async () => {
     if (!appId || !exam) return;
     setSubmitting(true);
@@ -242,6 +306,7 @@ export default function ScribeApplyDetailsPage() {
     }
   };
 
+  // Initial load spinner.
   if (loading) {
     return (
       <View className="flex-1 bg-white items-center justify-center">
@@ -250,6 +315,7 @@ export default function ScribeApplyDetailsPage() {
     );
   }
 
+  // Request id didn't resolve (deleted, wrong type, or fetch failed): show a not-found state with Back.
   if (!exam) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 justify-center items-center p-6">
@@ -306,6 +372,7 @@ export default function ScribeApplyDetailsPage() {
           <View className="space-y-3.5">
             {type === 'exam' ? (
               <>
+                {/* Exam rows: date, venue, language */}
                 <View className="flex-row items-start">
                   <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
@@ -332,6 +399,7 @@ export default function ScribeApplyDetailsPage() {
               </>
             ) : (
               <>
+                {/* Assignment rows: deadline, title, optional page count and instructions */}
                 <View className="flex-row items-start">
                   <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
@@ -369,7 +437,8 @@ export default function ScribeApplyDetailsPage() {
                 ) : null}
               </>
             )}
- 
+
+            {/* Student name (both types; exams also show the student's grade) */}
             <View className="flex-row items-start">
               <Feather name="user" size={16} color="#059669" className="mr-3.5 mt-0.5" />
               <View className="flex-1">
@@ -395,6 +464,7 @@ export default function ScribeApplyDetailsPage() {
                     <Text className="text-[9px] text-slate-400 mt-0.5">JPEG Image • 1.2 MB</Text>
                   </View>
                 </View>
+                {/* Note: the type/size caption above is placeholder text and this eye button has no onPress yet */}
                 <TouchableOpacity className="p-2 bg-emerald-100/40 rounded-lg">
                   <Feather name="eye" size={14} color="#059669" />
                 </TouchableOpacity>
@@ -485,8 +555,10 @@ export default function ScribeApplyDetailsPage() {
         )}
 
         {/* Action Button */}
+        {/* Already involved (applied/invited, or already the assigned scribe) -> status UI; otherwise -> Apply button */}
         {hasApplied || (exam && exam.scribe_id === (profile ? profile.id : '')) ? (
           (() => {
+            // Confirmed: application accepted or the request already names this scribe.
             if (appStatus === 'accepted' || (exam && exam.scribe_id === (profile ? profile.id : ''))) {
               return (
                 <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
@@ -495,6 +567,7 @@ export default function ScribeApplyDetailsPage() {
                 </View>
               );
             }
+            // Student invited this scribe directly: offer Accept / Decline.
             if (appStatus === 'invited') {
               return (
                 <View className="bg-white border border-slate-150 p-4 rounded-3xl">
@@ -526,6 +599,7 @@ export default function ScribeApplyDetailsPage() {
                 </View>
               );
             }
+            // Any other active status (normally 'pending'): waiting for the student to decide.
             return (
               <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
                 <Feather name="clock" size={16} color="#059669" className="mr-2" />

@@ -1,9 +1,24 @@
+/**
+ * SharedNotificationsView - the "Notifications" tab shared by both consoles.
+ *
+ * Mounted inside a TabPane by app/console/student/index.tsx and
+ * app/console/scribe/index.tsx. It lists the signed-in user's in-app notifications,
+ * newest first, and lets them mark one (tap) or all ("Mark all read") as read.
+ *
+ * Data (via the `supabase` shim, which calls the Rust/Axum backend, not real Supabase):
+ * - reads `profiles.role` only to pick the colour theme (blue = student, green = scribe);
+ * - reads and updates `notifications` rows for the current user (`is_read` is 0/1).
+ *
+ * Loads once on mount; pull-to-refresh reloads. The parent consoles count unread rows
+ * separately for their tab badge, so marking read here does not update that badge directly.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 
+/** One `notifications` row. `is_read` is stored as an integer flag: 0 = unread, 1 = read. */
 interface Notification {
   id: number;
   user_id: string;
@@ -13,17 +28,28 @@ interface Notification {
   created_at: string;
 }
 
+/**
+ * Notification inbox for the current user (takes no props; reads the session itself).
+ * Side effects: updates `notifications.is_read` when the user marks items read.
+ */
 export default function SharedNotificationsView() {
   const { t } = useLanguage();
+  // Loading flags, the user's role (theme only) and the fetched notification list.
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [role, setRole] = useState<'student' | 'scribe'>('student');
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  // Initial load on mount only.
   useEffect(() => {
     fetchNotifications();
   }, []);
 
+  /**
+   * Loads the role and the notification list for the signed-in user.
+   * Errors are only logged; both loading spinners are always cleared in `finally`
+   * (including when there is no session).
+   */
   const fetchNotifications = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -57,6 +83,7 @@ export default function SharedNotificationsView() {
     }
   };
 
+  /** Sets `is_read = 1` on every notification of the current user, then mirrors it locally. Shows an Alert on failure. */
   const handleMarkAllAsRead = async () => {
     if (notifications.length === 0) return;
     try {
@@ -77,6 +104,7 @@ export default function SharedNotificationsView() {
     }
   };
 
+  /** Marks one notification (by `notifications.id`) as read; failures are only logged. */
   const handleMarkSingleAsRead = async (id: number) => {
     try {
       const { error } = await supabase
@@ -93,16 +121,19 @@ export default function SharedNotificationsView() {
     }
   };
 
+  /** Pull-to-refresh handler: shows the refresh spinner and reloads everything. */
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
   };
 
+  // Role-based accent colours: blue for students, green for scribes.
   const isStudent = role === 'student';
   const themeColor = isStudent ? '#2563eb' : '#059669';
   const themeBgColor = isStudent ? '#2563eb' : '#059669';
   const themeBgLight = isStudent ? 'rgba(37,99,235,0.08)' : 'rgba(5,150,105,0.08)';
 
+  /** Formats a timestamp as a short day + month + time string in the en-IN locale; returns '' if formatting throws. */
   const formatTime = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -117,6 +148,7 @@ export default function SharedNotificationsView() {
     }
   };
 
+  // Full-area spinner until the first load finishes.
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
@@ -144,6 +176,7 @@ export default function SharedNotificationsView() {
         )}
       </View>
 
+      {/* Empty state ("All caught up") or one card per notification; tapping an unread card marks it read. */}
       {notifications.length === 0 ? (
         <View style={{ backgroundColor: '#f8fafc', padding: 32, borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginTop: 8 }}>
           <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' }}>

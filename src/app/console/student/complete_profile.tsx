@@ -1,3 +1,22 @@
+/**
+ * Student onboarding / verification form. Route: `/console/student/complete_profile`.
+ *
+ * Students are sent here (by app/index.tsx, app/auth/login.tsx and StudentHomeView) while their
+ * `profiles` row is not "approved": no `verification_status = 'approved'` and no ID proof,
+ * disability certificate or location on file. It is a 2-step form:
+ *   1. Official document type (Aadhar / PAN / Voter ID / Other), an image of that document and
+ *      an emergency (parent/guardian) phone number;
+ *   2. Disability type and a disability certificate.
+ *
+ * On submit it reads the session, then inserts or updates the user's `profiles` row via the
+ * `supabase` shim (a custom client for the Rust/Axum backend's POST /api/query, not real
+ * Supabase), setting `verification_status: 'approved'` immediately. A success overlay is shown
+ * and the user is redirected to `/console/student` after 3 seconds.
+ *
+ * Note: the "uploads" are simulated. No file picker opens and nothing is uploaded; only a
+ * placeholder file NAME is saved in the profile (hence the `handleSimulate...` names).
+ * Styling mixes NativeWind `className` utilities and inline `style` objects.
+ */
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +26,10 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { announceForAccessibility } from '@/core/a11y';
 
+/**
+ * Official ID document choices for step 1. The chosen name is what gets saved in
+ * `profiles.aadhar_number` (see handleSubmit).
+ */
 const DOCUMENT_TYPES = [
   'Aadhar Card',
   'PAN Card',
@@ -14,6 +37,7 @@ const DOCUMENT_TYPES = [
   'Other'
 ];
 
+/** Options for step 2's disability-type dropdown (saved as `profiles.disability_type`). */
 const DISABILITY_TYPES = [
   'Visual Impairment (Blindness)',
   'Visual Impairment (Low Vision)',
@@ -23,7 +47,9 @@ const DISABILITY_TYPES = [
   'Other'
 ];
 
+/** Screen component for the student verification form (see file header). Takes no props. */
 export default function StudentCompleteProfileForm() {
+  // Wizard state: submit spinner, current step (1-2) and the post-submit success overlay.
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
@@ -39,17 +65,23 @@ export default function StudentCompleteProfileForm() {
   const [isDisabilityDropdownOpen, setIsDisabilityDropdownOpen] = useState(false);
   const [disabilityCertificate, setDisabilityCertificate] = useState<string | null>(null);
 
+  /**
+   * Simulated document "upload": opens no picker. Builds a file name from the document type
+   * (e.g. "aadhar_card_document.jpg"), stores it as docImage and shows an alert.
+   */
   const handleSimulateDocUpload = () => {
     const filename = `${docType.toLowerCase().replace(/\s+/g, '_')}_document.jpg`;
     setDocImage(filename);
     Alert.alert('Upload Simulated', `Your ${docType} image "${filename}" has been prepared for upload.`);
   };
 
+  /** Simulated certificate "upload": stores a fixed placeholder file name and shows an alert. */
   const handleSimulateCertificateUpload = () => {
     setDisabilityCertificate('medical_disability_certificate.pdf');
     Alert.alert('Upload Simulated', 'Your Disability Certificate "medical_disability_certificate.pdf" has been prepared for upload.');
   };
 
+  /** Validates step 1 (document image chosen, emergency phone filled) and moves to step 2. */
   const handleNextStep = () => {
     if (currentStep === 1) {
       if (!docImage) {
@@ -64,7 +96,13 @@ export default function StudentCompleteProfileForm() {
     setCurrentStep(2);
   };
 
+  /**
+   * Validates step 2, then saves the profile: inserts a `profiles` row if none exists for the
+   * session user, otherwise updates it. On success shows the overlay and redirects to
+   * `/console/student` after 3 seconds; errors are shown in an alert.
+   */
   const handleSubmit = async () => {
+    // Step 2 validation: a real disability type (not the placeholder text) and a certificate.
     if (disabilityType === 'Select Disability Type') {
       Alert.alert('Missing Disability Type', 'Please select your Disability Type from the options.');
       return;
@@ -77,9 +115,13 @@ export default function StudentCompleteProfileForm() {
     setLoading(true);
 
     try {
+      // The signed-in user comes from the locally stored session.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
+      // Fields to save. aadhar_number receives the chosen document TYPE (e.g. "Aadhar Card"), not a
+      // number; the form never asks for one. verification_status is set to 'approved' straight away
+      // (no manual review), so app/index.tsx, login and StudentHomeView skip this screen next time.
       const profilePayload = {
         aadhar_number: docType,
         aadhar_image_proof: docImage,
@@ -97,6 +139,7 @@ export default function StudentCompleteProfileForm() {
         .single();
 
       if (!existingProfile) {
+        // New row: also set the role and a default name (email prefix, or "Student").
         await supabase.from('profiles').insert({
           id: session.user.id,
           role: 'student',
@@ -127,6 +170,7 @@ export default function StudentCompleteProfileForm() {
     }
   };
 
+  /** Title shown next to the progress bar for the current step. */
   const getStepTitle = () => {
     switch (currentStep) {
       case 1: return 'Document & Contact Details';
@@ -135,6 +179,7 @@ export default function StudentCompleteProfileForm() {
     }
   };
 
+  // Layout: header bar, a scrollable card (progress bar, current step, nav buttons) and the success overlay.
   return (
     <SafeAreaView className="flex-1 bg-slate-50">
       <StatusBar style="dark" />
@@ -142,6 +187,7 @@ export default function StudentCompleteProfileForm() {
       {/* Header */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center justify-between shadow-sm">
         <View className="flex-row items-center">
+          {/* Header back arrow, only on step 2 */}
           {currentStep > 1 && (
             <TouchableOpacity 
               onPress={() => setCurrentStep(currentStep - 1)} 
@@ -156,6 +202,7 @@ export default function StudentCompleteProfileForm() {
           <Text className="text-xl font-black text-slate-800">Verification Form</Text>
         </View>
 
+        {/* Step counter */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>
             Step {currentStep} of 2
@@ -163,6 +210,7 @@ export default function StudentCompleteProfileForm() {
         </View>
       </View>
 
+      {/* Scrollable card holding the progress bar, the current step and the nav buttons */}
       <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
         <View className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
           
@@ -172,6 +220,7 @@ export default function StudentCompleteProfileForm() {
               <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Step {currentStep} of 2</Text>
               <Text className="text-[10px] font-black text-blue-600 uppercase tracking-wider">{getStepTitle()}</Text>
             </View>
+            {/* Progress bar: half on step 1, full on step 2 */}
             <View className="h-1 bg-slate-100 rounded-full w-full">
               <View 
                 className="h-1 bg-blue-500 rounded-full" 
@@ -218,6 +267,7 @@ export default function StudentCompleteProfileForm() {
                     <Feather name={isDocDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </TouchableOpacity>
 
+                  {/* Inline option list (not a modal). Picking a type clears any chosen image. */}
                   {isDocDropdownOpen && (
                     <View style={{
                       marginTop: 6,
@@ -274,6 +324,7 @@ export default function StudentCompleteProfileForm() {
                       docImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
                     }`}
                   >
+                    {/* Chosen: show the file name; otherwise the empty upload prompt */}
                     {docImage ? (
                       <View className="items-center">
                         <Feather name="image" size={24} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
@@ -345,6 +396,7 @@ export default function StudentCompleteProfileForm() {
                   <Feather name={isDisabilityDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </TouchableOpacity>
 
+                {/* Option list: a FlatList with a max height so the options scroll inside the card */}
                 {isDisabilityDropdownOpen && (
                   <View style={{
                     marginTop: 6,
@@ -400,6 +452,7 @@ export default function StudentCompleteProfileForm() {
               <View style={{ marginTop: 8 }}>
                 <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate *</Text>
                 
+                {/* Tapping only records a placeholder file name (see handleSimulateCertificateUpload) */}
                 <TouchableOpacity 
                   onPress={handleSimulateCertificateUpload}
                   accessible={true}
@@ -464,6 +517,7 @@ export default function StudentCompleteProfileForm() {
 
           {/* Bottom Navigation Buttons */}
           <View className="flex-row gap-3 mt-6 pt-4 border-t border-slate-100">
+            {/* Back (step 2 only) */}
             {currentStep > 1 && (
               <TouchableOpacity 
                 onPress={() => {
@@ -479,6 +533,7 @@ export default function StudentCompleteProfileForm() {
               </TouchableOpacity>
             )}
             
+            {/* Step 1: Next (validates first). Step 2: Submit Profile. */}
             {currentStep < 2 ? (
               <TouchableOpacity 
                 onPress={() => {

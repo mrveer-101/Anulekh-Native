@@ -1,3 +1,19 @@
+/**
+ * App-wide update / "What's New" modal.
+ *
+ * Mounted once in the root layout (app/_layout.tsx) so it can appear over any
+ * screen. About 1.5 s after start-up it calls `versionService.checkVersion()`
+ * (which hits the backend's GET /api/system/version and compares against the
+ * installed build) and, unless the result is UP_TO_DATE, shows one of three
+ * variants:
+ *   - FORCE_UPDATE     : red, cannot be dismissed (Android back button is ignored);
+ *                        only action is "Update Now", which opens the store.
+ *   - UPDATE_AVAILABLE : blue, "Later" dismisses for this session, "Update" opens the store.
+ *   - WHATS_NEW        : green, shown once after upgrading; dismissing records the
+ *                        version as seen (AsyncStorage, via versionService.markVersionSeen).
+ * Copy (title, message, feature bullets) comes from the server's release info.
+ * Network failures are ignored so the check can never block the app.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   Modal,
@@ -11,10 +27,16 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { versionService, VersionCheckResult } from '@/services/versionService';
 
+/**
+ * Self-contained update prompt (no props). Renders nothing until a version
+ * check returns something other than UP_TO_DATE with release info attached.
+ */
 export const AppUpdateModal: React.FC = () => {
+  // Latest version-check result and whether the modal is currently shown.
   const [result, setResult] = useState<VersionCheckResult | null>(null);
   const [visible, setVisible] = useState(false);
 
+  // One-shot version check after mount; `isMounted` guards against setting state after unmount.
   useEffect(() => {
     let isMounted = true;
 
@@ -37,14 +59,20 @@ export const AppUpdateModal: React.FC = () => {
     };
   }, []);
 
+  // Nothing to show (still checking, up to date, dismissed, or no release info).
   if (!visible || !result || !result.info) {
     return null;
   }
 
+  // Which of the three variants to render.
   const { status, info } = result;
   const isForce = status === 'FORCE_UPDATE';
   const isWhatsNew = status === 'WHATS_NEW';
 
+  /**
+   * Opens the app store listing. For a forced update the modal stays open, so
+   * returning to the app without updating still blocks it.
+   */
   const handleUpdatePress = () => {
     versionService.openStore(info);
     if (!isForce) {
@@ -52,6 +80,11 @@ export const AppUpdateModal: React.FC = () => {
     }
   };
 
+  /**
+   * Closes the modal ("Later" / "Got it"). For What's New it first stores the
+   * version code as seen so the sheet is not shown again; an optional update
+   * will be offered again on the next app start.
+   */
   const handleDismiss = async () => {
     if (isWhatsNew) {
       await versionService.markVersionSeen(info.latest_version_code);
@@ -59,6 +92,7 @@ export const AppUpdateModal: React.FC = () => {
     setVisible(false);
   };
 
+  // onRequestClose (Android back button) is a no-op for forced updates so the modal cannot be escaped.
   return (
     <Modal
       visible={visible}
@@ -97,6 +131,7 @@ export const AppUpdateModal: React.FC = () => {
               : info.title || 'New Update Available!'}
           </Text>
 
+          {/* Version badge: just the new version for What's New, otherwise "current -> new" */}
           <View style={styles.badgeRow}>
             <View style={styles.badge}>
               <Text style={styles.badgeText}>
@@ -183,6 +218,7 @@ export const AppUpdateModal: React.FC = () => {
   );
 };
 
+/** Plain StyleSheet styles (not NativeWind) for the overlay, card, badge, feature list and buttons. */
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,

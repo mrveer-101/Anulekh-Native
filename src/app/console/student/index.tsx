@@ -1,3 +1,29 @@
+/**
+ * Student dashboard — route `/console/student` (optionally `?tab=<Tab>`).
+ *
+ * Reached from app/console/index.tsx (role router) and from login once a
+ * student's profile is complete. It is the shell for every student screen:
+ *  - Mobile / narrow (< 768px): a header (logo, notifications bell, avatar),
+ *    a tab body, and a bottom tab bar (Home, Requests, Plan, Account). The
+ *    Notifications tab has no bottom-bar button and is opened from the header
+ *    bell; the header avatar opens Account ('settings'). The 'profile' tab is
+ *    only reachable through the `tab` URL param.
+ *  - Desktop (>= 768px): renders ConsoleStudentPC instead, passing the profile.
+ *
+ * Each tab body is wrapped in a TabPane, so a tab mounts on first visit and is
+ * then kept alive (hidden) when the user switches away.
+ *
+ * Data loaded (through the `supabase` shim, which calls the Rust/Axum backend):
+ *  - the stored session (AsyncStorage) — no session → `/landing`;
+ *  - `profiles` row for the user — role 'scribe' → redirected to `/console/scribe`;
+ *  - unread `notifications` count (rows with is_read = 0) for the bell dot.
+ * The avatar photo comes from AsyncStorage key `profile_photo_<userId>`, and a
+ * one-time welcome toast is gated by AsyncStorage key `welcome_toast_shown`.
+ *
+ * Accessibility: tabs announce the selection to screen readers and expose
+ * role="tab" + selected state; decorative icons/labels inside are hidden from
+ * the accessibility tree so each tab is read once.
+ */
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -26,9 +52,16 @@ import SharedSettingsView from '@/components/shared/SharedSettingsView';
 import SharedNotificationsView from '@/components/shared/SharedNotificationsView';
 import StudentPlanView from '@/components/student/StudentPlanView';
 import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
+import { TabPane } from '@/components/ui/TabPane';
 
+/** Every screen the dashboard can show; also the accepted values of the `?tab=` route param. */
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
 
+/**
+ * Buttons shown in the mobile bottom tab bar, in display order.
+ * The 'settings' tab is labelled "Account" (translated via `nav_account`).
+ * `label` is an English fallback; the rendered label comes from translations.
+ */
 const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { id: 'home',     iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
   { id: 'requests', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
@@ -45,6 +78,15 @@ const ACCENT_BD  = 'rgba(37,99,235,0.22)';
 const TEXT       = '#0f172a';
 const MUTED      = '#64748b';
 
+/**
+ * Student dashboard screen (default export for the `/console/student` route).
+ *
+ * Side effects: reads the session and `profiles` row, counts unread
+ * `notifications`, reads/writes AsyncStorage (avatar photo, welcome-toast flag)
+ * and may redirect to `/landing` or `/console/scribe`.
+ *
+ * @returns The desktop console, a loading spinner, or the mobile tabbed layout.
+ */
 export default function StudentDashboard() {
   const { width: windowWidth } = useWindowDimensions();
 
@@ -70,6 +112,7 @@ export default function StudentDashboard() {
     setMounted(true);
   }, []);
 
+  // Web only: track browser resizes so the layout can switch between mobile and desktop live.
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const handleResize = () => setScreenWidth(window.innerWidth);
@@ -83,30 +126,48 @@ export default function StudentDashboard() {
   const isDesktop = currentWidth >= 768;
 
   // ── HELPER FUNCTIONS ───────────────────────────────────────────────────
+  /**
+   * Counts the user's unread notifications (`notifications` rows with
+   * is_read = 0) and stores the number for the header bell's red dot.
+   * @param uid The signed-in user's id.
+   */
   const fetchUnread = async (uid: string) => {
     const { data } = await supabase
       .from('notifications').select('id').eq('user_id', uid).eq('is_read', 0);
     setUnread(data?.length ?? 0);
   };
 
+  /**
+   * Loads everything the dashboard shell needs and guards the route.
+   * Also passed to ConsoleStudentPC as `onRefresh` so the desktop view can reload it.
+   *
+   * Side effects: may redirect to `/landing` (no session or any error) or to
+   * `/console/scribe` (user is a scribe); sets profile, unread count, avatar
+   * photo and the welcome-toast flag; always clears `loading` at the end.
+   */
   const fetchSession = async () => {
     try {
+      // 1. Session check — the shim keeps the signed-in user in AsyncStorage.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/landing'); return; }
 
+      // 2. Load the full profile row and bounce scribes to their own dashboard.
       const { data: profileData } = await supabase
         .from('profiles').select('*').eq('id', session.user.id).single();
 
       if (profileData?.role === 'scribe') { router.replace('/console/scribe' as any); return; }
 
+      // 3. Store the profile and fetch the unread count in the background (not awaited).
       setProfile(profileData);
       fetchUnread(session.user.id);
 
+      // 4. Avatar photo is cached on the device only, keyed by user id.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
 
+      // 5. Show the welcome toast only once per device (flag is not per-user).
       const shown = await AsyncStorage.getItem('welcome_toast_shown');
       if (!shown) {
         setShowWelcome(true);
@@ -119,14 +180,18 @@ export default function StudentDashboard() {
     }
   };
 
+  // Load session/profile once on mount.
   useEffect(() => { fetchSession(); }, []);
 
+  // Deep-link support: `/console/student?tab=requests` (etc.) opens that tab.
+  // The value is cast without validation, so an unknown tab shows an empty body.
   useEffect(() => {
     if (params.tab) {
       setActiveTab(params.tab as Tab);
     }
   }, [params.tab]);
 
+  // Welcome toast animation: fade in (0.4s), hold (2.6s), fade out (0.6s), then unmount.
   useEffect(() => {
     if (!showWelcome) return;
     Animated.sequence([
@@ -136,6 +201,8 @@ export default function StudentDashboard() {
     ]).start(() => setShowWelcome(false));
   }, [showWelcome]);
 
+  // Re-read the cached avatar whenever the screen regains focus or the tab changes,
+  // so a photo changed in Profile/Settings shows up in the header immediately.
   useFocusEffect(
     useCallback(() => {
       if (profile?.id) {
@@ -146,6 +213,8 @@ export default function StudentDashboard() {
     }, [profile?.id, activeTab])
   );
 
+  // ── RENDER ──────────────────────────────────────────────────────────────
+  // Full-screen spinner until fetchSession() finishes (or redirects).
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' }}>
@@ -156,15 +225,20 @@ export default function StudentDashboard() {
     );
   }
 
+  // Wide screens get the separate desktop console (its own sidebar and tabs).
   if (isDesktop) {
     return (
       <ConsoleStudentPC
         userProfile={profile}
         onRefresh={fetchSession}
+        unreadCount={unreadNotifs}
+        onNotificationsOpened={() => setUnread(0)}
       />
     );
   }
 
+  // Mobile layout. On web the root is locked to the viewport height so only the
+  // tab body scrolls and the header / bottom bar stay fixed.
   return (
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
@@ -213,6 +287,7 @@ export default function StudentDashboard() {
 
           {/* Right Action Icons: Notifications + Profile */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Bell: opens the Notifications tab and hides the red dot locally (rows are not marked read here) */}
             <TouchableOpacity
               onPress={() => { setActiveTab('notifications'); setUnread(0); }}
               activeOpacity={0.75}
@@ -242,6 +317,7 @@ export default function StudentDashboard() {
               )}
             </TouchableOpacity>
 
+            {/* Avatar: cached photo or first initial; opens the Account (settings) tab */}
             <TouchableOpacity
               onPress={() => setActiveTab('settings')}
               activeOpacity={0.8}
@@ -268,12 +344,12 @@ export default function StudentDashboard() {
 
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        {activeTab === 'home'          && <StudentHomeView />}
-        {activeTab === 'requests'      && <StudentRequestsView />}
-        {activeTab === 'plan'          && <StudentPlanView />}
-        {activeTab === 'profile'       && <StudentProfileView />}
-        {activeTab === 'settings'      && <SharedSettingsView />}
-        {activeTab === 'notifications' && <SharedNotificationsView />}
+        <TabPane active={activeTab === 'home'}><StudentHomeView /></TabPane>
+        <TabPane active={activeTab === 'requests'}><StudentRequestsView /></TabPane>
+        <TabPane active={activeTab === 'plan'}><StudentPlanView /></TabPane>
+        <TabPane active={activeTab === 'profile'}><StudentProfileView /></TabPane>
+        <TabPane active={activeTab === 'settings'}><SharedSettingsView /></TabPane>
+        <TabPane active={activeTab === 'notifications'}><SharedNotificationsView /></TabPane>
       </View>
 
       {/* ── BOTTOM NAV — top corners rounded ── */}
@@ -298,6 +374,7 @@ export default function StudentDashboard() {
         }}>
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
+            // Map tab id → translation key for the visible (and spoken) label.
             const translationKey = tab.id === 'home' ? 'nav_home' :
                                    tab.id === 'requests' ? 'nav_requests' :
                                    tab.id === 'plan' ? 'nav_plan' : 'nav_account';

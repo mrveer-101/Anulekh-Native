@@ -1,3 +1,22 @@
+/**
+ * ScribeCommitmentsView — the scribe portal's "Applied" tab.
+ *
+ * Rendered inside a keep-alive <TabPane> by the scribe console (app/console/scribe/index.tsx), its
+ * desktop counterpart (components/pc_view/ConsoleScribePC.tsx) and the standalone route
+ * app/console/scribe/commitments.tsx. Shows a month calendar of the scribe's exam/assignment dates,
+ * status filter pills and one expandable card per application (with call, chat, declaration,
+ * withdraw and rate-student actions), plus three modals: scribe declaration, call sheet, rate student.
+ *
+ * Data goes through the `supabase` shim (core/supabase.ts → Rust backend `POST /api/query`), cached
+ * stale-while-revalidate in core/screenCache under the key 'scribe_commitments'.
+ *   Reads:  profiles, scribe_applications, scribe_reviews, student_reviews, exam_requests,
+ *           assignment_requests.
+ *   Writes: student_reviews (insert a rating), scribe_applications (status → 'rejected' on withdraw),
+ *           exam_requests / assignment_requests (back to 'pending', scribe_id cleared, when a confirmed
+ *           commitment is withdrawn), notifications (insert, tells the student about the withdrawal).
+ *
+ * Styling is inline (no StyleSheet) using SCRIBE_THEME tokens and gradient() from core/portalTheme.
+ */
 import React, { useState, useCallback } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -7,7 +26,11 @@ import { useLanguage } from '@/core/translation';
 import { canScribeWithdraw } from '@/core/examDate';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
+import { useDesktopColumns, useInDesktopShell } from '@/components/ui/DesktopShell';
+import { useTabActive } from '@/components/ui/TabPane';
+import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 
+/** One scribe_applications row. `type` is 'assignment' for assignment requests, otherwise an exam request. */
 interface Application {
   id: number;
   request_id: number;
@@ -17,6 +40,10 @@ interface Application {
   type?: string;
 }
 
+/**
+ * An application joined with the request it points to: the exam_requests row as-is, or an
+ * assignment_requests row mapped into the same exam-card shape (see fetchApplications).
+ */
 interface EnrichedApplication extends Application {
   examDetails?: {
     id: number;
@@ -34,11 +61,32 @@ interface EnrichedApplication extends Application {
   };
 }
 
+/** Everything the Applied tab shows, cached so the next visit paints instantly (see core/screenCache). */
+interface CommitmentsSnapshot {
+  profile: any;
+  applications: any[];
+  reviews: any[];
+  studentReviews: any[];
+}
+
+/**
+ * The scribe "Applied" tab: every application this scribe has made, newest first.
+ *
+ * Refreshes only while its tab is visible (`useTabActive()` + `useFocusEffect`), painting the cached
+ * snapshot first and then fetching fresh data. Takes no props; the user comes from the current session.
+ */
 export default function ScribeCommitmentsView() {
+  // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
+  const inShell = useInDesktopShell();
+  // Wide desktop screens show the calendar beside the list instead of above it.
+  const twoColumns = useDesktopColumns() > 1;
   const { t } = useLanguage();
+  // True while this tab is visible (TabPane keep-alive) — data refreshes only then.
+  const isActive = useTabActive();
   // Blocks and cards rise in one after another (off with Reduce Motion).
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 6) * 70).duration(420));
+  // Data loaded from the backend (also restored from the snapshot cache).
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [applications, setApplications] = useState<EnrichedApplication[]>([]);
@@ -61,6 +109,10 @@ export default function ScribeCommitmentsView() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isCalendarCollapsed, setIsCalendarCollapsed] = useState(false);
 
+  /**
+   * Builds the calendar grid for `date`'s month: leading `null`s pad the first week up to its weekday
+   * (Sunday-first), followed by one Date per day of the month.
+   */
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -77,18 +129,21 @@ export default function ScribeCommitmentsView() {
     return days;
   };
 
+  /** Moves the calendar by `increment` months (negative goes back). */
   const changeMonth = (increment: number) => {
     const newMonth = new Date(currentMonth);
     newMonth.setMonth(newMonth.getMonth() + increment);
     setCurrentMonth(newMonth);
   };
 
+  /** True if any loaded application's exam date / deadline falls on `date` (matched on the YYYY-MM-DD prefix). */
   const hasPlanOnDate = (date: Date) => {
     if (!date) return false;
     const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     return applications.some(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(dateString));
   };
 
+  /** Applications whose exam date / deadline falls on `date`. */
   const getPlansOnDate = (date: Date) => {
     if (!date) return [];
     const dateString = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -98,6 +153,7 @@ export default function ScribeCommitmentsView() {
   // Track which cards are expanded (by application id) for the collapsed list / detailed view toggle
   const [expandedIds, setExpandedIds] = useState<number[]>([]);
 
+  /** Expands or collapses one application card. */
   const toggleExpanded = (id: number) => {
     setExpandedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
   };
@@ -111,49 +167,56 @@ export default function ScribeCommitmentsView() {
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
 
+  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
+  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
   useFocusEffect(
     useCallback(() => {
+      if (!isActive) return;
       fetchApplications();
-    }, [])
+    }, [isActive])
   );
 
+  /** Puts a snapshot (cached or freshly fetched) on screen. */
+  const applySnapshot = (snap: CommitmentsSnapshot) => {
+    setScribeProfile(snap.profile);
+    setApplications(snap.applications);
+    setReviews(snap.reviews);
+    setStudentReviews(snap.studentReviews);
+  };
+
+  /**
+   * Loads the Applied tab: cached snapshot first, then profile, applications and both review lists in
+   * parallel, then each application's exam/assignment details (in parallel).
+   */
   const fetchApplications = async () => {
     try {
+      // Every query is scoped to the signed-in user; no session means nothing to load.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+      const userId = session.user.id;
 
-      // Fetch Scribe Profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single();
-      setScribeProfile(profile);
+      // 1. Show the cached snapshot straight away (no spinner on repeat visits).
+      const cached = await readScreenCache<CommitmentsSnapshot>('scribe_commitments', userId);
+      if (cached) {
+        applySnapshot(cached);
+        setLoading(false);
+      }
 
-      // Fetch all Scribe Applications
-      const { data, error } = await supabase
-        .from('scribe_applications')
-        .select('*')
-        .eq('scribe_id', session.user.id)
-        .order('created_at', { ascending: false });
-
+      // 2. Fetch profile, applications and both review lists in parallel.
+      const [
+        { data: profile },
+        { data, error },                 // this scribe's applications (newest first)
+        { data: reviewsData },           // reviews students left for this scribe
+        { data: studentReviewsData },    // ratings this scribe left for students
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('scribe_applications').select('*').eq('scribe_id', userId).order('created_at', { ascending: false }),
+        supabase.from('scribe_reviews').select('*').eq('scribe_id', userId),
+        supabase.from('student_reviews').select('*').eq('scribe_id', userId),
+      ]);
       if (error) throw error;
 
-      // Fetch Scribe Reviews
-      const { data: reviewsData } = await supabase
-        .from('scribe_reviews')
-        .select('*')
-        .eq('scribe_id', session.user.id);
-      setReviews(reviewsData || []);
-
-      // Fetch reviews of students left by this scribe
-      const { data: studentReviewsData } = await supabase
-        .from('student_reviews')
-        .select('*')
-        .eq('scribe_id', session.user.id);
-      setStudentReviews(studentReviewsData || []);
-
-      // Enrich with Request Details (Exam or Assignment)
+      // Attach each application's request details (assignments are mapped into the exam card shape)
       const enriched = await Promise.all(
         (data || []).map(async (app: any) => {
           let details = null;
@@ -163,7 +226,6 @@ export default function ScribeCommitmentsView() {
               .select('*')
               .eq('id', app.request_id)
               .single();
-
             if (assign) {
               details = {
                 id: assign.id,
@@ -185,7 +247,6 @@ export default function ScribeCommitmentsView() {
               .single();
             details = exam;
           }
-          
           return {
             ...app,
             examDetails: details || undefined
@@ -193,7 +254,15 @@ export default function ScribeCommitmentsView() {
         })
       );
 
-      setApplications(enriched);
+      // 3. Show the fresh data and save it for the next visit.
+      const snapshot: CommitmentsSnapshot = {
+        profile,
+        applications: enriched,
+        reviews: reviewsData || [],
+        studentReviews: studentReviewsData || [],
+      };
+      applySnapshot(snapshot);
+      writeScreenCache('scribe_commitments', userId, snapshot);
     } catch (error: any) {
       console.error('Error fetching applications:', error.message);
     } finally {
@@ -201,12 +270,13 @@ export default function ScribeCommitmentsView() {
       setRefreshing(false);
     }
   };
-
+  /** Pull-to-refresh: shows the refresh spinner and reloads everything. */
   const onRefresh = () => {
     setRefreshing(true);
     fetchApplications();
   };
 
+  /** Opens the "Rate Candidate Student" modal for a completed application, resetting it to 5 stars and no remark. */
   const openRatingModal = (app: EnrichedApplication) => {
     setRatingTarget(app);
     setSelectedRating(5);
@@ -214,6 +284,10 @@ export default function ScribeCommitmentsView() {
     setRatingModalVisible(true);
   };
 
+  /**
+   * Saves the scribe's rating of the student as a new student_reviews row, then closes the modal and
+   * reloads the tab so the card shows "Your Rating for Student". Ignores repeat taps while saving.
+   */
   const submitStudentRating = async () => {
     if (!ratingTarget || submittingRating) return;
     setSubmittingRating(true);
@@ -221,6 +295,7 @@ export default function ScribeCommitmentsView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Insert the rating (overall stars + optional remark) for this request.
       const { error } = await supabase
         .from('student_reviews')
         .insert({
@@ -234,6 +309,7 @@ export default function ScribeCommitmentsView() {
 
       if (error) throw error;
 
+      // Close the modal and reload so the card shows the saved rating.
       Alert.alert("Success", "Student rating submitted successfully!");
       setRatingModalVisible(false);
       fetchApplications();
@@ -244,6 +320,7 @@ export default function ScribeCommitmentsView() {
     }
   };
 
+  /** Opens the call bottom sheet for a confirmed exam's student. */
   const openCallSheet = (exam: any) => {
     if (!exam) return;
     setCallExam(exam);
@@ -251,13 +328,22 @@ export default function ScribeCommitmentsView() {
     setIsCallOpen(true);
   };
 
+  /** Closes the call bottom sheet. */
   const closeCallSheet = () => setIsCallOpen(false);
 
+  /**
+   * Withdraws a pending application or a confirmed commitment after a confirmation alert.
+   *
+   * Blocked within 24 hours of the exam (core/examDate `canScribeWithdraw`). For a confirmed commitment
+   * the request goes back to 'pending' with no scribe and the student is notified; in every case the
+   * scribe_applications row is set to 'rejected'. Reloads the tab afterwards.
+   */
   const handleWithdrawApplication = (app: EnrichedApplication) => {
     const exam = app.examDetails;
     const isConfirmed = app.status === 'accepted' && exam?.status === 'matched';
     const withdrawalCheck = canScribeWithdraw(exam?.exam_date);
 
+    // Withdrawal is locked close to the exam to protect the student.
     if (!withdrawalCheck.allowed) {
       Alert.alert(
         'Withdrawal Locked',
@@ -266,6 +352,7 @@ export default function ScribeCommitmentsView() {
       return;
     }
 
+    // Confirm first; the wording depends on whether the scribe was already matched.
     Alert.alert(
       isConfirmed ? 'Withdraw Commitment' : 'Withdraw Application',
       `Are you sure you want to withdraw your ${isConfirmed ? 'commitment' : 'application'} for "${exam?.subject || 'this exam'}"?`,
@@ -276,6 +363,7 @@ export default function ScribeCommitmentsView() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Confirmed commitment: release the request back to pending and tell the student.
               if (isConfirmed && exam) {
                 const table = app.type === 'assignment' ? 'assignment_requests' : 'exam_requests';
                 await supabase
@@ -294,6 +382,7 @@ export default function ScribeCommitmentsView() {
                 }
               }
 
+              // Mark this scribe's application as rejected (both pending and confirmed cases).
               await supabase
                 .from('scribe_applications')
                 .update({ status: 'rejected' })
@@ -310,6 +399,7 @@ export default function ScribeCommitmentsView() {
     );
   };
 
+  // First load with nothing cached yet: full-screen spinner.
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 10, backgroundColor: '#f9fafb' }}>
@@ -318,6 +408,7 @@ export default function ScribeCommitmentsView() {
     );
   }
 
+  /** Read-only row of five stars, filled up to `rating`. */
   const StarDisplay = ({ rating }: { rating: number }) => {
     return (
       <View style={{ flexDirection: 'row', gap: 2 }}>
@@ -342,6 +433,7 @@ export default function ScribeCommitmentsView() {
     return null;
   };
 
+  /** Status filter pills shown above the list. */
   const FILTERS: { key: 'All' | 'Pending' | 'Completed' | 'Rejected'; label: string }[] = [
     { key: 'All', label: 'All' },
     { key: 'Pending', label: 'Pending' },
@@ -359,14 +451,23 @@ export default function ScribeCommitmentsView() {
     return type === selectedFilter.toLowerCase();
   });
 
+  // A calendar day is selected: also narrow the list to that date.
   if (selectedDate) {
     visibleApps = visibleApps.filter(app => app.examDetails?.exam_date && app.examDetails.exam_date.startsWith(selectedDate));
   }
 
+  /**
+   * Renders one collapsible application card.
+   *
+   * @param app   The application with its request details (cards without details render nothing).
+   * @param type  Display bucket from getAppType; picks the status colour/label and which actions show.
+   * @param index Position in the list, used to stagger the entrance animation.
+   */
   const renderCard = (app: EnrichedApplication, type: 'pending' | 'confirmed' | 'rejected' | 'completed', index = 0) => {
     const exam = app.examDetails;
     if (!exam) return null;
 
+    // Status pill colours and label (defaults are for 'pending').
     let badgeBg = 'rgba(234,179,8,0.08)';
     let badgeBorder = 'rgba(234,179,8,0.2)';
     let badgeText = '#d97706';
@@ -389,6 +490,7 @@ export default function ScribeCommitmentsView() {
       statusLabel = t('status_rejected') || 'Rejected';
     }
 
+    // Student's review of this scribe for this request (shown on completed cards) and card state.
     const review = reviews.find(r => r.request_id === app.request_id);
     const isExpanded = expandedIds.includes(app.id);
     const isEmergency = exam.is_emergency === 'yes';
@@ -678,18 +780,24 @@ export default function ScribeCommitmentsView() {
     );
   };
 
+  // Layout: calendar card, filter pills, application cards, then the three modals.
   return (
-    <View style={[{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
+    <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
-      <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />
+      {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
 
+      {/* Scrollable content; pull-to-refresh reloads everything */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 16, paddingBottom: 40 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
       >
+        {/* Desktop: calendar on the right, filters + application cards on the left (row-reverse keeps
+            the phone order — calendar first — in the code). Phones: one column, unchanged. */}
+        <View style={twoColumns ? { flexDirection: 'row-reverse', gap: 24, alignItems: 'flex-start' } : undefined}>
+        <View style={twoColumns ? { flex: 1 } : undefined}>
         {/* Interactive Calendar Card (First) */}
         <Animated.View entering={rise(0)} style={{
           backgroundColor: '#ffffff',
@@ -743,6 +851,7 @@ export default function ScribeCommitmentsView() {
             </TouchableOpacity>
           </View>
 
+          {/* Month grid (hidden while the calendar is collapsed) */}
           {!isCalendarCollapsed && (
             <>
               {/* Weekdays Row */}
@@ -765,6 +874,7 @@ export default function ScribeCommitmentsView() {
                   const hasPlan = hasPlanOnDate(day);
                   const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
 
+                  // Day cell colours: selected > has plans (red if any is an emergency, else orange) > today.
                   let cellBg = 'transparent';
                   let cellTextColor = '#334155';
                   let cellBorder = {};
@@ -849,7 +959,9 @@ export default function ScribeCommitmentsView() {
             </View>
           )}
         </Animated.View>
+        </View>
 
+        <View style={twoColumns ? { flex: 1 } : undefined}>
         {/* ── FILTER SELECTION BLOCK (Slider Track) ── */}
         <Animated.View entering={rise(1)} style={{
           flexDirection: 'row',
@@ -901,6 +1013,7 @@ export default function ScribeCommitmentsView() {
             );
           })}
         </Animated.View>
+        {/* Application cards, or an empty state for the current filter */}
         {visibleApps.length === 0 ? (
           <Animated.View entering={rise(2)} style={{ backgroundColor: '#ffffff', padding: 32, borderRadius: 24, borderWidth: 1.5, borderColor: THEME.cardBorder, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 3, justifyContent: 'center', alignItems: 'center', marginTop: 10 }}>
             <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
@@ -918,6 +1031,8 @@ export default function ScribeCommitmentsView() {
         ) : (
           visibleApps.map((app, i) => renderCard(app, getAppType(app) as 'pending' | 'confirmed' | 'rejected' | 'completed', i))
         )}
+        </View>
+        </View>
       </ScrollView>
 
       {/* FORMAL SCRIBE DECLARATION MODAL */}
@@ -1146,6 +1261,7 @@ export default function ScribeCommitmentsView() {
           {/* Dial Now CTA */}
           <TouchableOpacity
             onPress={async () => {
+              // Open the phone dialer; show an error if the device cannot place calls.
               const url = `tel:${callExam?.phone || '9876543210'}`;
               try {
                 const supported = await Linking.canOpenURL(url);

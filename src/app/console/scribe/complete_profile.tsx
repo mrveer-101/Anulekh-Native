@@ -1,3 +1,24 @@
+/**
+ * Scribe onboarding / verification wizard. Route: `/console/scribe/complete_profile`.
+ *
+ * Volunteers are sent here (by app/index.tsx, app/auth/login.tsx and ScribeHomeView) while
+ * their `profiles` row is not "approved" (no `verification_status = 'approved'` and no
+ * Aadhaar / location details yet). It is a 3-step form:
+ *   1. Personal details - official name, date of birth (custom calendar modal), occupation,
+ *      location (typed, or auto-detected via expo-location + OpenStreetMap Nominatim fallback);
+ *   2. Identity & proofs - 12-digit Aadhaar number, Aadhaar image, education level,
+ *      optional certificate file;
+ *   3. Preferences - exam languages, daily availability slots, urgent-call and first-time flags.
+ *
+ * On submit it inserts or updates the user's `profiles` row via the `supabase` shim (a
+ * custom client for the Rust/Axum backend, not real Supabase), setting
+ * `verification_status: 'approved'` immediately, then shows a success overlay and redirects
+ * to `/console/scribe` after 3 seconds.
+ *
+ * Note: the document "uploads" only record the picked file NAME in the profile; the file
+ * contents are not uploaded anywhere (hence the `handleSimulate...` names).
+ * Styling uses NativeWind `className` utilities.
+ */
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,18 +30,31 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 
+/**
+ * Year choices for the DOB calendar's year dropdown: 35 years starting 30 years ago
+ * (so it also includes the current year and the next four).
+ */
 const YEARS = Array.from({ length: 35 }, (_, i) => (new Date().getFullYear() - 30 + i).toString()); // Last 30 years
+/** Calendar labels: month names (index = JS month 0-11) and Sunday-first weekday headers. */
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+/** Options for the "Highest Education Level" dropdown (saved as `profiles.education_level`). */
 const EDUCATION_LEVELS = ['Secondary School (10th)', 'Higher Secondary (12th)', 'Undergraduate (Bachelor)', 'Postgraduate (Master)'];
+/** Exam languages a scribe can offer (saved as the `profiles.languages` array). */
 const LANGUAGES = ['English', 'Hindi', 'Gujarati'];
+/**
+ * Daily availability windows. The selected `key`s are saved comma-joined in
+ * `profiles.availability_slots` (e.g. "Morning, Evening"); `time` and `icon` are display only.
+ */
 const AVAILABILITY_SLOTS = [
   { key: 'Morning', label: 'Morning', time: '8 AM – 12 PM', icon: 'sunrise' as const },
   { key: 'Afternoon', label: 'Afternoon', time: '12 PM – 4 PM', icon: 'sun' as const },
   { key: 'Evening', label: 'Evening', time: '4 PM – 8 PM', icon: 'sunset' as const },
 ];
 
+/** Screen component for the scribe onboarding wizard (see file header). Takes no props. */
 export default function CompleteProfileForm() {
+  // Wizard state: submit spinner, current step (1-3) and the post-submit success overlay.
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
@@ -32,6 +66,12 @@ export default function CompleteProfileForm() {
   const [location, setLocation] = useState('');
   const [locating, setLocating] = useState(false);
 
+  /**
+   * Fills the Location field with "City, State" from the device GPS.
+   * Asks for foreground location permission, reverse-geocodes with expo-location, and
+   * falls back to OpenStreetMap Nominatim when city or state is missing. If neither
+   * source returns anything it silently fills the hard-coded default "Ahmedabad, Gujarat".
+   */
   const handleAutoDetectLocation = async () => {
     setLocating(true);
     try {
@@ -96,6 +136,7 @@ export default function CompleteProfileForm() {
       setLocating(false);
     }
   };
+  // Step 2 / step 3 form fields. Document state holds only the picked file name, not the file.
   const [aadharNumber, setAadharNumber] = useState('');
   const [educationLevel, setEducationLevel] = useState('Higher Secondary (12th)');
   const [isEduDropdownOpen, setIsEduDropdownOpen] = useState(false);
@@ -103,7 +144,8 @@ export default function CompleteProfileForm() {
   const [availabilitySlots, setAvailabilitySlots] = useState<string[]>([]);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [aadharImage, setAadharImage] = useState<string | null>(null);
-  
+
+  // Step 3 yes/no toggles, saved as 'yes' / 'no' strings.
   const [urgentCalls, setUrgentCalls] = useState(false);
   const [firstTime, setFirstTime] = useState(true);
 
@@ -113,6 +155,7 @@ export default function CompleteProfileForm() {
   const [calendarYear, setCalendarYear] = useState(2003); // Default start year for volunteers
   const [showYearDropdown, setShowYearDropdown] = useState(false);
 
+  /** Opens the document picker (PDF or image) for the optional certificate and stores just its file name. */
   const handleSimulateUpload = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -128,6 +171,7 @@ export default function CompleteProfileForm() {
     }
   };
 
+  /** Asks for photo-library permission, lets the user pick the Aadhaar card image and stores just its file name. */
   const handleSimulateAadharUpload = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -149,6 +193,7 @@ export default function CompleteProfileForm() {
     }
   };
 
+  /** Adds/removes one exam language from the selection. */
   const toggleLanguage = (lang: string) => {
     if (selectedLanguages.includes(lang)) {
       setSelectedLanguages(selectedLanguages.filter(l => l !== lang));
@@ -157,6 +202,7 @@ export default function CompleteProfileForm() {
     }
   };
 
+  /** Adds/removes one availability slot key (e.g. 'Morning'). */
   const toggleSlot = (slot: string) => {
     if (availabilitySlots.includes(slot)) {
       setAvailabilitySlots(availabilitySlots.filter(s => s !== slot));
@@ -166,14 +212,17 @@ export default function CompleteProfileForm() {
   };
 
   // Calendar Helper functions
+  /** Number of days in a month (`month` is 0-based); day 0 of the next month is the last day of this one. */
   const getDaysInMonth = (month: number, year: number) => {
     return new Date(year, month + 1, 0).getDate();
   };
 
-  const getFirstDayOfMonth = (month: number, year: number) => {
+  /** Weekday (0 = Sunday) of the 1st of the month; used to offset the calendar grid. */
+  const getFirstDayOfMonth =(month: number, year: number) => {
     return new Date(year, month, 1).getDay();
   };
 
+  /** Stores the tapped day as the DOB in DD/MM/YYYY format and closes the calendar. */
   const handleSelectDay = (day: number) => {
     const formattedDay = day < 10 ? `0${day}` : day;
     const formattedMonth = calendarMonth + 1 < 10 ? `0${calendarMonth + 1}` : calendarMonth + 1;
@@ -181,6 +230,7 @@ export default function CompleteProfileForm() {
     setShowCalendar(false);
   };
 
+  /** Moves the calendar one month back/forward, rolling the year over at January/December. */
   const changeMonth = (direction: 'next' | 'prev') => {
     if (direction === 'prev') {
       if (calendarMonth === 0) {
@@ -199,6 +249,7 @@ export default function CompleteProfileForm() {
     }
   };
 
+  /** Builds the calendar grid cells: blank spacers before the 1st, then one tappable cell per day. */
   const renderCalendarDays = () => {
     const daysInMonth = getDaysInMonth(calendarMonth, calendarYear);
     const firstDay = getFirstDayOfMonth(calendarMonth, calendarYear);
@@ -225,6 +276,11 @@ export default function CompleteProfileForm() {
     return totalSlots;
   };
 
+  /**
+   * Validates the current step before advancing.
+   * Step 1: name, DOB, occupation and location required.
+   * Step 2: Aadhaar number (exactly 12 digits) and Aadhaar image required.
+   */
   const handleNextStep = () => {
     if (currentStep === 1) {
       if (!officialName.trim() || !dob.trim() || !occupation.trim() || !location.trim()) {
@@ -244,7 +300,13 @@ export default function CompleteProfileForm() {
     setCurrentStep(currentStep + 1);
   };
 
+  /**
+   * Final step: validates step 3, then writes the whole profile to `profiles`.
+   * Inserts a new row (role 'scribe') if none exists, otherwise updates it. Marks the
+   * scribe as `verification_status: 'approved'` and redirects to `/console/scribe`.
+   */
   const handleSubmit = async () => {
+    // Step 3 validation: at least one language and one availability slot.
     if (selectedLanguages.length === 0) {
       Alert.alert('Missing Fields', 'Please select at least one language you can scribe in.');
       return;
@@ -261,6 +323,7 @@ export default function CompleteProfileForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
+      // Column values for `profiles`; document fields hold file names only.
       const profilePayload = {
         official_name: officialName.trim(),
         aadhar_number: aadharNumber.trim(),
@@ -315,6 +378,7 @@ export default function CompleteProfileForm() {
     }
   };
 
+  /** Label for the current step shown in the progress indicator. */
   const getStepTitle = () => {
     switch (currentStep) {
       case 1: return 'Personal Details';
@@ -345,6 +409,7 @@ export default function CompleteProfileForm() {
           <Text className="text-xl font-black text-slate-800">Verify Scribe Profile</Text>
         </View>
 
+        {/* Step counter (right side of the header). */}
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#16a34a' }}>
             Step {currentStep} of 3
@@ -375,6 +440,7 @@ export default function CompleteProfileForm() {
               <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Personal Information</Text>
               
               <View className="space-y-3">
+                {/* Official name (also used as `full_name` when a new profile row is inserted) */}
                  <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Name (as per ID) *</Text>
                   <TextInput 
@@ -399,7 +465,8 @@ export default function CompleteProfileForm() {
                     <Feather name="calendar" size={16} color="#059669" />
                   </TouchableOpacity>
                 </View>
- 
+
+                {/* Occupation */}
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Occupation *</Text>
                   <TextInput 
@@ -409,7 +476,8 @@ export default function CompleteProfileForm() {
                     className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
- 
+
+                {/* Location: free text plus an "Auto-Detect" button (spinner while locating) */}
                 <View>
                   <View className="flex-row items-center justify-between mb-1 ml-1">
                     <Text className="text-[10px] font-semibold text-slate-500">Location (City / Area) *</Text>
@@ -582,6 +650,7 @@ export default function CompleteProfileForm() {
                 </View>
               </View>
 
+              {/* Divider */}
               <View className="h-px bg-slate-100 w-full my-1" />
 
               {/* Availability Windows */}
@@ -626,6 +695,7 @@ export default function CompleteProfileForm() {
                 <Text className="text-xs font-bold text-slate-800 mb-2 uppercase tracking-wider">Preferences & History</Text>
                 
                 <View className="space-y-3.5">
+                  {/* Urgent calls Yes/No segmented toggle (saved as `urgent_calls`) */}
                   <View className="flex-row items-center justify-between">
                     <View className="flex-1 pr-4">
                       <Text className="text-xs font-semibold text-slate-800">Available for Urgent Calls?</Text>
@@ -649,6 +719,7 @@ export default function CompleteProfileForm() {
 
                   <View className="h-px bg-slate-50 w-full" />
 
+                  {/* First-time scribe Yes/No segmented toggle (saved as `first_time`) */}
                   <View className="flex-row items-center justify-between">
                     <View className="flex-1 pr-4">
                       <Text className="text-xs font-semibold text-slate-800">First Time as Scribe?</Text>
@@ -684,7 +755,8 @@ export default function CompleteProfileForm() {
                 <Text className="text-slate-700 font-bold text-sm">Back</Text>
               </TouchableOpacity>
             )}
-            
+
+            {/* "Next" (validates via handleNextStep) on steps 1-2; "Submit Profile" on step 3 */}
             {currentStep < 3 ? (
               <TouchableOpacity 
                 onPress={handleNextStep}
@@ -802,6 +874,7 @@ export default function CompleteProfileForm() {
       </Modal>
 
       {/* 100% PROFILE COMPLETION SUCCESS OVERLAY */}
+      {/* Shown for 3 seconds after a successful submit, then handleSubmit's timer redirects to /console/scribe. */}
       {showSuccessOverlay && (
         <View className="absolute inset-0 bg-slate-950/80 items-center justify-center z-50">
           <View className="bg-white/95 p-8 rounded-3xl items-center border border-slate-200/50 shadow-2xl w-80">

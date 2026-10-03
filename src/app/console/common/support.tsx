@@ -1,3 +1,21 @@
+/**
+ * Contact Support screen — route `/console/common/support`, shared by both roles.
+ *
+ * Opened from the "support" entry on the student home (components/student/StudentHomeView.tsx)
+ * and scribe home (components/scribe/ScribeHomeView.tsx) dashboards. Lets the signed-in user
+ * file a helpdesk ticket for the admin team.
+ *
+ * Data:
+ * - auth session (user id + email); redirects to `/auth/login` when signed out,
+ * - the user's `profiles` row (role and phone) via the `supabase` shim (Rust/Axum backend).
+ * The role only changes the accent colour (blue = student, emerald = scribe) and the fallback
+ * route used by the back button.
+ *
+ * Submitting POSTs the ticket directly (plain `fetch`, not the shim) to the backend's
+ * `/api/support/create`, which inserts a 'pending' row into `support_tickets`.
+ * Note: the screenshot attachment is simulated — it attaches a fixed placeholder base64 PNG,
+ * not a real image picked by the user.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, FlatList, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +24,7 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
+/** Categories offered in the issue-type picker; the chosen string is sent as `issue_type`. */
 const ISSUE_TYPES = [
   'App bug / Crash',
   'Verification issue',
@@ -14,7 +33,13 @@ const ISSUE_TYPES = [
   'Other / Suggestions'
 ];
 
+/**
+ * Support ticket screen (default export for expo-router). Takes no props.
+ * Shows a spinner until the user's details load, then the read-only identity fields, the issue
+ * form and a bottom-sheet modal for picking the issue category.
+ */
 export default function SupportScreen() {
+  // Signed-in user's details, shown read-only and sent with the ticket.
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState('');
   const [email, setEmail] = useState('');
@@ -28,12 +53,18 @@ export default function SupportScreen() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [sending, setSending] = useState(false);
 
+  // Load the user's details once on mount.
   useEffect(() => {
     fetchUserData();
   }, []);
 
+  /**
+   * Reads the auth session (redirecting to login if absent), then the user's `profiles` row to
+   * fill role and phone. Errors are logged and the form still renders with what was loaded.
+   */
   const fetchUserData = async () => {
     try {
+      // 1. Session: user id and email; signed-out users are sent to the login screen.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         router.replace('/auth/login');
@@ -43,6 +74,7 @@ export default function SupportScreen() {
       setUserId(session.user.id);
       setEmail(session.user.email || '');
 
+      // 2. Profile row: role (for theming / back navigation) and phone number.
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
@@ -61,17 +93,25 @@ export default function SupportScreen() {
     }
   };
 
+  /** "Attach screenshot" handler: attaches a fixed placeholder image (no real picker yet). */
   const handleSimulateAttachment = () => {
     // Simulated base64 mockup screenshot of the app
     setReferenceImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAMklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBC1iAAEJf8pIAAAAAElFTkSuQmCC');
     Alert.alert('Image Attached', 'Mock reference screenshot "support_screenshot.png" attached to ticket.');
   };
 
+  /** Clears the attached reference image. */
   const handleRemoveAttachment = () => {
     setReferenceImage(null);
   };
 
+  /**
+   * Validates the form and submits the ticket to `POST /api/support/create` (backend inserts into
+   * `support_tickets`). On success shows a confirmation alert whose OK button resets the form and
+   * navigates back; on failure shows an error alert. `sending` disables the button meanwhile.
+   */
   const handleSubmitTicket = async () => {
+    // Validation: an issue category and a non-empty description are required.
     if (issueType === 'Select Issue Type') {
       Alert.alert('Required Field', 'Please select the type of issue you are facing.');
       return;
@@ -84,6 +124,7 @@ export default function SupportScreen() {
     setSending(true);
 
     try {
+      // Direct call to the Axum backend (EXPO_PUBLIC_API_URL, else the hosted server).
       const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${API_URL}/api/support/create`, {
         method: 'POST',
@@ -126,6 +167,10 @@ export default function SupportScreen() {
     }
   };
 
+  /**
+   * Goes back in history, or — when the screen was opened directly with no history — replaces
+   * the route with the user's own console home.
+   */
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -134,12 +179,14 @@ export default function SupportScreen() {
     }
   };
 
+  // Role-based accent colours (NativeWind classes): blue for students, emerald for scribes.
   const isStudent = role === 'student';
   const themeColorClass = isStudent ? 'bg-blue-600 active:bg-blue-700' : 'bg-emerald-600 active:bg-emerald-700';
   const themeTextClass = isStudent ? 'text-blue-600' : 'text-emerald-600';
   const themeBgClass = isStudent ? 'bg-blue-50' : 'bg-emerald-50';
   const themeBorderClass = isStudent ? 'focus:border-blue-500' : 'focus:border-emerald-500';
 
+  // Spinner while the user's details load.
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50 justify-center items-center">
@@ -236,6 +283,7 @@ export default function SupportScreen() {
           {/* Reference Image upload (Optional) */}
           <View>
             <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Reference Screenshot (Optional)</Text>
+            {/* Attached: thumbnail + remove button; otherwise the attach button */}
             {referenceImage ? (
               <View className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex-row items-center justify-between">
                 <View className="flex-row items-center space-x-3">
@@ -297,6 +345,7 @@ export default function SupportScreen() {
               </TouchableOpacity>
             </View>
 
+            {/* Category list; tapping one selects it and closes the sheet */}
             <FlatList
               data={ISSUE_TYPES}
               keyExtractor={(item) => item}

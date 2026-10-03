@@ -1,3 +1,27 @@
+/**
+ * Chat room between a student and their scribe for one request.
+ * Route: `/console/common/chat?requestId=<exam_requests.id>` (callers may also pass `type`, which
+ * this screen currently ignores). Opened from the student/scribe Home, Requests, Plan and
+ * Commitments views.
+ *
+ * Data (via the `supabase` shim, which calls the Rust/Axum backend rather than real Supabase):
+ *   - reads `profiles` (current user and the other party) and the request from `exam_requests`
+ *     (assignment requests are not looked up here);
+ *   - reads/writes `chat_messages` for the request. There is no realtime socket: messages are
+ *     re-fetched every 2 seconds by polling.
+ *   - images/PDFs are uploaded through `storageService.uploadFile` (folder 'chat') and the returned
+ *     public URL is stored on the message.
+ *
+ * Notable behaviour:
+ *   - Theme follows the viewer's role: Telegram-style blue for students, WhatsApp-style green for scribes.
+ *   - Calling is time-restricted (see the comment near `canCall`): the phone icon only appears on the
+ *     exam day and is locked once the exam is over.
+ *   - The header's document icon (shown once a scribe is assigned) opens the scribe declaration letter.
+ *   - Voice notes are a stub: the timer runs locally and a fixed sample audio URL is sent.
+ *   - Messages also understand an older inline format (`[audio/m4a;base64]...`, `[file/image;name=...;base64]...`,
+ *     `[file/pdf;name=...;base64]...`) for rows that predate `message_type` / `media_url`.
+ *   - A copy of the portal's bottom tab bar is rendered so users can jump back to a portal tab.
+ */
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Linking, Modal, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +35,15 @@ import { isExamToday, isExamPast } from '@/core/examDate';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { storageService } from '@/services/storageService';
+import { useInDesktopFrame } from '@/components/ui/DesktopShell';
 
+/**
+ * A row of the `chat_messages` table.
+ * - `message` is the text, or the file name / "🎤 Voice Note" label for media messages
+ *   (or a legacy inline-encoded payload, see the file header).
+ * - `message_type` + `media_url` / `media_duration` describe media; `is_voice` / `voice_url` /
+ *   `voice_duration` are older voice-specific columns that are still written and read as fallbacks.
+ */
 interface Message {
   id: number;
   request_id: number;
@@ -28,11 +60,19 @@ interface Message {
 
 import { VoiceMessageBubble } from '../../../components/voice_msg/VoiceMessageBubble';
 
+/**
+ * Chat room screen for a single exam request (see the file header for routing, data and behaviour).
+ * Takes no props; reads `requestId` from the route.
+ */
 export default function ChatRoomScreen() {
+  // Inside the desktop page frame the phone tab bar is hidden (the header's back arrow remains).
+  const inDesktopFrame = useInDesktopFrame();
+  // `t` translates UI strings into the user's chosen language.
   const { t } = useLanguage();
   const params = useLocalSearchParams<{ requestId: string }>();
   const scrollViewRef = useRef<ScrollView>(null);
   
+  // Who is chatting about what: signed-in user + profile, the exam request, and the other party's display info.
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -40,10 +80,12 @@ export default function ChatRoomScreen() {
   const [otherPartyName, setOtherPartyName] = useState('User');
   const [otherPartyRole, setOtherPartyRole] = useState('');
   
+  // Message list (refreshed by polling) and the text currently in the composer.
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
   // Voice recording state
+  // Note: `recording` (an audio recorder object) is never assigned by startRecording, so it stays null.
   const [recording, setRecording] = useState<any>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
@@ -56,7 +98,14 @@ export default function ChatRoomScreen() {
   const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
   const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
 
+  // One-time setup per request: who am I, which request is this, and who is on the other side.
   useEffect(() => {
+    /**
+     * Loads the session, the user's `profiles` row and the `exam_requests` row, then works out the
+     * other participant: for the student it is the assigned scribe (if any); for the scribe it is
+     * the student. The other party's profile supplies the display name, phone (for calling) and
+     * the details shown on the declaration letter. Redirects to `/auth/login` if signed out.
+     */
     const initializeChat = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -66,6 +115,7 @@ export default function ChatRoomScreen() {
         }
         setCurrentUser(session.user);
 
+        // Current user's profile (its `role` drives the theme and the bottom tab bar).
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
@@ -73,6 +123,7 @@ export default function ChatRoomScreen() {
           .single();
         setProfile(profileData);
 
+        // The request this chat belongs to.
         const { data: examData } = await supabase
           .from('exam_requests')
           .select('*')
@@ -80,10 +131,12 @@ export default function ChatRoomScreen() {
           .single();
         setExam(examData);
 
+        // Resolve the other participant. The viewer is "the student" if they own the request.
         if (examData) {
           const isStudent = session.user.id === examData.student_id;
           
           if (isStudent) {
+            // Placeholder name until (and unless) the assigned scribe's profile loads.
             setOtherPartyName(examData.scribe_id ? 'Scribe' : 'Volunteer');
             setOtherPartyRole('Volunteer');
             
@@ -100,6 +153,7 @@ export default function ChatRoomScreen() {
               }
             }
           } else {
+            // Scribe viewing: the name comes straight from the request; the profile is only for phone/details.
             setOtherPartyName(examData.student_name);
             setOtherPartyRole('Student');
             
@@ -124,6 +178,7 @@ export default function ChatRoomScreen() {
     initializeChat();
   }, [params.requestId]);
 
+  /** Fetches every `chat_messages` row for this request, oldest first, and replaces `messages`. Errors are logged only. */
   const loadMessages = async () => {
     if (!params.requestId) return;
     try {
@@ -141,6 +196,7 @@ export default function ChatRoomScreen() {
     }
   };
 
+  // Poll for new messages every 2 s while the screen is mounted (no push/realtime channel exists).
   useEffect(() => {
     if (!params.requestId) return;
     loadMessages();
@@ -148,12 +204,17 @@ export default function ChatRoomScreen() {
     return () => clearInterval(interval);
   }, [params.requestId]);
 
+  // Keep the newest message in view. Because each poll sets a new array, this also fires every 2 s.
   useEffect(() => {
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
 
+  /**
+   * Sends the composer text as a plain text message: clears the input immediately (optimistic),
+   * inserts into `chat_messages`, then reloads. On failure the text is not restored.
+   */
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !currentUser || !exam) return;
 
@@ -177,6 +238,11 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /**
+   * "Upload Photo" option: closes the attachment sheet, opens the photo library (base64 requested so
+   * the upload can skip a file read), uploads via `storageService` to the 'chat' folder as JPEG, and
+   * inserts an 'image' message with the public URL. Shows an alert if the upload fails.
+   */
   const handlePickAndSendImage = async () => {
     if (!currentUser || !exam) return;
     setIsAttachmentModalOpen(false);
@@ -214,6 +280,10 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /**
+   * "Upload PDF/Document" option: picks a PDF or image file, uploads it by URI with the file's own
+   * extension/MIME type, and inserts an 'image' or 'pdf' message depending on the MIME type.
+   */
   const handlePickAndSendDocument = async () => {
     if (!currentUser || !exam) return;
     setIsAttachmentModalOpen(false);
@@ -251,6 +321,10 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /**
+   * Mic button: switches the composer into "recording" mode and starts a 1-second timer.
+   * No microphone audio is actually captured yet (UI-only stub).
+   */
   const startRecording = async () => {
     setIsRecording(true);
     setRecordDuration(0);
@@ -259,6 +333,11 @@ export default function ChatRoomScreen() {
     }, 1000);
   };
 
+  /**
+   * Tick button while recording: stops the timer and inserts a 'voice' message whose audio is a
+   * fixed sample clip, with the elapsed seconds (minimum 3) as its duration. Both the new
+   * `media_*` and legacy `voice_*` columns are filled.
+   */
   const stopAndSendRecording = async () => {
     const duration = recordDuration;
     clearInterval(recordInterval.current);
@@ -292,6 +371,11 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /**
+   * Trash button while recording: meant to stop the timer and discard the recording.
+   * Note: it returns early when `recording` is null, which is always the case today, so the
+   * timer and recording UI are not actually cleared.
+   */
   const cancelRecording = async () => {
     if (!recording) return;
 
@@ -307,6 +391,7 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /** Formats a second count as `m:ss` for the recording timer. */
   const formatRecordTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -321,6 +406,7 @@ export default function ChatRoomScreen() {
     );
   }
 
+  // Role of the viewer (from their profile) picks the colour theme and which portal's tabs to show.
   const isStudent = profile?.role === 'student';
 
   // Time-Restricted Calling: the call button only works on the day of the exam and
@@ -335,6 +421,7 @@ export default function ChatRoomScreen() {
   const bubbleBgLight = isStudent ? 'rgba(36,129,204,0.08)' : 'rgba(0,168,132,0.08)';
   const inputBarBg = isStudent ? '#e7ebf0' : '#efeae2'; // Telegram light blue-grey / WhatsApp beige
 
+  /** Header back arrow: pop the stack, or (deep link / web refresh) fall back to the user's portal home. */
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -343,6 +430,10 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /**
+   * Mirror of the portal's bottom tab bar (Ionicons names). Tapping a tab replaces the route with the
+   * portal and a `tab` param, so the portal opens on that tab. None is highlighted here.
+   */
   const TABS = isStudent ? [
     { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home'     },
     { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
@@ -768,7 +859,8 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </Modal>
-      {/* ── DEFAULT BOTTOM NAV BAR ── */}
+      {/* ── DEFAULT BOTTOM NAV BAR ── (phones only) */}
+      {!inDesktopFrame && (
       <SafeAreaView edges={['bottom']} style={{
         backgroundColor: '#fff',
         borderTopLeftRadius: 20,
@@ -821,6 +913,7 @@ export default function ChatRoomScreen() {
           })}
         </View>
       </SafeAreaView>
+      )}
 
       {/* ── ATTACHMENT CHOICE MODAL ── */}
       <Modal animationType="slide" transparent visible={isAttachmentModalOpen} onRequestClose={() => setIsAttachmentModalOpen(false)}>

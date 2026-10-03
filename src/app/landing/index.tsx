@@ -1,3 +1,18 @@
+/**
+ * Landing screen — route "/landing".
+ *
+ * The first thing a signed-out user sees (the root route "/" redirects here when there is no session).
+ * On phones it renders the animated welcome page: logo + tagline, three feature cards, a
+ * "Get Started" button (-> /landing/induction, the intro/role-selection flow) and a "Log In" link
+ * (-> /auth/login). On wide screens (>= 768 px) it renders the desktop version, <LandingPC />, instead.
+ *
+ * Data: on mount it re-checks the stored session via `supabase.auth.getSession()` and, if one exists,
+ * reads the user's `role` from the `profiles` table and replaces the route with the matching console
+ * (/console/scribe or /console/student). `supabase` is the app's shim over the Rust/Axum backend
+ * (core/supabase.ts), not real Supabase.
+ *
+ * Accessibility: all entrance animations are skipped when the OS "Reduce Motion" setting is on.
+ */
 import React, { useEffect } from 'react';
 import {
   View,
@@ -29,6 +44,7 @@ import { supabase } from '@/core/supabase';
 import { Feather } from '@expo/vector-icons';
 import LandingPC from '@/components/pc_view/LandingPC';
 
+/** Pressable that accepts Reanimated animated styles (used for the scaling "Get Started" button). */
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Entrance timeline (ms). Cards start while the logo is still settling so the screen flows as one motion.
@@ -38,7 +54,12 @@ const CTA_DELAY = 700;
 const FOOTER_DELAY = 950;
 const CTA_PULSE_DELAY = 1400;
 
+/**
+ * Default-exported route component for /landing.
+ * Takes no props. Side effects: may redirect a signed-in user to their console (see file header).
+ */
 export default function LandingScreen() {
+  // Window size drives the phone/desktop switch and positions the background orbs.
   const { width, height } = useWindowDimensions();
   const isDesktop = width >= 768;
 
@@ -52,12 +73,18 @@ export default function LandingScreen() {
     transform: [{ scale: logoScale.get() }],
   }));
 
+  // "Get Started" scale = one-off attention pulse x press-down feedback, combined in one style.
   const ctaPulse = useSharedValue(1);
   const ctaPress = useSharedValue(1);
   const ctaStyle = useAnimatedStyle(() => ({
     transform: [{ scale: ctaPulse.get() * ctaPress.get() }],
   }));
 
+  /**
+   * If a session is stored, looks up the user's role in `profiles` and replaces this route with
+   * /console/scribe (role 'scribe') or /console/student (anything else). Errors are swallowed so the
+   * landing page simply stays visible.
+   */
   const checkExistingSession = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -68,6 +95,7 @@ export default function LandingScreen() {
     } catch {}
   };
 
+  // Run the session check on mount (and again if the layout flips between phone and desktop).
   useEffect(() => {
     checkExistingSession();
   }, [isDesktop]);
@@ -85,6 +113,7 @@ export default function LandingScreen() {
     ));
   }, [isDesktop, reduceMotion, ctaPulse, logoScale]);
 
+  // Wide screens get the dedicated desktop landing page (all hooks above still run first).
   if (isDesktop) {
     return <LandingPC />;
   }
@@ -95,6 +124,7 @@ export default function LandingScreen() {
     router.push('/landing/induction' as any);
   };
 
+  // Content for the three feature cards; `delay` staggers each card's entrance on the timeline above.
   const features = [
     {
       icon: 'target' as const,
@@ -128,6 +158,7 @@ export default function LandingScreen() {
     },
   ];
 
+  // Phone layout: decorative orbs behind a scrollable column of logo, cards, buttons and footer.
   return (
     <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
       <StatusBar style="dark" />
@@ -169,6 +200,7 @@ export default function LandingScreen() {
               paddingBottom: 32,
             }}
           >
+            {/* Logo tile — scaled in by logoStyle */}
              <Animated.View style={[{
               width: 84, height: 84, borderRadius: 26,
               backgroundColor: '#ffffff',
@@ -188,6 +220,7 @@ export default function LandingScreen() {
               />
             </Animated.View>
 
+            {/* App name and tagline */}
             <Text style={{
               fontSize: 40, fontWeight: '900',
               color: '#0f172a', letterSpacing: -1, marginBottom: 12,

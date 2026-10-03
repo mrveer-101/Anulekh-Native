@@ -1,3 +1,12 @@
+/**
+ * Portal colour themes and small style helpers.
+ *
+ * Pure styling module (no data loading). Exports the `PortalTheme` palette shape, the concrete
+ * themes (`PORTAL_THEMES`, `STUDENT_THEME`, `SCRIBE_THEME`), a cross-platform CSS `gradient()`
+ * helper and `portalCardStyle()`. Imported by the student views (StudentHomeView,
+ * StudentRequestsView, StudentPlanView), the scribe views (ScribeHomeView, ScribeExploreView,
+ * ScribeCommitmentsView) and the shared SharedSettingsView so both portals look consistent.
+ */
 import { Platform } from 'react-native';
 
 // Shared look for the student and scribe portal tabs (Account, Plan, Applied, …).
@@ -21,6 +30,11 @@ export interface PortalTheme {
   roleIcon: 'user-graduate' | 'pen-nib';
 }
 
+/**
+ * All available portal palettes, keyed by name. `scribeGreen` is the one in use for scribes;
+ * `scribeOrange` is kept as an alternative (see SCRIBE_THEME below). Gradient fields are CSS
+ * `linear-gradient(...)` strings meant to be passed through `gradient()`.
+ */
 export const PORTAL_THEMES: Record<'student' | 'scribeGreen' | 'scribeOrange', PortalTheme> = {
   student: {
     primary: '#2563eb', accentText: '#1d4ed8', solid: '#2563eb',
@@ -51,6 +65,7 @@ export const PORTAL_THEMES: Record<'student' | 'scribeGreen' | 'scribeOrange', P
   },
 };
 
+/** Theme used by every student-portal tab. */
 export const STUDENT_THEME = PORTAL_THEMES.student;
 // Scribe side uses the portal's green; switch to PORTAL_THEMES.scribeOrange to match the orange scribe-home test.
 export const SCRIBE_THEME = PORTAL_THEMES.scribeGreen;
@@ -62,7 +77,11 @@ export const SCRIBE_THEME = PORTAL_THEMES.scribeGreen;
 export const gradient = (css: string) =>
   (Platform.OS === 'web' ? { backgroundImage: css } : { experimental_backgroundImage: css }) as object;
 
-/** White card with a tinted border and soft coloured shadow. */
+/**
+ * White card with a tinted border and soft coloured shadow.
+ * @param theme Portal palette supplying the border and shadow colours.
+ * @returns A plain style object (iOS shadow* props plus Android `elevation`) to spread into `style`.
+ */
 export const portalCardStyle = (theme: PortalTheme) => ({
   backgroundColor: '#ffffff',
   borderRadius: 22,

@@ -1,3 +1,18 @@
+/**
+ * My Requests screen — route `/console/student/my_requests`.
+ *
+ * A standalone list of exam requests for the signed-in user (no other screen
+ * currently links here directly; the main student console has its own
+ * requests tab). Works for both roles:
+ *  - student: shows requests they created (`exam_requests.student_id`)
+ *  - scribe:  shows requests they are committed to (`exam_requests.scribe_id`)
+ *
+ * Data: reads the user's `role` and `full_name` from `profiles`, then all
+ * matching rows of `exam_requests`, newest first, via the `supabase` shim
+ * (a custom client for the Rust/Axum backend, not real Supabase).
+ * Supports pull-to-refresh. The bottom tab bar replaces the route with the
+ * student console (`/console/student`) and selects a tab via the `tab` param.
+ */
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +21,12 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 
+/**
+ * Local shape of an `exam_requests` row — only the columns this screen
+ * displays or keys on. `status` is free text such as 'pending', 'matched'
+ * or 'cancelled' (see `getStatusStyle`). `id_proof` holds the student's
+ * ID (Aadhaar) number entered on the request form.
+ */
 interface ExamRequest {
   id: number;
   student_name: string;
@@ -20,21 +41,35 @@ interface ExamRequest {
   created_at: string;
 }
 
+/**
+ * Screen component (default export used by expo-router). No props.
+ * Renders a header, the request list (spinner while loading, empty state
+ * with a "Create Request" button for students) and a bottom tab bar.
+ */
 export default function MyRequests() {
+  // List data + loading flags, and the viewer's role / name for the header avatar.
   const [requests, setRequests] = useState<ExamRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [role, setRole] = useState<'student' | 'scribe'>('student');
   const [fullName, setFullName] = useState('');
 
+  /**
+   * Load the viewer's profile and their exam requests.
+   * Reads `profiles` (role, full_name) and `exam_requests`; filters by
+   * `student_id` for students or `scribe_id` for scribes. Errors are only
+   * logged. Always clears both `loading` and `refreshing` when done.
+   */
   const fetchRequests = async () => {
     try {
+      // No session (signed out) -> just stop the spinner and show the empty list.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setLoading(false);
         return;
       }
 
+      // Step 1: role decides which column the requests are filtered on.
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, full_name')
@@ -45,6 +80,7 @@ export default function MyRequests() {
       setRole(userRole);
       setFullName(profile?.full_name || '');
 
+      // Step 2: build the role-specific `exam_requests` query, newest first.
       let query = supabase.from('exam_requests').select('*');
       
       if (userRole === 'student') {
@@ -65,15 +101,21 @@ export default function MyRequests() {
     }
   };
 
+  // Initial load on mount.
   useEffect(() => {
     fetchRequests();
   }, []);
 
+  /** Pull-to-refresh handler for the FlatList. */
   const onRefresh = () => {
     setRefreshing(true);
     fetchRequests();
   };
 
+  /**
+   * Map a request status to Tailwind (NativeWind) class names for the badge.
+   * Returns `{ bg, border, text }`; unknown statuses fall back to blue.
+   */
   const getStatusStyle = (status: string) => {
     switch (status.toLowerCase()) {
       case 'pending':
@@ -87,6 +129,7 @@ export default function MyRequests() {
     }
   };
 
+  /** Format an ISO timestamp as an Indian-style short date, e.g. "05 Mar 2026". */
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-IN', {
@@ -103,6 +146,7 @@ export default function MyRequests() {
       {/* Header */}
       <View className="bg-white px-6 py-4 border-b border-slate-100 flex-row items-center justify-between shadow-sm">
         <View className="flex-row items-center">
+          {/* Brand mark: blue "अ" tile for students, green heart for scribes */}
           {role === 'student' ? (
             <View className="flex-row items-center">
               <View className="w-9 h-9 bg-white border border-slate-200 rounded-lg items-center justify-center mr-2 shadow-sm shadow-slate-200/50">
@@ -121,6 +165,7 @@ export default function MyRequests() {
         </View>
 
         <View className="flex-row items-center" style={{ gap: 10 }}>
+          {/* Header actions: "New Request" (students only) + initial avatar that opens the role's console */}
           {role === 'student' && (
             <TouchableOpacity
               onPress={() => router.push('/console/student/request_form' as any)}
@@ -144,6 +189,7 @@ export default function MyRequests() {
         </View>
       </View>
 
+      {/* Body: spinner while loading, otherwise the pull-to-refresh request list */}
       {loading ? (
         <View className="flex-1 justify-center items-center bg-slate-50">
           <ActivityIndicator size="large" color="#2563eb" />
@@ -182,6 +228,7 @@ export default function MyRequests() {
             const statusStyle = getStatusStyle(item.status);
             return (
               <View className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm mb-4">
+                {/* Card header: exam type, creation date and status badge */}
                 <View className="flex-row items-center justify-between mb-3">
                   <View>
                     <Text className="text-base font-bold text-slate-800">{item.exam_type} Exam</Text>
@@ -192,6 +239,7 @@ export default function MyRequests() {
                   </View>
                 </View>
 
+                {/* Card details: languages, grade and ID proof number */}
                 <View className="space-y-1.5 border-t border-slate-50 pt-2.5">
                   <View className="flex-row items-center">
                     <Feather name="globe" size={12} color="#64748b" className="mr-2" />
