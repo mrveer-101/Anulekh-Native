@@ -2,7 +2,7 @@
  * Exam scribe request form. Route: `/console/student/request_form` (optional `?id=<exam_requests id>`).
  *
  * Students open it from the student console (StudentHomeView, StudentRequestsView, my_requests and the
- * desktop ConsoleStudentPC / StudentHomePCView). StudentRequestsView passes `?id=` to edit an existing
+ * desktop console). StudentRequestsView passes `?id=` to edit an existing
  * request. A new request first shows an entry-choice screen:
  *   - "Request Assignment" -> `/console/student/assignment_form`;
  *   - "Auto-Fill (ADMIT Card)" -> pick a photo/PDF hall ticket, send it to the backend
@@ -19,22 +19,21 @@
  * client for the Rust/Axum backend's `POST /api/query`, not real Supabase.
  *
  * Notes: the admit card is saved only as the picked file NAME in `admit_card_proof`; the file is sent to
- * the AI parser but not stored. On desktop (>= 768px) only the entry-choice screen uses the
- * ConsoleStudentPC frame; the form always uses the mobile layout with a copy of the bottom tab bar.
- * Styling mixes NativeWind `className` utilities and inline styles (no StyleSheet).
+ * the AI parser but not stored. Page frame, header, section cards, submit button, tab bar and the
+ * request-type chooser come from components/student/RequestKit (shared with assignment_form). On
+ * desktop the root layout shows this page in the centred DesktopPageFrame. Field styling uses
+ * NativeWind `className` utilities.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, Platform, Animated, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Modal, Platform, Animated } from 'react-native';
 import * as Location from 'expo-location';
-import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { supabase } from '@/core/supabase';
-import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
+import { FormSection, RequestHeader, RequestPage, RequestTabBar, RequestTypeChooser, SubmitButton } from '@/components/student/RequestKit';
 import { announceForAccessibility } from '@/core/a11y';
 
 /** Base URL of the Rust/Axum backend; used here only for the hall-ticket AI parser endpoint. */
@@ -82,9 +81,6 @@ const MOCK_LOCATIONS = [
  * date/time picker, venue picker and "reading hall ticket" overlay modals.
  */
 export default function ScribeRequestForm() {
-  // Layout: desktop-width screens get the PC console frame for the entry-choice screen.
-  const { width: windowWidth } = useWindowDimensions();
-  const isDesktop = windowWidth >= 768;
 
   // Edit mode is driven by the `id` query param (set by StudentRequestsView).
   const params = useLocalSearchParams<{ id?: string }>();
@@ -653,299 +649,48 @@ export default function ScribeRequestForm() {
     }
   };
 
-  // Entry-choice screen: ask whether to fill the request manually or auto-fill from an admit card.
+  /** Back from the chooser (or while editing): previous screen, or the console if there is none. */
+  const leavePage = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/console/student' as any);
+  };
+
+  // Entry-choice screen: Exam (scan admit card / fill manually) or Assignment.
   if (entryMode === 'choice') {
-    if (isDesktop) {
-      // Desktop: card-style chooser inside the PC console frame.
-      return (
-        <ConsoleStudentPC activeTab="requests">
-          <View style={{ maxWidth: 880, width: '100%', alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 24, padding: 36, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
-            {/* Header: title + Cancel (back to the student console) */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-              <View>
-                <Text style={{ fontSize: 22, fontWeight: '800', color: '#0f172a' }}>Select Request Type</Text>
-                <Text style={{ fontSize: 14, fontWeight: '500', color: '#64748b', marginTop: 4 }}>Choose whether you need help for an assignment or an upcoming exam.</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => router.replace('/console/student' as any)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f1f5f9', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, cursor: 'pointer' as any }}
-              >
-                <Feather name="x" size={18} color="#64748b" />
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Request Assignment Block */}
-            <View style={{ marginBottom: 24 }}>
-              <TouchableOpacity
-                onPress={() => router.push('/console/student/assignment_form' as any)}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#6366f1', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', cursor: 'pointer' as any }}
-              >
-                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
-                  <Feather name="file-text" size={26} color="#ffffff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 18 }}>Request Assignment</Text>
-                  <Text style={{ color: '#e0e7ff', fontSize: 13, marginTop: 4 }}>Get assistance for academic assignment completion</Text>
-                </View>
-                <Feather name="chevron-right" size={24} color="#ffffff" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Exam Request Section */}
-            <View>
-              <Text style={{ fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 16 }}>Exam Scribe Request</Text>
-
-              {/* Auto-fill from admit card: opens the form and the file picker */}
-              <TouchableOpacity
-                onPress={startAutoFillEntry}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#2563eb', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', marginBottom: 16, cursor: 'pointer' as any }}
-              >
-                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
-                  <Feather name="upload-cloud" size={26} color="#ffffff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 18 }}>Auto-Fill (ADMIT Card)</Text>
-                  <Text style={{ color: '#dbeafe', fontSize: 13, marginTop: 4 }}>Upload a photo or PDF admit card — details filled automatically via AI</Text>
-                </View>
-                <Feather name="chevron-right" size={24} color="#ffffff" />
-              </TouchableOpacity>
-
-              {/* Manual entry: opens the empty form */}
-              <TouchableOpacity
-                onPress={() => setEntryMode('form')}
-                activeOpacity={0.85}
-                style={{ backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#cbd5e1', borderRadius: 20, padding: 24, flexDirection: 'row', alignItems: 'center', cursor: 'pointer' as any }}
-              >
-                <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 18 }}>
-                  <Feather name="edit-3" size={26} color="#334155" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: '#0f172a', fontWeight: '800', fontSize: 18 }}>Manual Fill Form</Text>
-                  <Text style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>Enter exam details, date, time, and venue step by step</Text>
-                </View>
-                <Feather name="chevron-right" size={24} color="#334155" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ConsoleStudentPC>
-      );
-    }
-
-    // Mobile: full-height page with header, option list and a copy of the console's bottom tab bar.
     return (
-      <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
-        <StatusBar style="dark" />
-        
-        {/* Page Header (with back button) */}
-        <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 }}>
-          <View style={{ paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity
-              onPress={() => {
-                if (router.canGoBack()) router.back();
-                else router.replace('/console/student' as any);
-              }}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Back to Student Console"
-              style={{ marginRight: 16, padding: 8, marginLeft: -8, borderRadius: 10 }}
-            >
-              <Feather name="arrow-left" size={24} color="#334155" importantForAccessibility="no" accessibilityElementsHidden={true} />
-            </TouchableOpacity>
-            <Text
-              accessible={true}
-              accessibilityRole="header"
-              style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '700', color: '#1e293b' }}
-            >
-              Request a Scribe
-            </Text>
-          </View>
-        </SafeAreaView>
-
-        {/* Request type options */}
-        <ScrollView className="flex-1 px-6 pt-6 pb-8" contentContainerStyle={{ paddingBottom: 40 }}>
-          <Text
-            accessible={true}
-            accessibilityRole="header"
-            className="text-xl font-bold text-slate-800 mb-6"
-            style={{ fontFamily: 'Roboto' }}
-          >
-            Select Request Type
-          </Text>
-
-          {/* Request Assignment Block */}
-          <View className="mb-8">
-            <TouchableOpacity
-              onPress={() => router.push('/console/student/assignment_form' as any)}
-              activeOpacity={0.85}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Request Assignment Help. Get assistance for academic assignments"
-              accessibilityHint="Navigates to assignment helper booking form"
-              className="w-full bg-indigo-500 rounded-2xl p-5 flex-row items-center shadow-md shadow-indigo-500/30"
-            >
-              <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
-                <Feather name="file-text" size={22} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Request Assignment</Text>
-                <Text className="text-indigo-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Get help with your assignments</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Exam Request Block */}
-          <View>
-            <Text
-              accessible={true}
-              accessibilityRole="header"
-              className="text-lg font-bold text-slate-800 mb-4"
-              style={{ fontFamily: 'Roboto' }}
-            >
-              Exam Request
-            </Text>
-
-            {/* Auto-fill option */}
-            <TouchableOpacity
-              onPress={startAutoFillEntry}
-              activeOpacity={0.85}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Auto-Fill with Admit Card. Upload a photo or PDF of your hall ticket to fill details automatically"
-              accessibilityHint="Opens file picker to select hall ticket"
-              className="w-full bg-blue-500 rounded-2xl p-5 flex-row items-center mb-4 shadow-md shadow-blue-500/30"
-            >
-              <View className="w-12 h-12 rounded-xl bg-white/20 items-center justify-center mr-4">
-                <Feather name="upload-cloud" size={22} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-white font-bold text-base" style={{ fontFamily: 'Roboto' }}>Auto-Fill (ADMIT Card)</Text>
-                <Text className="text-blue-100 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Upload a photo or PDF — details filled automatically</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-            </TouchableOpacity>
-
-            {/* Manual option (also announced to screen readers) */}
-            <TouchableOpacity
-              onPress={() => {
-                setEntryMode('form');
-                announceForAccessibility('Manual scribe request form opened');
-              }}
-              activeOpacity={0.85}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Manual Fill Form. Enter exam details, date, time, and venue step by step"
-              accessibilityHint="Opens the manual scribe request form"
-              className="w-full bg-white border border-slate-200 rounded-2xl p-5 flex-row items-center shadow-sm"
-            >
-              <View className="w-12 h-12 rounded-xl bg-slate-100 items-center justify-center mr-4">
-                <Feather name="edit-3" size={22} color="#475569" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-slate-800 font-bold text-base" style={{ fontFamily: 'Roboto' }}>Manual Fill Form</Text>
-                <Text className="text-slate-500 text-xs mt-0.5" style={{ fontFamily: 'Roboto' }}>Fill in details yourself</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color="#475569" importantForAccessibility="no" accessibilityElementsHidden={true} />
-            </TouchableOpacity>
-          </View>
+      <RequestPage>
+        <RequestHeader title="New Request" subtitle="Get a scribe for an exam or assignment" onBack={leavePage} />
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+          <RequestTypeChooser
+            onAutoFill={startAutoFillEntry}
+            onManual={() => {
+              setEntryMode('form');
+              announceForAccessibility('Manual scribe request form opened');
+            }}
+            onAssignment={() => router.push('/console/student/assignment_form' as any)}
+          />
         </ScrollView>
-
-        {/* Replicated Bottom Nav Bar */}
-        <SafeAreaView edges={['bottom']} style={{
-          backgroundColor: 'rgba(255,255,255,0.82)',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-          shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
-        }}>
-          <View style={{
-            flexDirection: 'row',
-            paddingVertical: 8,
-            paddingHorizontal: 8,
-            gap: 4,
-            borderTopWidth: 1,
-            borderTopColor: 'rgba(0,0,0,0.07)',
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-          }}>
-            {/* Tabs go back to the student console with ?tab=...; "Requests" is shown as active */}
-            {[
-              { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
-              { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
-              { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
-              { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
-            ].map((tab) => {
-              const active = tab.id === 'requests';
-              return (
-                <TouchableOpacity
-                  key={tab.id}
-                  onPress={() => {
-                    router.replace(`/console/student?tab=${tab.id}`);
-                  }}
-                  style={{
-                    flex: 1, alignItems: 'center', paddingVertical: 9,
-                    borderRadius: 20,
-                    backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
-                  }}
-                >
-                  <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
-                  <Text style={{
-                    fontFamily: 'Roboto',
-                    fontSize: 11, fontWeight: active ? '800' : '600',
-                    marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
-                  }}>
-                    {tab.label}
-                  </Text>
-                  {active && (
-                    <View style={{
-                      position: 'absolute', bottom: 2,
-                      width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
-                    }} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </SafeAreaView>
-      </View>
+        <RequestTabBar />
+      </RequestPage>
     );
   }
 
   // Form view (manual entry, after auto-fill, or editing).
   return (
-    <View style={{ flex: 1, backgroundColor: '#f9fafb', height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
-      <StatusBar style="dark" />
+    <RequestPage>
+      {/* Back: a new request returns to the chooser; editing leaves the page */}
+      <RequestHeader
+        title={isEditing ? 'Edit Exam Request' : 'Exam Request'}
+        subtitle={isEditing ? undefined : 'Fill in your exam details'}
+        onBack={() => (isEditing ? leavePage() : setEntryMode('choice'))}
+      />
 
-      {/* Page Header (with back button) */}
-      <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.07)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3 }}>
-        <View style={{ paddingHorizontal: 24, paddingVertical: 14, flexDirection: 'row', alignItems: 'center' }}>
-          {/* Back: a new request returns to the entry choice; editing returns to the previous screen */}
-          <TouchableOpacity
-            onPress={() => {
-              if (!isEditing) { setEntryMode('choice'); return; }
-              if (router.canGoBack()) router.back();
-              else router.replace('/console/student' as any);
-            }}
-            style={{ marginRight: 16, padding: 8, marginLeft: -8, borderRadius: 10 }}
-          >
-            <Feather name="arrow-left" size={24} color="#334155" />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 20, fontWeight: '900', color: '#1e293b' }}>
-            {isEditing ? 'Edit Scribe Request' : 'Request a Scribe'}
-          </Text>
-        </View>
-      </SafeAreaView>
-
-      {/* Scrollable form card */}
-      <ScrollView className="flex-1 px-6 py-3" contentContainerStyle={{ paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
-        <View className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 space-y-4">
+      {/* Scrollable form: one card per section */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 28 }} keyboardShouldPersistTaps="handled">
+        <View style={{ gap: 14 }}>
           
-          {/* Section: Exam Classification (top) */}
-          <View>
-            <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Classification</Text>
+          {/* Section: Exam Classification */}
+          <FormSection icon="layers" title="Exam Classification">
 
             <View className="space-y-3">
               {/* 1. Exam Type Segments */}
@@ -1072,13 +817,10 @@ export default function ScribeRequestForm() {
                 </View>
               </View>
             </View>
-          </View>
+          </FormSection>
 
-          <View className="h-px bg-slate-100 w-full my-1" />
-
-          {/* Section: Exam Details (middle) — includes Admit Card Upload */}
-          <View>
-            <Text className="text-xs font-bold text-slate-800 mb-2.5 uppercase tracking-wider">Exam Details</Text>
+          {/* Section: Exam Details — includes Admit Card Upload */}
+          <FormSection icon="file-text" title="Exam Details">
 
             {/* Pre-Booking toggle (create mode only) */}
             {!isEditing && (
@@ -1224,113 +966,98 @@ export default function ScribeRequestForm() {
               </View>
 
             </View>
-          </View>
+          </FormSection>
 
           {/* Section: Additional Subjects (Bulk Exam Creation) — create mode only */}
           {!isEditing && (
-            <>
-              <View className="h-px bg-slate-100 w-full my-1" />
-              <View>
-                <View className="flex-row items-center justify-between mb-1">
-                  <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider">Additional Exams</Text>
-                  {extraSubjects.length > 0 && (
-                    <View className="bg-blue-50 px-2 py-0.5 rounded-full">
-                      <Text className="text-[9px] font-bold text-blue-600">{extraSubjects.length + 1} total</Text>
-                    </View>
-                  )}
+            <FormSection
+              icon="copy"
+              title="Additional Exams"
+              right={extraSubjects.length > 0 ? (
+                <View className="bg-blue-50 px-2 py-0.5 rounded-full">
+                  <Text className="text-[9px] font-bold text-blue-600">{extraSubjects.length + 1} total</Text>
                 </View>
-                <Text className="text-[10px] text-slate-400 mb-2.5 ml-0.5">
-                  Sitting multiple papers? Add them here — each becomes a separate request scribes can apply to.
-                </Text>
+              ) : undefined}
+            >
+              <Text className="text-[10px] text-slate-400 mb-2.5 ml-0.5">
+                Sitting multiple papers? Add them here — each becomes a separate request scribes can apply to.
+              </Text>
 
-                {/* One card per extra exam: subject, date/time and venue (same pickers, targeted via activeExtraIndex) */}
-                {extraSubjects.map((row, index) => (
-                  <View key={index} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2.5">
-                    <View className="flex-row items-center justify-between mb-2">
-                      <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Exam #{index + 2}</Text>
-                      <TouchableOpacity onPress={() => removeExtraSubject(index)} className="p-1">
-                        <Feather name="trash-2" size={14} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
+              {/* One card per extra exam: subject, date/time and venue (same pickers, targeted via activeExtraIndex) */}
+              {extraSubjects.map((row, index) => (
+                <View key={index} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-2.5">
+                  <View className="flex-row items-center justify-between mb-2">
+                    <Text className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Exam #{index + 2}</Text>
+                    <TouchableOpacity onPress={() => removeExtraSubject(index)} className="p-1">
+                      <Feather name="trash-2" size={14} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
 
-                    <View className="space-y-2">
+                  <View className="space-y-2">
+                    <TextInput
+                      value={row.subject}
+                      onChangeText={(text) => updateExtraSubject(index, 'subject', text)}
+                      placeholder="Subject / Paper Name"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800"
+                    />
+
+                    <TouchableOpacity
+                      onPress={() => { setActiveExtraIndex(index); setShowDatePicker(true); }}
+                      activeOpacity={0.8}
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between"
+                    >
+                      <Text className={`text-sm ${row.examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
+                        {row.examDate || 'Select Date & Time'}
+                      </Text>
+                      <Feather name="calendar" size={16} color="#2563eb" />
+                    </TouchableOpacity>
+
+                    <View className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between">
                       <TextInput
-                        value={row.subject}
-                        onChangeText={(text) => updateExtraSubject(index, 'subject', text)}
-                        placeholder="Subject / Paper Name"
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800"
+                        value={row.examVenue}
+                        onChangeText={(text) => updateExtraSubject(index, 'examVenue', text)}
+                        placeholder="Exam venue address"
+                        multiline={true}
+                        numberOfLines={2}
+                        className="flex-1 text-sm text-slate-800 mr-2 py-1"
                       />
-
-                      <TouchableOpacity
-                        onPress={() => { setActiveExtraIndex(index); setShowDatePicker(true); }}
-                        activeOpacity={0.8}
-                        className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between"
-                      >
-                        <Text className={`text-sm ${row.examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
-                          {row.examDate || 'Select Date & Time'}
-                        </Text>
-                        <Feather name="calendar" size={16} color="#2563eb" />
-                      </TouchableOpacity>
-
-                      <View className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between">
-                        <TextInput
-                          value={row.examVenue}
-                          onChangeText={(text) => updateExtraSubject(index, 'examVenue', text)}
-                          placeholder="Exam venue address"
-                          multiline={true}
-                          numberOfLines={2}
-                          className="flex-1 text-sm text-slate-800 mr-2 py-1"
-                        />
-                        <View className="flex-row gap-2">
-                          <TouchableOpacity
-                            onPress={() => handleGetCurrentLocation(index)}
-                            disabled={isLocating}
-                            className="p-2 bg-blue-50 rounded-lg active:bg-blue-100 items-center justify-center"
-                          >
-                            {isLocating && activeExtraIndex === index ? (
-                              <ActivityIndicator size="small" color="#2563eb" style={{ width: 16, height: 16 }} />
-                            ) : (
-                              <Feather name="navigation" size={16} color="#2563eb" />
-                            )}
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
-                            className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
-                          >
-                            <Feather name="map" size={16} color="#2563eb" />
-                          </TouchableOpacity>
-                        </View>
+                      <View className="flex-row gap-2">
+                        <TouchableOpacity
+                          onPress={() => handleGetCurrentLocation(index)}
+                          disabled={isLocating}
+                          className="p-2 bg-blue-50 rounded-lg active:bg-blue-100 items-center justify-center"
+                        >
+                          {isLocating && activeExtraIndex === index ? (
+                            <ActivityIndicator size="small" color="#2563eb" style={{ width: 16, height: 16 }} />
+                          ) : (
+                            <Feather name="navigation" size={16} color="#2563eb" />
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
+                          className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
+                        >
+                          <Feather name="map" size={16} color="#2563eb" />
+                        </TouchableOpacity>
                       </View>
                     </View>
                   </View>
-                ))}
+                </View>
+              ))}
 
-                {/* Add another extra exam row */}
-                <TouchableOpacity
-                  onPress={addExtraSubject}
-                  className="w-full border-2 border-dashed border-blue-200 bg-blue-50/40 rounded-xl py-2.5 flex-row items-center justify-center active:bg-blue-50"
-                >
-                  <Feather name="plus" size={16} color="#2563eb" />
-                  <Text className="text-blue-600 font-bold text-xs ml-1.5">Add another subject</Text>
-                </TouchableOpacity>
-              </View>
-            </>
+              {/* Add another extra exam row */}
+              <TouchableOpacity
+                onPress={addExtraSubject}
+                className="w-full border-2 border-dashed border-blue-200 bg-blue-50/40 rounded-xl py-2.5 flex-row items-center justify-center active:bg-blue-50"
+              >
+                <Feather name="plus" size={16} color="#2563eb" />
+                <Text className="text-blue-600 font-bold text-xs ml-1.5">Add another subject</Text>
+              </TouchableOpacity>
+            </FormSection>
           )}
 
           {/* Submit Button */}
-          <TouchableOpacity
-            onPress={() => handleSubmit()}
-            disabled={loading}
-            className="w-full bg-blue-500 active:bg-blue-600 py-3 mt-2 rounded-xl items-center justify-center shadow-md shadow-blue-500/30"
-          >
-            {loading ? (
-              <ActivityIndicator color="white" size="small" />
-            ) : (
-              <Text className="text-white font-bold text-sm">
-                {isEditing ? 'Update Request' : 'Generate Request'}
-              </Text>
-            )}
-          </TouchableOpacity>
+          <SubmitButton label={isEditing ? 'Update Request' : 'Submit Request'} onPress={() => handleSubmit()} loading={loading} />
 
         </View>
       </ScrollView>
@@ -1555,64 +1282,9 @@ export default function ScribeRequestForm() {
         </View>
       </Modal>
 
-      {/* Replicated Bottom Nav Bar */}
-      <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: 'rgba(255,255,255,0.82)',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
-      }}>
-        <View style={{
-          flexDirection: 'row',
-          paddingVertical: 8,
-          paddingHorizontal: 8,
-          gap: 4,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.07)',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}>
-          {/* Same tab list as the entry-choice screen; "Requests" is active */}
-          {[
-            { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
-            { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
-            { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
-            { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
-          ].map((tab) => {
-            const active = tab.id === 'requests';
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => {
-                  router.replace(`/console/student?tab=${tab.id}`);
-                }}
-                style={{
-                  flex: 1, alignItems: 'center', paddingVertical: 9,
-                  borderRadius: 20,
-                  backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
-                }}
-              >
-                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
-                <Text style={{
-                  fontFamily: 'Roboto',
-                  fontSize: 11, fontWeight: active ? '800' : '600',
-                  marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
-                }}>
-                  {tab.label}
-                </Text>
-                {active && (
-                  <View style={{
-                    position: 'absolute', bottom: 2,
-                    width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
-                  }} />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
-    </View>
+      {/* Student console tab bar (phones; hidden in the desktop frame) */}
+      <RequestTabBar />
+    </RequestPage>
   );
 }
 

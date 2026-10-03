@@ -144,9 +144,8 @@ import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
 /**
  * Pages shown in a centred desktop frame on wide browser windows (see ui/DesktopShell), keyed by
- * route name, with the column width for each. Routes not listed render as before; that includes
- * the two portal dashboards, the request / assignment forms (they draw the desktop console
- * themselves) and the landing page (which has its own desktop design, LandingPC).
+ * route name, with the column width for each. Routes not listed render as before: the two portal
+ * dashboards (they draw the desktop console) and the landing page (its own design, LandingPC).
  */
 const DESKTOP_FRAMED_ROUTES: Record<string, DesktopFrameWidth> = {
   'auth/login': 'auth',
@@ -159,6 +158,8 @@ const DESKTOP_FRAMED_ROUTES: Record<string, DesktopFrameWidth> = {
   'console/student/view_applications': 'page',
   'console/student/my_requests': 'page',
   'console/student/complete_profile': 'form',
+  'console/student/request_form': 'form',
+  'console/student/assignment_form': 'form',
   'console/student/profile': 'form',
   'console/scribe/apply': 'form',
   'console/scribe/achievements': 'page',

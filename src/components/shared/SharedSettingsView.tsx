@@ -16,7 +16,7 @@
  * welcome flags live only in AsyncStorage.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Pressable, Switch } from 'react-native';
 import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { router } from 'expo-router';
@@ -25,6 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 import { triggerTestNotification } from '@/core/notifications';
+import { haptic, HapticKind, loadHapticsEnabled, setHapticsEnabled } from '@/core/haptics';
 import { announceForAccessibility } from '@/core/a11y';
 import { gradient, portalCardStyle, PortalTheme, SCRIBE_THEME, STUDENT_THEME } from '@/core/portalTheme';
 import { useInDesktopShell } from '@/components/ui/DesktopShell';
@@ -33,6 +34,16 @@ import { useInDesktopShell } from '@/components/ui/DesktopShell';
 
 /** Union of valid Feather icon names, used to type the icon props below. */
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
+
+/** The three test-notification tiles: short label on screen, full description for screen readers. */
+const NOTIF_TESTS: {
+  type: 'match' | 'sos' | 'reminder'; label: string; icon: FeatherName; haptic: HapticKind;
+  color: string; bg: string; border: string; a11yLabel: string; a11yHint: string;
+}[] = [
+  { type: 'match', label: 'Match', icon: 'check-circle', haptic: 'success', color: '#15803d', bg: 'rgba(22,163,74,0.07)', border: 'rgba(22,163,74,0.22)', a11yLabel: 'Test Scribe Matched Alert', a11yHint: 'Sends a test notification simulating scribe match confirmation' },
+  { type: 'sos', label: 'SOS', icon: 'alert-triangle', haptic: 'error', color: '#dc2626', bg: 'rgba(220,38,38,0.06)', border: 'rgba(220,38,38,0.22)', a11yLabel: 'Test Emergency SOS Alert', a11yHint: 'Sends high-priority emergency SOS broadcast alert' },
+  { type: 'reminder', label: 'Reminder', icon: 'clock', haptic: 'warning', color: '#c2410c', bg: 'rgba(234,88,12,0.06)', border: 'rgba(234,88,12,0.22)', a11yLabel: 'Test Exam Reminder', a11yHint: 'Sends scheduled exam day reminder' },
+];
 
 /**
  * Shared TextInput style for the form fields.
@@ -147,6 +158,8 @@ export default function SharedSettingsView() {
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false);
   const [notifTriggering, setNotifTriggering] = useState(false);
   const [notifStatusText, setNotifStatusText] = useState<string | null>(null);
+  // Haptic feedback setting (core/haptics), shown as a switch in the Notifications card.
+  const [hapticsOn, setHapticsOn] = useState(true);
 
   // Visual theme follows the account's role; cards rise in one after another (off with Reduce Motion).
   const theme = role === 'scribe' ? SCRIBE_THEME : STUDENT_THEME;
@@ -159,11 +172,14 @@ export default function SharedSettingsView() {
    * @param type Which demo notification to send.
    */
   const handleSendTestNotification = async (type: 'match' | 'sos' | 'reminder') => {
+    // Each kind has its own feel: success (match), error buzz (SOS), warning nudge (reminder).
+    haptic(NOTIF_TESTS.find((n) => n.type === type)?.haptic);
     setNotifTriggering(true);
-    setNotifStatusText('Triggering notification...');
+    setNotifStatusText('Sending…');
     try {
       const summary = await triggerTestNotification(type);
-      setNotifStatusText(`Notification triggered: ${summary}`);
+      // Show just the notification title (the summary is "title: body").
+      setNotifStatusText(`Sent · ${summary.split(':')[0]}`);
     } catch (err: any) {
       setNotifStatusText(`Notification error: ${err?.message || err}`);
     } finally {
@@ -177,7 +193,15 @@ export default function SharedSettingsView() {
   // Load once on mount. The keep-alive TabPane keeps this view mounted, so revisiting the tab does not refetch.
   useEffect(() => {
     fetchUserData();
+    loadHapticsEnabled().then(setHapticsOn);
   }, []);
+
+  /** Haptic switch: saves the choice and gives a light tap when turned on. */
+  const toggleHaptics = async (on: boolean) => {
+    setHapticsOn(on);
+    await setHapticsEnabled(on);
+    if (on) haptic('tap');
+  };
 
   /**
    * Loads the signed-in user's `profiles` row into the form, or redirects to /auth/login when there is
@@ -790,120 +814,64 @@ export default function SharedSettingsView() {
 
       </Animated.View>
 
-      {/* System Notifications & Alerts Card (Demo Testing) */}
+      {/* Notification settings card: haptic feedback switch */}
+      <Animated.View entering={rise(3)} style={portalCardStyle(theme)}>
+        <SectionHeader theme={theme} icon="bell" title="Notifications" />
+
+        {/* Haptic feedback on/off (saved on the device, see core/haptics) */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+          <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+            <Feather name="smartphone" size={17} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+          </View>
+          <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>Haptic feedback</Text>
+          <Switch
+            value={hapticsOn}
+            onValueChange={toggleHaptics}
+            trackColor={{ false: '#cbd5e1', true: theme.primary }}
+            thumbColor="#ffffff"
+            {...({ activeThumbColor: '#ffffff' } as object)} // web-only prop: keep the knob white when on
+            accessibilityLabel="Haptic feedback"
+          />
+        </View>
+      </Animated.View>
+
+      {/* Test alerts card: three round icon buttons in one row, a one-word label under each.
+          Each plays its own haptic, then sends a demo notification. */}
       <Animated.View entering={rise(3)} style={portalCardStyle(theme)}>
         <SectionHeader
           theme={theme}
-          icon="bell"
-          title="System Notifications & Alerts"
+          icon="send"
+          title="Test Alerts"
           right={
             <View style={{ backgroundColor: theme.soft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: theme.softBorder }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: theme.accentText }}>DEMO</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: theme.accentText }}>TEST</Text>
             </View>
           }
         />
 
-        <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 14, lineHeight: 17, marginTop: -6 }}>
-          Test native push banners, vibrations, and heads-up alerts on your Android device / browser.
-        </Text>
-
-        {/* Three demo buttons that fire local notifications via handleSendTestNotification */}
-        <View style={{ gap: 10 }}>
-          {/* Test Scribe Matched Alert */}
-          <TouchableOpacity
-            onPress={() => handleSendTestNotification('match')}
-            disabled={notifTriggering}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Test Scribe Matched Alert"
-            accessibilityHint="Sends a test notification simulating scribe match confirmation"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: theme.softBorder,
-              borderRadius: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Feather name="check-circle" size={17} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+          {NOTIF_TESTS.map((n) => (
+            <Pressable
+              key={n.type}
+              onPress={() => handleSendTestNotification(n.type)}
+              disabled={notifTriggering}
+              accessibilityRole="button"
+              accessibilityLabel={n.a11yLabel}
+              accessibilityHint={n.a11yHint}
+              style={({ pressed }) => ({
+                alignItems: 'center',
+                gap: 8,
+                minWidth: 72,
+                opacity: notifTriggering ? 0.6 : 1,
+                transform: [{ scale: pressed ? 0.92 : 1 }],
+              })}
+            >
+              <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: n.bg, borderWidth: 1.5, borderColor: n.border, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name={n.icon} size={22} color={n.color} importantForAccessibility="no" accessibilityElementsHidden={true} />
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Test Scribe Matched Alert</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Simulates instant match confirmation alert</Text>
-              </View>
-            </View>
-            <Feather name="send" size={15} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-          </TouchableOpacity>
-
-          {/* Test Emergency SOS Broadcast Alert */}
-          <TouchableOpacity
-            onPress={() => handleSendTestNotification('sos')}
-            disabled={notifTriggering}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Test Emergency SOS Alert"
-            accessibilityHint="Sends high-priority emergency SOS broadcast alert"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#fffafa',
-              borderWidth: 1.5,
-              borderColor: 'rgba(220,38,38,0.25)',
-              borderRadius: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: 'rgba(220,38,38,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Feather name="alert-triangle" size={17} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#dc2626' }}>Test Emergency SOS Alert</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Simulates high-priority SOS emergency dispatch</Text>
-              </View>
-            </View>
-            <Feather name="zap" size={15} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
-          </TouchableOpacity>
-
-          {/* Test 24h Exam Reminder */}
-          <TouchableOpacity
-            onPress={() => handleSendTestNotification('reminder')}
-            disabled={notifTriggering}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Test Exam Reminder"
-            accessibilityHint="Sends scheduled exam day reminder"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5,
-              borderColor: 'rgba(234,88,12,0.22)',
-              borderRadius: 16,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-              <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: 'rgba(234,88,12,0.08)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-                <Feather name="clock" size={17} color="#c2410c" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Test Exam Reminder</Text>
-                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>Simulates scheduled exam day reminder</Text>
-              </View>
-            </View>
-            <Feather name="bell" size={15} color="#c2410c" importantForAccessibility="no" accessibilityElementsHidden={true} />
-          </TouchableOpacity>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>{n.label}</Text>
+            </Pressable>
+          ))}
         </View>
 
         {/* Status line for the last test notification (auto-clears after 5 s) */}
@@ -924,7 +892,7 @@ export default function SharedSettingsView() {
               importantForAccessibility="no"
               accessibilityElementsHidden={true}
             />
-            <Text style={{ fontSize: 12, color: '#334155', fontWeight: '600', flex: 1 }}>{notifStatusText}</Text>
+            <Text numberOfLines={1} style={{ fontSize: 12, color: '#334155', fontWeight: '600', flex: 1 }}>{notifStatusText}</Text>
           </View>
         )}
       </Animated.View>

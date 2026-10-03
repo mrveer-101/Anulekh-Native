@@ -5,12 +5,8 @@
  * bell, profile pill with a dropdown) and a collapsible left sidebar (tab navigation, "New
  * Scribe Request" button, log out, collapse toggle) beside a scrollable content area.
  *
- * Used in two ways:
- * - As the whole desktop dashboard: app/console/student/index.tsx renders it on wide screens
- *   with no children, and it shows each tab's PC view inside a keep-alive TabPane.
- * - As a frame around a single page: app/console/student/request_form.tsx and
- *   assignment_form.tsx pass their form as `children` with `activeTab="requests"`, and the
- *   children replace the tab content.
+ * Rendered by app/console/student/index.tsx on wide screens; each tab view sits in a keep-alive
+ * TabPane. Optional `children` replace the tab content (no page uses this at the moment).
  *
  * Loads no data itself (tab views fetch their own); the only backend call is
  * `supabase.auth.signOut()` on log out, followed by navigation to `/auth/login`.

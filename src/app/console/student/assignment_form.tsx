@@ -20,20 +20,19 @@
  * payload is too large) it retries with path-only references, and finally saves
  * without the column, listing file names at the end of the description.
  *
- * Layout: at >= 768 px width it renders inside the desktop shell ConsoleStudentPC
- * (Requests tab highlighted); otherwise a mobile screen with its own header.
+ * Layout: one layout for every screen size, built from components/student/RequestKit (page,
+ * header, section cards, submit button — shared with request_form). On desktop the root layout
+ * shows it in the centred DesktopPageFrame.
  * After a successful save it returns to /console/student with the Requests tab open.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, StyleSheet, useWindowDimensions } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput, Modal, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
+import { FormSection, RequestHeader, RequestPage, SubmitButton } from '@/components/student/RequestKit';
 
 /**
  * A reference file attached to the request while the form is open.
@@ -55,9 +54,6 @@ interface Attachment {
  * Reads the optional `id` search param to switch into edit mode.
  */
 export default function AssignmentRequestForm() {
-  // Responsive switch: tablets/desktop browsers get the PC console layout.
-  const { width: windowWidth } = useWindowDimensions();
-  const isDesktop = windowWidth >= 768;
 
   // `?id=` present => editing an existing assignment_requests row.
   const params = useLocalSearchParams<{ id?: string }>();
@@ -379,165 +375,20 @@ export default function AssignmentRequestForm() {
     return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f9fafb' }}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
-  // ── Desktop layout: the form rendered inside the PC console shell ──
-  if (isDesktop) {
-    return (
-      <ConsoleStudentPC activeTab="requests">
-        <View style={{ maxWidth: 880, width: '100%', alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 24, padding: 36, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
-          {/* Title row with Cancel (goes back, or to the console if there is no history) */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
-            <View>
-              <Text style={{ fontSize: 22, fontWeight: '800', color: '#0f172a' }}>{isEditing ? 'Edit Assignment Request' : 'New Assignment Request'}</Text>
-              <Text style={{ fontSize: 14, fontWeight: '500', color: '#64748b', marginTop: 4 }}>Post an academic assignment for writer matching.</Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f1f5f9', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, cursor: 'pointer' as any }}
-            >
-              <Feather name="x" size={18} color="#64748b" />
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Form Card */}
-          <View style={s.card}>
-            <View style={s.field}>
-              <Text style={s.label}>Subject</Text>
-              <TextInput value={subject} onChangeText={setSubject} placeholder="e.g. Applied Physics, Chemistry-II" placeholderTextColor="#94a3b8" style={s.input} />
-            </View>
-
-            <View style={s.field}>
-              <Text style={s.label}>Assignment Title</Text>
-              <TextInput value={title} onChangeText={setTitle} placeholder="e.g. Lab Report 2, Term Paper 1" placeholderTextColor="#94a3b8" style={s.input} />
-            </View>
-
-            <View style={s.field}>
-              <Text style={s.label}>Academic Level</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {ACADEMIC_LEVELS.map((lvl) => (
-                  <TouchableOpacity key={lvl} onPress={() => setAcademicLevel(lvl)} style={[s.levelBtn, academicLevel === lvl ? s.levelBtnActive : s.levelBtnInactive, { cursor: 'pointer' as any }]}>
-                    <Text style={[s.levelBtnText, academicLevel === lvl ? s.levelBtnTextActive : s.levelBtnTextInactive]}>{lvl}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={s.field}>
-              <Text style={s.label}>Page Count / Word Estimation</Text>
-              <TextInput value={pageCount} onChangeText={setPageCount} keyboardType="number-pad" placeholder="e.g. 10" placeholderTextColor="#94a3b8" style={s.input} />
-            </View>
-
-            <View style={s.field}>
-              <Text style={s.label}>Submission Deadline</Text>
-              <TouchableOpacity onPress={() => setShowDatePicker(true)} style={[s.deadlineBtn, { cursor: 'pointer' as any }]}>
-                <Text style={s.deadlineBtnText}>{deadline || 'Select Date & Time'}</Text>
-                <Feather name="calendar" size={18} color="#2563eb" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={s.field}>
-              <Text style={s.label}>Assignment Instructions / Description</Text>
-              <TextInput value={description} onChangeText={setDescription} placeholder="Describe formatting rules, reference styles, topic details..." placeholderTextColor="#94a3b8" multiline numberOfLines={4} style={[s.input, { minHeight: 90, textAlignVertical: 'top' }]} />
-            </View>
-
-            {/* Attachments Section */}
-            <View style={s.field}>
-              <Text style={s.label}>Reference Attachments (Optional)</Text>
-              {attachments.map((att, idx) => (
-                <View key={idx} style={s.attachRow}>
-                  <View style={s.attachIcon}>
-                    <Feather name={att.mimeType.includes('image') ? 'image' : 'file-text'} size={18} color="#2563eb" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{att.name}</Text>
-                    <Text style={{ fontSize: 11, color: '#64748b' }}>{att.mimeType}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setAttachments(prev => prev.filter((_, i) => i !== idx))} style={s.removeBtn}>
-                    <Feather name="trash-2" size={14} color="#ef4444" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 6 }}>
-                <TouchableOpacity onPress={pickDocument} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
-                  <Feather name="paperclip" size={16} color="#2563eb" />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>Add PDF / Doc</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={pickImage} style={[s.pickerBtn, { cursor: 'pointer' as any }]}>
-                  <Feather name="image" size={16} color="#2563eb" />
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>Add Photo</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Submit (desktop): only disabled while saving; handleSave itself blocks during file conversion */}
-            <TouchableOpacity onPress={handleSave} disabled={loading} style={[s.saveBtn, { cursor: 'pointer' as any }]}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.saveBtnText}>{isEditing ? 'Update Assignment' : 'Submit Assignment Request'}</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Date Picker Modal */}
-        <Modal visible={showDatePicker} transparent animationType="fade">
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={s.pickerModal}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 14 }}>Select Deadline</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <TouchableOpacity onPress={() => changeMonth('prev')} style={s.navBtn}><Feather name="chevron-left" size={18} color="#334155" /></TouchableOpacity>
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#1e293b' }}>{MONTHS[calendarMonth]} {calendarYear}</Text>
-                <TouchableOpacity onPress={() => changeMonth('next')} style={s.navBtn}><Feather name="chevron-right" size={18} color="#334155" /></TouchableOpacity>
-              </View>
-              <View style={{ flexDirection: 'row', marginBottom: 8 }}>
-                {WEEKDAYS.map(w => <Text key={w} style={{ width: '14%', textAlign: 'center', fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>{w}</Text>)}
-              </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>{renderCalendarDays()}</View>
-              
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 8 }}>Time</Text>
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-                <TextInput value={selectedHour} onChangeText={setSelectedHour} keyboardType="number-pad" maxLength={2} style={[s.input, { width: 50, textAlign: 'center' }]} />
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#475569' }}>:</Text>
-                <TextInput value={selectedMinute} onChangeText={setSelectedMinute} keyboardType="number-pad" maxLength={2} style={[s.input, { width: 50, textAlign: 'center' }]} />
-                <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', borderRadius: 10, padding: 2 }}>
-                  {['AM', 'PM'].map(ap => (
-                    <TouchableOpacity key={ap} onPress={() => setSelectedAmPm(ap)} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selectedAmPm === ap ? '#2563eb' : 'transparent' }}>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: selectedAmPm === ap ? '#fff' : '#64748b' }}>{ap}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)} style={{ flex: 1, backgroundColor: '#f1f5f9', borderRadius: 14, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#475569' }}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleConfirmDateTime} style={{ flex: 1, backgroundColor: '#2563eb', borderRadius: 14, paddingVertical: 12, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#fff' }}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </ConsoleStudentPC>
-    );
-  }
-
-  // ── Mobile layout ──
+  // ── Page: header, two section cards (details, attachments) and the submit button ──
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#f9fafb' }}>
-      <StatusBar style="dark" />
+    <RequestPage>
+      <RequestHeader
+        title={isEditing ? 'Edit Assignment' : 'Assignment Request'}
+        subtitle={isEditing ? undefined : 'Get a writer for your assignment'}
+        onBack={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }}
+      />
 
-      {/* ── Header ── */}
-      <View style={s.header}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }} style={s.backBtn}>
-          <Feather name="arrow-left" size={22} color="#334155" />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{isEditing ? 'Edit Assignment Request' : 'New Assignment Request'}</Text>
-      </View>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 48, gap: 14 }} showsVerticalScrollIndicator={false}>
 
-      <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingTop: 16, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
-
-        {/* ── Main Form Card ── */}
-        <View style={s.card}>
+        {/* ── Assignment details ── */}
+        <FormSection icon="file-text" title="Assignment Details">
+        <View style={{ gap: 18 }}>
 
           <View style={s.field}>
             <Text style={s.label}>Subject</Text>
@@ -627,19 +478,18 @@ export default function AssignmentRequestForm() {
               style={[s.input, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]} />
           </View>
         </View>
+        </FormSection>
 
-        {/* ── Attachments Card ── */}
-        <View style={[s.card, { marginTop: 14 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <View>
-              <Text style={s.label}>Reference Attachments</Text>
+        {/* ── Reference attachments (optional) ── */}
+        <FormSection
+          icon="paperclip"
+          title="Attachments"
+          right={attachments.length > 0 ? (
+            <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: '#bfdbfe' }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>{attachments.length} file{attachments.length !== 1 ? 's' : ''}</Text>
             </View>
-            {attachments.length > 0 && (
-              <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: '#bfdbfe' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>{attachments.length} file{attachments.length !== 1 ? 's' : ''}</Text>
-              </View>
-            )}
-          </View>
+          ) : undefined}
+        >
 
           {convertingFiles && (
             <View style={[s.banner, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
@@ -684,15 +534,15 @@ export default function AssignmentRequestForm() {
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#475569' }}>Image</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </FormSection>
 
-        {/* ── Save Button ── */}
-        <TouchableOpacity onPress={handleSave} disabled={loading || convertingFiles} activeOpacity={0.85}
-          style={[s.saveBtn, (loading || convertingFiles) && { opacity: 0.65 }]}>
-          {loading
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={s.saveBtnText}>{isEditing ? 'Update Request' : 'Post Assignment Request'}</Text>}
-        </TouchableOpacity>
+        {/* ── Save (blocked while files are still being read) ── */}
+        <SubmitButton
+          label={isEditing ? 'Update Request' : 'Post Assignment Request'}
+          onPress={handleSave}
+          loading={loading}
+          disabled={convertingFiles}
+        />
 
       </ScrollView>
 
@@ -757,15 +607,11 @@ export default function AssignmentRequestForm() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </RequestPage>
   );
 }
 
 const s = StyleSheet.create({
-  header: { backgroundColor: '#fff', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', shadowColor: '#64748b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 2 },
-  backBtn: { marginRight: 14, padding: 6, marginLeft: -4, borderRadius: 10 },
-  headerTitle: { fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' },
-  card: { backgroundColor: '#fff', borderRadius: 20, borderWidth: 1, borderColor: '#f1f5f9', padding: 20, shadowColor: '#64748b', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2, gap: 18 },
   field: { gap: 6 },
   label: { fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8 },
   input: { fontFamily: 'Roboto', fontSize: 14, color: '#0f172a', backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
@@ -783,8 +629,6 @@ const s = StyleSheet.create({
   attachIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   removeBtn: { width: 26, height: 26, borderRadius: 8, backgroundColor: 'rgba(100,116,139,0.1)', alignItems: 'center', justifyContent: 'center' },
   pickerBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingVertical: 13, backgroundColor: '#f8fafc' },
-  saveBtn: { marginTop: 20, backgroundColor: '#2563eb', borderRadius: 18, paddingVertical: 16, alignItems: 'center', shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 },
-  saveBtnText: { fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#fff' },
   pickerModal: { backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, padding: 22, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 20, elevation: 6 },
   navBtn: { padding: 8, backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0' },
 });

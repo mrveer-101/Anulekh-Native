@@ -1,22 +1,37 @@
 # Anulekh — Codebase Guide
 
-Anulekh (अनुलेख) connects visually-impaired and differently-abled **students** with verified volunteer
-**scribes** for exams and written assignments. This guide explains how the code is organised and how the
-pieces work together. Every source file also starts with a header comment describing its role.
+Anulekh (अनुलेख) matches visually-impaired and differently-abled **students** with verified volunteer
+**scribes** for exams and assignments. Every source file also starts with a header comment.
 
-| # | Document | What it covers |
-|---|---|---|
-| 1 | [Architecture](01-architecture.md) | The three parts (app, backend, admin panel), how data flows, folder layout |
-| 2 | [Routes & screens](02-routes-and-screens.md) | Every route in `src/app`, what each screen does, navigation flow |
-| 3 | [Components](03-components.md) | Every reusable component in `src/components` |
-| 4 | [Core modules & services](04-core-and-services.md) | `src/core`, `src/services`, `src/types` |
-| 5 | [Data model](05-data-model.md) | Database tables, fields, status values, who reads/writes what |
-| 6 | [Design system](06-design-system.md) | Portal themes, splash, icons/fonts, motion, accessibility |
-| 7 | [Performance & caching](07-performance-and-caching.md) | Tab keep-alive, cached snapshots, parallel queries |
-| 8 | [Development & deployment](08-development-and-deployment.md) | Running locally, builds, deploying web/mobile/backend |
-| 9 | [Known issues & roadmap](09-known-issues.md) | Security and functional issues found during review, next steps |
+| Doc | Covers |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How the app is built: data client, routes, screens, desktop layout, caching, design system |
+| [DATA.md](DATA.md) | Database tables and status lifecycles |
+| [OPERATIONS.md](OPERATIONS.md) | Run locally, checks, deploy, known issues |
+| [Backend API](../../../Anulekh-Axum/docs/codebase/API.md) | Rust/Axum modules, endpoints, configuration |
 
-The backend has its own reference: [`Anulekh-Axum/docs/codebase/API.md`](../../../Anulekh-Axum/docs/codebase/API.md).
+## System at a glance
 
-Older documents in `docs/` (`architecture.md`, `implementation_plan.md`, roadmaps, …) are earlier planning
-notes; where they disagree with this guide, this guide reflects the current code.
+```
+Expo app (Android · iOS · Web)  ──HTTPS JSON──▶  Rust/Axum backend (Render)  ──libsql──▶  Turso (local.db in dev)
+                                                 └─ admin panel (admin.html at /)          media → Cloudflare R2
+```
+
+## Folder map (`src/`)
+
+| Folder | Contents |
+|---|---|
+| `app/` | Routes (Expo Router). `_layout.tsx` = root shell, `index.tsx` = entry gate |
+| `components/student`, `scribe`, `shared` | Portal tab screens (same screens on phone and desktop) |
+| `components/pc_view` | Desktop consoles (sidebar + header) and landing page |
+| `components/ui` | Splash, `TabPane`, `DesktopShell`, update popup |
+| `core/` | Data client, translation, theme, cache, haptics, notifications, a11y |
+| `services/` | Update checker, uploads (`services/api/*` is unused, kept for a refactor) |
+
+## Core flow
+
+1. Register → complete verification profile → admin approves.
+2. Student posts an **exam** or **assignment** request (or invites a scribe directly).
+3. Scribes apply → student accepts one → request `matched`.
+4. Chat, voice notes, call (exam day), declaration. Unmatched ≤ 24 h before the exam → **SOS**.
+5. After the exam: `completed`, both sides rate each other, scribes earn badges/certificates.
