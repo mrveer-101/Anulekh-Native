@@ -255,9 +255,8 @@ export default function ScribeHomeView() {
         { data: available },       // open exam requests
         { data: studentReviews },  // ratings used to prioritise students
         { data: pastMatches },     // students this scribe worked with before (boosted)
-        { data: rejectedApps },    // requests this scribe was rejected from (hidden)
+        { data: myAppsData },      // this scribe's applications (all statuses)
         { data: committed },       // confirmed commitments ("My Plans")
-        { data: apps },            // pending applications (count)
         { data: completed },       // completed exams (count)
         { data: reviewsData },     // reviews of this scribe
         { data: invitations },     // private invitations awaiting a reply
@@ -265,9 +264,8 @@ export default function ScribeHomeView() {
         supabase.from('exam_requests').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
         supabase.from('student_reviews').select('student_id, rating_overall'),
         supabase.from('exam_requests').select('student_id').eq('scribe_id', userId),
-        supabase.from('scribe_applications').select('request_id').eq('scribe_id', userId).eq('status', 'rejected'),
+        supabase.from('scribe_applications').select('request_id, status').eq('scribe_id', userId),
         supabase.from('exam_requests').select('*').eq('status', 'matched').eq('scribe_id', userId).order('created_at', { ascending: false }),
-        supabase.from('scribe_applications').select('id').eq('scribe_id', userId).eq('status', 'pending'),
         supabase.from('exam_requests').select('id').eq('status', 'completed').eq('scribe_id', userId),
         supabase.from('scribe_reviews').select('*').eq('scribe_id', userId),
         supabase.from('scribe_applications').select('*').eq('scribe_id', userId).eq('status', 'invited'),
@@ -289,7 +287,14 @@ export default function ScribeHomeView() {
       };
 
       const pastStudentsSet = new Set((pastMatches || []).map((pm: any) => pm.student_id));
-      const rejectedRequestIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
+      const appStatusMap = new Map<number, string>();
+      const rejectedRequestIds = new Set<number>();
+      let pendingCount = 0;
+      (myAppsData || []).forEach((a: any) => {
+        appStatusMap.set(a.request_id, a.status);
+        if (a.status === 'rejected') rejectedRequestIds.add(a.request_id);
+        if (a.status === 'pending') pendingCount++;
+      });
 
       // Open exams this scribe can take, best matches first:
       // SOS → private invite for this scribe → past student → student rating.
@@ -324,14 +329,26 @@ export default function ScribeHomeView() {
         })
       );
 
+      // Only confirmed commitments where this scribe hasn't rejected the request and is not still unaccepted (invited/pending)
+      const validCommitments = (committed || []).filter((exam: any) => {
+        const appStatus = appStatusMap.get(exam.id);
+        if (appStatus === 'rejected' || appStatus === 'invited' || appStatus === 'pending') {
+          return false;
+        }
+        if (rejectedRequestIds.has(exam.id)) {
+          return false;
+        }
+        return true;
+      });
+
       const snapshot: ScribeHomeSnapshot = {
         profile: profileData,
         availableExams: sortedAvailable,
-        scribeCommitments: committed || [],
-        pendingApplicationsCount: apps ? apps.length : 0,
+        scribeCommitments: validCommitments,
+        pendingApplicationsCount: pendingCount,
         completedExamsCount: completed ? completed.length : 0,
         reviews: reviewsData || [],
-        incomingInvitations: enrichedInvitations.filter(inv => inv.details !== null),
+        incomingInvitations: enrichedInvitations.filter(inv => inv.details !== null && !rejectedRequestIds.has(inv.request_id)),
       };
       applySnapshot(snapshot);
       writeScreenCache('scribe_home', userId, snapshot);
@@ -385,6 +402,18 @@ export default function ScribeHomeView() {
         .eq('id', invite.id);
 
       if (error) throw error;
+
+      // Revert the request back to pending (so the student can receive other scribes)
+      // and clear the scribe_id & private_scribe_id so this scribe no longer appears as a commitment.
+      const table = invite.type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+      await supabase
+        .from(table)
+        .update({ status: 'pending', scribe_id: null, private_scribe_id: null })
+        .eq('id', invite.request_id);
+
+      // Optimistically update UI so it vanishes immediately from invitations and commitments
+      setIncomingInvitations(prev => prev.filter(inv => inv.id !== invite.id));
+      setScribeCommitments(prev => prev.filter(c => c.id !== invite.request_id));
 
       await supabase
         .from('notifications')

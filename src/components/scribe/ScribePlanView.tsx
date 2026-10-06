@@ -80,40 +80,41 @@ export default function ScribePlanView() {
         .single();
       setScribeProfile(profile);
 
-      // Fetch only MATCHED exam requests (Confirmed Plans)
-      const { data: exams, error: examsErr } = await supabase
-        .from('exam_requests')
-        .select('*')
-        .eq('status', 'matched')
-        .eq('scribe_id', session.user.id);
+      // Fetch only MATCHED exam requests, assignment requests, and rejected apps to exclude
+      const [
+        { data: exams, error: examsErr },
+        { data: assignments, error: assignmentsErr },
+        { data: rejectedApps }
+      ] = await Promise.all([
+        supabase.from('exam_requests').select('*').eq('status', 'matched').eq('scribe_id', session.user.id),
+        supabase.from('assignment_requests').select('*').eq('status', 'matched').eq('scribe_id', session.user.id),
+        supabase.from('scribe_applications').select('request_id').eq('scribe_id', session.user.id).eq('status', 'rejected')
+      ]);
 
       if (examsErr) throw examsErr;
-
-      // Fetch only MATCHED assignment requests (Confirmed Plans)
-      const { data: assignments, error: assignmentsErr } = await supabase
-        .from('assignment_requests')
-        .select('*')
-        .eq('status', 'matched')
-        .eq('scribe_id', session.user.id);
-
       if (assignmentsErr) throw assignmentsErr;
+
+      const rejectedIds = new Set((rejectedApps || []).map((a: any) => a.request_id));
 
       // Reshape assignments to reuse the exam card UI: deadline acts as the date and the
       // description is shown in the "venue" slot as instructions.
-      const mappedAssignments = (assignments || []).map((assign: any) => ({
-        id: assign.id,
-        subject: assign.subject || 'Assignment',
-        exam_type: 'Assignment: ' + assign.academic_level,
-        exam_date: assign.deadline,
-        exam_venue: assign.description || 'No instructions provided.',
-        exam_language: 'Written',
-        student_name: assign.student_name || 'Student',
-        education_grade: assign.academic_level,
-        status: assign.status,
-        is_assignment: true
-      }));
+      const mappedAssignments = (assignments || [])
+        .filter((assign: any) => !rejectedIds.has(assign.id))
+        .map((assign: any) => ({
+          id: assign.id,
+          subject: assign.subject || 'Assignment',
+          exam_type: 'Assignment: ' + assign.academic_level,
+          exam_date: assign.deadline,
+          exam_venue: assign.description || 'No instructions provided.',
+          exam_language: 'Written',
+          student_name: assign.student_name || 'Student',
+          education_grade: assign.academic_level,
+          status: assign.status,
+          is_assignment: true
+        }));
 
-      const allPlans = [...(exams || []), ...mappedAssignments];
+      const validExams = (exams || []).filter((e: any) => !rejectedIds.has(e.id));
+      const allPlans = [...validExams, ...mappedAssignments];
       setPlans(allPlans);
     } catch (error: any) {
       console.error('Error fetching scribe plans:', error.message);
@@ -301,40 +302,56 @@ export default function ScribePlanView() {
               </View>
 
               {/* Days Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+              {/* Days Grid */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 5, marginHorizontal: -2 }}>
                 {getDaysInMonth(currentMonth).map((day, idx) => {
                   if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 44, padding: 2.5 }} />;
                   }
-                  // Cell styling priority: selected (green) > has a plan (orange) > today (green outline).
+                  // Cell styling priority: selected (green) > has a plan (orange/emerald) > today (green outline) > default card.
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
                   const hasPlan = hasPlanOnDate(day);
-                  const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                  const today = new Date();
+                  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  const isToday = dateString === todayString;
 
-                  let cellBg = 'transparent';
+                  let cellBg = '#f8fafc';
                   let cellTextColor = '#334155';
-                  let cellBorder = {};
+                  let cellBorderColor = '#e2e8f0';
+                  let cellBorderWidth = 1;
                   let dotColor = '#94a3b8';
+                  let cellShadow: any = {};
 
                   if (isSelected) {
                     cellBg = '#059669';
                     cellTextColor = '#ffffff';
+                    cellBorderColor = '#047857';
+                    cellBorderWidth = 1.5;
                     dotColor = '#ffffff';
+                    cellShadow = {
+                      shadowColor: '#059669',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3,
+                      elevation: 3,
+                    };
                   } else if (hasPlan) {
-                    cellBg = 'rgba(249,115,22,0.14)';
+                    cellBg = '#fff7ed';
                     cellTextColor = '#c2410c';
-                    cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                    dotColor = '#f97316';
+                    cellBorderColor = '#fed7aa';
+                    cellBorderWidth = 1.5;
+                    dotColor = '#ea580c';
                   } else if (isToday) {
-                    cellBg = 'rgba(5,150,105,0.08)';
+                    cellBg = '#ecfdf5';
                     cellTextColor = '#059669';
-                    cellBorder = { borderWidth: 1.5, borderColor: 'rgba(5,150,105,0.3)' };
+                    cellBorderColor = '#059669';
+                    cellBorderWidth = 1.5;
                   }
 
                   return (
                     <TouchableOpacity
-                      key={idx}
+                      key={dateString}
                       onPress={() => {
                         if (isSelected) {
                           setSelectedDate(null);
@@ -342,37 +359,74 @@ export default function ScribePlanView() {
                           setSelectedDate(dateString);
                         }
                       }}
+                      activeOpacity={0.7}
                       style={{
-                        width: '14.2%',
-                        height: 38,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: 19,
-                        backgroundColor: cellBg,
-                        ...cellBorder
+                        width: '14.28%',
+                        height: 44,
+                        padding: 2.5,
                       }}
                     >
-                      <Text style={{
-                        fontFamily: 'Roboto',
-                        fontSize: 12,
-                        fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
-                        color: cellTextColor
+                      <View style={{
+                        flex: 1,
+                        borderRadius: 10,
+                        backgroundColor: cellBg,
+                        borderWidth: cellBorderWidth,
+                        borderColor: cellBorderColor,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        ...cellShadow
                       }}>
-                        {day.getDate()}
-                      </Text>
-                      {hasPlan && (
-                        <View style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: 2.5,
-                          backgroundColor: dotColor,
-                          marginTop: 2
-                        }} />
-                      )}
+                        <Text style={{
+                          fontFamily: 'Roboto',
+                          fontSize: 12,
+                          fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
+                          color: cellTextColor
+                        }}>
+                          {day.getDate()}
+                        </Text>
+                        {hasPlan ? (
+                          <View style={{
+                            width: 4,
+                            height: 4,
+                            borderRadius: 2,
+                            backgroundColor: dotColor,
+                            marginTop: 2
+                          }} />
+                        ) : (
+                          <View style={{ width: 4, height: 4, marginTop: 2, opacity: 0 }} />
+                        )}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}
               </View>
+
+              {/* Status Legend */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Scheduled Plan</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#059669' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Today</Text>
+                </View>
+              </View>
+
+              {/* Selected Date Filter Badge / Reset */}
+              {selectedDate && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Feather name="calendar" size={13} color="#059669" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                      Filtered by date: {selectedDate}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b' }}>Clear Date</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </>
           )}
         </View>

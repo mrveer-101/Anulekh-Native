@@ -392,54 +392,75 @@ export default function StudentPlanView() {
           </View>
 
           {/* Days Grid */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 5, marginHorizontal: -2 }}>
             {getDaysInMonth(currentMonth).map((day, idx) => {
               // Blank cells before the 1st of the month.
               if (!day) {
-                return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+                return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 44, padding: 2.5 }} />;
               }
               // Local "YYYY-MM-DD" key, the same format stored in selectedDate.
               const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
               const isSelected = selectedDate === dateString;
               const hasPlan = hasPlanOnDate(day);
-              // Compares UTC dates (toISOString) of the cell's local midnight and of now, so in zones ahead
-              // of UTC (e.g. IST) the "today" highlight can land on a neighbouring day.
-              const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+              const today = new Date();
+              const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+              const isToday = dateString === todayString;
 
-              // Cell colours, in priority order: selected > has a plan (SOS red, else orange) > today > plain.
-              let cellBg = 'transparent';
+              // Cell colours: selected > has a plan (SOS red, matched green, else orange) > today > default card.
+              let cellBg = '#f8fafc';
               let cellTextColor = '#334155';
-              let cellBorder = {};
+              let cellBorderColor = '#e2e8f0';
+              let cellBorderWidth = 1;
               let dotColor = '#94a3b8';
+              let cellShadow: any = {};
 
               if (isSelected) {
                 cellBg = '#2563eb';
                 cellTextColor = '#ffffff';
+                cellBorderColor = '#1d4ed8';
+                cellBorderWidth = 1.5;
                 dotColor = '#ffffff';
+                cellShadow = {
+                  shadowColor: '#2563eb',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 3,
+                  elevation: 3,
+                };
               } else if (hasPlan) {
                 const plansOnDay = getPlansOnDate(day);
                 const hasEmergency = plansOnDay.some(p => p.is_emergency === 'yes');
+                const hasConfirmed = plansOnDay.some(p => p.status === 'confirmed' || p.status === 'assigned');
                 if (hasEmergency) {
-                  cellBg = 'rgba(239,68,68,0.15)';
-                  cellTextColor = '#dc2626';
-                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
+                  cellBg = '#fee2e2';
+                  cellTextColor = '#b91c1c';
+                  cellBorderColor = '#f87171';
+                  cellBorderWidth = 1.5;
                   dotColor = '#dc2626';
+                } else if (hasConfirmed) {
+                  cellBg = '#dcfce7';
+                  cellTextColor = '#15803d';
+                  cellBorderColor = '#86efac';
+                  cellBorderWidth = 1.5;
+                  dotColor = '#16a34a';
                 } else {
-                  cellBg = 'rgba(249,115,22,0.14)';
+                  cellBg = '#fff7ed';
                   cellTextColor = '#c2410c';
-                  cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                  dotColor = '#f97316';
+                  cellBorderColor = '#fed7aa';
+                  cellBorderWidth = 1.5;
+                  dotColor = '#ea580c';
                 }
               } else if (isToday) {
                 cellBg = '#eff6ff';
                 cellTextColor = '#2563eb';
-                cellBorder = { borderWidth: 1.5, borderColor: '#93c5fd' };
+                cellBorderColor = '#2563eb';
+                cellBorderWidth = 1.5;
               }
 
               // Tapping selects the day as a list filter; tapping the selected day clears it.
               return (
                 <TouchableOpacity
-                  key={idx}
+                  key={dateString}
                   onPress={() => {
                     if (isSelected) {
                       setSelectedDate(null);
@@ -447,38 +468,78 @@ export default function StudentPlanView() {
                       setSelectedDate(dateString);
                     }
                   }}
+                  activeOpacity={0.7}
                   style={{
-                    width: '14.2%',
-                    height: 38,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 19,
-                    backgroundColor: cellBg,
-                    ...cellBorder
+                    width: '14.28%',
+                    height: 44,
+                    padding: 2.5,
                   }}
                 >
-                  <Text style={{
-                    fontFamily: 'Roboto',
-                    fontSize: 13,
-                    fontWeight: '700',
-                    color: cellTextColor
+                  <View style={{
+                    flex: 1,
+                    borderRadius: 10,
+                    backgroundColor: cellBg,
+                    borderWidth: cellBorderWidth,
+                    borderColor: cellBorderColor,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    ...cellShadow
                   }}>
-                    {day.getDate()}
-                  </Text>
-                  {/* Dot under days that have a plan */}
-                  {hasPlan && (
-                    <View style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 2.5,
-                      backgroundColor: dotColor,
-                      marginTop: 2
-                    }} />
-                  )}
+                    <Text style={{
+                      fontFamily: 'Roboto',
+                      fontSize: 12,
+                      fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
+                      color: cellTextColor
+                    }}>
+                      {day.getDate()}
+                    </Text>
+                    {hasPlan ? (
+                      <View style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: 2,
+                        backgroundColor: dotColor,
+                        marginTop: 2
+                      }} />
+                    ) : (
+                      <View style={{ width: 4, height: 4, marginTop: 2, opacity: 0 }} />
+                    )}
+                  </View>
                 </TouchableOpacity>
               );
             })}
           </View>
+
+          {/* Status Legend */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac' }} />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Matched</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Pending</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#f87171' }} />
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>SOS</Text>
+            </View>
+          </View>
+
+          {/* Selected Date Filter Badge / Reset */}
+          {selectedDate && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="calendar" size={13} color="#2563eb" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#2563eb' }}>
+                  Filtered by date: {selectedDate}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>Clear Date</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </>
       )}
     </View>

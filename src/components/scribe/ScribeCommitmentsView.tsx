@@ -864,44 +864,67 @@ export default function ScribeCommitmentsView() {
               </View>
 
               {/* Days Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 5, marginHorizontal: -2 }}>
                 {getDaysInMonth(currentMonth).map((day, idx) => {
                   if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.2%', height: 38 }} />;
+                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 44, padding: 2.5 }} />;
                   }
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
                   const hasPlan = hasPlanOnDate(day);
-                  const isToday = day.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+                  const today = new Date();
+                  const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+                  const isToday = dateString === todayString;
 
-                  // Day cell colours: selected > has plans (red if any is an emergency, else orange) > today.
-                  let cellBg = 'transparent';
+                  // Day card styling: selected > has plans (emergency red, confirmed emerald, else orange) > today > default card
+                  let cellBg = '#f8fafc';
                   let cellTextColor = '#334155';
-                  let cellBorder = {};
+                  let cellBorderColor = '#e2e8f0';
+                  let cellBorderWidth = 1;
                   let dotColor = '#94a3b8';
+                  let cellShadow: any = {};
 
                   if (isSelected) {
                     cellBg = '#059669';
                     cellTextColor = '#ffffff';
+                    cellBorderColor = '#047857';
+                    cellBorderWidth = 1.5;
                     dotColor = '#ffffff';
+                    cellShadow = {
+                      shadowColor: '#059669',
+                      shadowOffset: { width: 0, height: 2 },
+                      shadowOpacity: 0.25,
+                      shadowRadius: 3,
+                      elevation: 3,
+                    };
                   } else if (hasPlan) {
                     const plansOnDay = getPlansOnDate(day);
                     const hasEmergency = plansOnDay.some(p => p.examDetails?.is_emergency === 'yes');
+                    const hasConfirmed = plansOnDay.some(p => p.status === 'confirmed' || p.status === 'assigned');
                     if (hasEmergency) {
-                      cellBg = 'rgba(239,68,68,0.15)';
-                      cellTextColor = '#dc2626';
-                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(239,68,68,0.35)' };
+                      cellBg = '#fee2e2';
+                      cellTextColor = '#b91c1c';
+                      cellBorderColor = '#f87171';
+                      cellBorderWidth = 1.5;
                       dotColor = '#dc2626';
+                    } else if (hasConfirmed) {
+                      cellBg = '#dcfce7';
+                      cellTextColor = '#15803d';
+                      cellBorderColor = '#86efac';
+                      cellBorderWidth = 1.5;
+                      dotColor = '#16a34a';
                     } else {
-                      cellBg = 'rgba(249,115,22,0.14)';
+                      cellBg = '#fff7ed';
                       cellTextColor = '#c2410c';
-                      cellBorder = { borderWidth: 1.5, borderColor: 'rgba(249,115,22,0.35)' };
-                      dotColor = '#f97316';
+                      cellBorderColor = '#fed7aa';
+                      cellBorderWidth = 1.5;
+                      dotColor = '#ea580c';
                     }
                   } else if (isToday) {
-                    cellBg = 'rgba(5,150,105,0.08)';
+                    cellBg = '#ecfdf5';
                     cellTextColor = '#059669';
-                    cellBorder = { borderWidth: 1.5, borderColor: 'rgba(5,150,105,0.3)' };
+                    cellBorderColor = '#059669';
+                    cellBorderWidth = 1.5;
                   }
 
                   return (
@@ -914,32 +937,62 @@ export default function ScribeCommitmentsView() {
                           setSelectedDate(dateString);
                         }
                       }}
+                      activeOpacity={0.7}
                       style={{
-                        width: '14.2%',
-                        height: 38,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        width: '14.28%',
+                        height: 44,
+                        padding: 2.5,
                       }}
                     >
                       <View style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
+                        flex: 1,
+                        borderRadius: 10,
                         backgroundColor: cellBg,
+                        borderWidth: cellBorderWidth,
+                        borderColor: cellBorderColor,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        ...cellBorder
+                        ...cellShadow
                       }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: isSelected || hasPlan || isToday ? '900' : '600', color: cellTextColor }}>
+                        <Text style={{
+                          fontFamily: 'Roboto',
+                          fontSize: 12,
+                          fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
+                          color: cellTextColor
+                        }}>
                           {day.getDate()}
                         </Text>
-                        {hasPlan && !isSelected && (
-                          <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: dotColor, marginTop: 1 }} />
+                        {hasPlan ? (
+                          <View style={{
+                            width: 4,
+                            height: 4,
+                            borderRadius: 2,
+                            backgroundColor: dotColor,
+                            marginTop: 2
+                          }} />
+                        ) : (
+                          <View style={{ width: 4, height: 4, marginTop: 2, opacity: 0 }} />
                         )}
                       </View>
                     </TouchableOpacity>
                   );
                 })}
+              </View>
+
+              {/* Status Legend */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Confirmed</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Applied</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#f87171' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>SOS</Text>
+                </View>
               </View>
             </>
           )}

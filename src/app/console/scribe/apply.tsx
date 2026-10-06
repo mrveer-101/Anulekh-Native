@@ -226,10 +226,12 @@ export default function ScribeApplyDetailsPage() {
     if (!appId || !exam) return;
 
     if (!agreedGuidelines) {
-      Alert.alert(
-        'Policy Agreement Required',
-        'Please agree to the Anulekh Scribe Guidelines & Code of Conduct before accepting this invitation.'
-      );
+      const msg = 'Please agree to the Anulekh Scribe Guidelines & Code of Conduct before accepting this invitation.';
+      if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(msg);
+      } else {
+        Alert.alert('Policy Agreement Required', msg);
+      }
       return;
     }
 
@@ -287,6 +289,13 @@ export default function ScribeApplyDetailsPage() {
         .eq('id', appId);
 
       if (appErr) throw appErr;
+
+      // Also revert request back to pending and clear scribe assignment & private invite
+      const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
+      await supabase
+        .from(table)
+        .update({ status: 'pending', scribe_id: null, private_scribe_id: null })
+        .eq('id', exam.id);
 
       await supabase
         .from('notifications')
@@ -508,7 +517,7 @@ export default function ScribeApplyDetailsPage() {
         ) : null}
 
         {/* Guidelines & Policy Agreement Checkbox */}
-        {!hasApplied && appStatus !== 'accepted' && (
+        {(!hasApplied || appStatus === 'invited') && appStatus !== 'accepted' && (
           <View style={{
             backgroundColor: '#ffffff',
             padding: 16,

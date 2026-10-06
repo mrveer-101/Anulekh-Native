@@ -155,6 +155,7 @@ export default function ScribeExploreView() {
   const [selectedType, setSelectedType] = useState('All');
   const [selectedSlot, setSelectedSlot] = useState('All');
   const [selectedDay, setSelectedDay] = useState('All');
+  const [sosOnly, setSosOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Date-range filter (DD/MM/YYYY text inputs, inclusive on both ends)
@@ -371,7 +372,7 @@ export default function ScribeExploreView() {
 
   // Count of non-default (active) filters, shown on the collapsed filter bar.
   const activeFilterCount = [selectedLanguage, selectedType, selectedSlot, selectedDay]
-    .filter(v => v !== 'All').length + (dateFrom.trim() ? 1 : 0) + (dateTo.trim() ? 1 : 0);
+    .filter(v => v !== 'All').length + (dateFrom.trim() ? 1 : 0) + (dateTo.trim() ? 1 : 0) + (sosOnly ? 1 : 0);
 
   const activeAssignmentFilterCount = (selectedAssignmentLevel !== 'All' ? 1 : 0)
     + (deadlineFrom.trim() ? 1 : 0) + (deadlineTo.trim() ? 1 : 0);
@@ -383,6 +384,7 @@ export default function ScribeExploreView() {
     setSelectedDay('All');
     setDateFrom('');
     setDateTo('');
+    setSosOnly(false);
   };
 
   const clearAssignmentFilters = () => {
@@ -393,6 +395,11 @@ export default function ScribeExploreView() {
 
   // Apply search query and filters
   const filteredExams = availableExams.filter(exam => {
+    // 0. SOS Emergency filter
+    if (sosOnly && exam.is_emergency !== 'yes') {
+      return false;
+    }
+
     // 1. Parse search query for potential date range/matching
     const dateParsed = parseSearchQueryForDates(searchQuery);
     
@@ -921,33 +928,8 @@ export default function ScribeExploreView() {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* SOS Emergency Reserve Duty Banner */}
-      <Animated.View entering={rise(1)} style={{ marginHorizontal: inShell ? 0 : 24, marginTop: 12 }}>
-        <View style={{
-          backgroundColor: 'rgba(239,68,68,0.06)',
-          borderWidth: 1.5,
-          borderColor: 'rgba(239,68,68,0.2)',
-          borderRadius: 16,
-          paddingHorizontal: 14,
-          paddingVertical: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="flash" size={16} color="#ef4444" />
-          </View>
-          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '900', color: '#991b1b' }}>SOS Standby Duty Active</Text>
-            <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>RESERVE 10</Text>
-            </View>
-          </View>
-        </View>
-      </Animated.View>
-
       {/* Search Header Bar */}
-      <Animated.View entering={rise(2)} style={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 12, paddingBottom: 10, gap: 10 }}>
+      <Animated.View entering={rise(1)} style={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 14, paddingBottom: 10, gap: 10 }}>
         
         {/* Search Input */}
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: searchFocused ? THEME.primary : THEME.cardBorder, paddingHorizontal: 14, height: 48, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: searchFocused ? 0.14 : 0.06, shadowRadius: 10, elevation: 2 }}>
@@ -1009,7 +991,76 @@ export default function ScribeExploreView() {
 
           {/* Expandable sections */}
           {showFilters && activeSegment === 'exams' && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+              {/* SOS Emergency Filter Toggle Bar (shifted inside filter block) */}
+              <View style={{
+                backgroundColor: sosOnly ? 'rgba(239,68,68,0.06)' : '#f8fafc',
+                borderWidth: 1.5,
+                borderColor: sosOnly ? 'rgba(239,68,68,0.3)' : '#e2e8f0',
+                borderRadius: 14,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  <View style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 9,
+                    backgroundColor: sosOnly ? '#ef4444' : 'rgba(239,68,68,0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Ionicons name="flash" size={16} color={sosOnly ? '#ffffff' : '#ef4444'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: sosOnly ? '#991b1b' : '#0f172a' }}>
+                        Emergency (SOS) Only
+                      </Text>
+                      <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>SOS</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500', marginTop: 1 }}>
+                      Show urgent SOS standby emergency requests only
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setSosOnly(!sosOnly)}
+                  accessibilityRole="switch"
+                  accessibilityLabel="Filter by SOS Emergency Only"
+                  aria-checked={sosOnly}
+                  style={{
+                    width: 44,
+                    height: 24,
+                    borderRadius: 12,
+                    backgroundColor: sosOnly ? '#ef4444' : '#cbd5e1',
+                    padding: 3,
+                    justifyContent: 'center',
+                    alignItems: sosOnly ? 'flex-end' : 'flex-start',
+                    marginLeft: 10,
+                  }}
+                >
+                  <View style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    backgroundColor: '#ffffff',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 2,
+                    elevation: 2,
+                  }} />
+                </TouchableOpacity>
+              </View>
+
               {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
               {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
               {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
