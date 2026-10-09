@@ -12,16 +12,13 @@ import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import Animated, {
   Easing,
+  FadeIn,
   FadeInDown,
-  ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
-  withSequence,
   withTiming,
-  cancelAnimation,
 } from 'react-native-reanimated';
 
 const getFirstName = (fullName: string | null | undefined, defaultVal: string) => {
@@ -138,20 +135,6 @@ export default function ScribeHomeView() {
   // Staggered section entrance: each block rises in slightly after the previous one.
   const rise = (index: number) => enter(FadeInDown.delay(index * 70).duration(420));
 
-  // Avatar tile floats gently.
-  const floatY = useSharedValue(0);
-  useEffect(() => {
-    if (reduceMotion || !isActive) {
-      cancelAnimation(floatY);
-      return;
-    }
-    floatY.set(withRepeat(withSequence(
-      withTiming(-3, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
-      withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.sin) }),
-    ), -1));
-  }, [reduceMotion, isActive, floatY]);
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
-
   // SOS switch: knob slides and track recolours instead of jumping.
   const sosProgress = useSharedValue(isSosRegistered ? 1 : 0);
   useEffect(() => {
@@ -161,20 +144,6 @@ export default function ScribeHomeView() {
     backgroundColor: interpolateColor(sosProgress.get(), [0, 1], ['#cbd5e1', '#ef4444']),
   }));
   const sosKnobStyle = useAnimatedStyle(() => ({ transform: [{ translateX: sosProgress.get() * 20 }] }));
-
-  // While on standby, the SOS bolt pulses softly.
-  const sosPulse = useSharedValue(1);
-  useEffect(() => {
-    if (reduceMotion || !isSosRegistered || !isActive) {
-      sosPulse.set(withTiming(1, { duration: 150 }));
-      return;
-    }
-    sosPulse.set(withRepeat(withSequence(
-      withTiming(1.18, { duration: 700, easing: Easing.inOut(Easing.quad) }),
-      withTiming(1, { duration: 700, easing: Easing.inOut(Easing.quad) }),
-    ), -1));
-  }, [isSosRegistered, reduceMotion, isActive, sosPulse]);
-  const sosPulseStyle = useAnimatedStyle(() => ({ transform: [{ scale: sosPulse.get() }] }));
 
   const openCallSheet = (exam: any) => {
     if (!exam) return;
@@ -596,8 +565,8 @@ export default function ScribeHomeView() {
           </Text>
         </View>
 
-        {/* Scribe Avatar & Badge Container (floats gently) */}
-        <Animated.View style={[{ position: 'relative' }, floatStyle]}>
+        {/* Scribe Avatar & Badge Container */}
+        <Animated.View style={{ position: 'relative' }}>
           <View style={{
             width: 48,
             height: 48,
@@ -619,7 +588,7 @@ export default function ScribeHomeView() {
             <FontAwesome5 name="pen-nib" size={20} color={ACCENT.main} />
           </View>
           {isVerified && (
-            <Animated.View entering={enter(ZoomIn.delay(450).springify().damping(12))} style={{
+            <Animated.View entering={enter(FadeIn.delay(450).duration(300))} style={{
               position: 'absolute',
               bottom: -4,
               right: -4,
@@ -868,7 +837,7 @@ export default function ScribeHomeView() {
             <FontAwesome5 name="award" size={12} color="#2563eb" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Contributions</Text>
           </View>
-          <Animated.View key={`stat-${scribeCommitments.length}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+          <Animated.View key={`stat-${scribeCommitments.length}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{scribeCommitments.length}</Text>
           </Animated.View>
         </View>
@@ -881,7 +850,7 @@ export default function ScribeHomeView() {
             <FontAwesome5 name="file-alt" size={12} color={ACCENT.contrast} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Applications</Text>
           </View>
-          <Animated.View key={`stat-${pendingApplicationsCount}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+          <Animated.View key={`stat-${pendingApplicationsCount}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.contrast }}>{pendingApplicationsCount}</Text>
           </Animated.View>
         </View>
@@ -894,7 +863,7 @@ export default function ScribeHomeView() {
             <Ionicons name="search" size={13} color={ACCENT.bright} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Available</Text>
           </View>
-          <Animated.View key={`stat-${availableExams.length}`} entering={enter(ZoomIn.delay(350).springify().damping(12))}>
+          <Animated.View key={`stat-${availableExams.length}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.bright }}>{availableExams.length}</Text>
           </Animated.View>
         </View>
@@ -966,9 +935,7 @@ export default function ScribeHomeView() {
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <Animated.View style={sosPulseStyle}>
-              <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
-            </Animated.View>
+            <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
           </View>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Opt SOS Standby Duty</Text>
         </View>

@@ -28,13 +28,9 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  ZoomIn,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withDelay,
-  withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -52,7 +48,6 @@ const CARD_START = 250;
 const CARD_STAGGER = 120;
 const CTA_DELAY = 700;
 const FOOTER_DELAY = 950;
-const CTA_PULSE_DELAY = 1400;
 
 /**
  * Default-exported route component for /landing.
@@ -73,11 +68,10 @@ export default function LandingScreen() {
     transform: [{ scale: logoScale.get() }],
   }));
 
-  // "Get Started" scale = one-off attention pulse x press-down feedback, combined in one style.
-  const ctaPulse = useSharedValue(1);
+  // "Get Started" press-down feedback.
   const ctaPress = useSharedValue(1);
   const ctaStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: ctaPulse.get() * ctaPress.get() }],
+    transform: [{ scale: ctaPress.get() }],
   }));
 
   /**
@@ -100,18 +94,11 @@ export default function LandingScreen() {
     checkExistingSession();
   }, [isDesktop]);
 
-  // Entrance: logo springs to full size, then Get Started "breathes" once to draw the eye to it.
+  // Entrance: the logo eases up to full size once (no bounce).
   useEffect(() => {
     if (isDesktop || reduceMotion) return;
-    logoScale.set(withSpring(1, { damping: 12, stiffness: 90 }));
-    ctaPulse.set(withDelay(
-      CTA_PULSE_DELAY,
-      withSequence(
-        withTiming(1.04, { duration: 260, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 340, easing: Easing.inOut(Easing.quad) }),
-      ),
-    ));
-  }, [isDesktop, reduceMotion, ctaPulse, logoScale]);
+    logoScale.set(withTiming(1, { duration: 450, easing: Easing.out(Easing.cubic) }));
+  }, [isDesktop, reduceMotion, logoScale]);
 
   // Wide screens get the dedicated desktop landing page (all hooks above still run first).
   if (isDesktop) {
@@ -240,7 +227,7 @@ export default function LandingScreen() {
             {features.map((f) => (
               <Animated.View
                 key={f.title}
-                entering={enter(FadeInDown.delay(f.delay).duration(550).springify().damping(18))}
+                entering={enter(FadeInDown.delay(f.delay).duration(550))}
               >
                 <View style={{
                   flexDirection: 'row', alignItems: 'center',
@@ -258,7 +245,7 @@ export default function LandingScreen() {
                     alignItems: 'center', justifyContent: 'center',
                     marginRight: 16,
                   }}>
-                    <Animated.View entering={enter(ZoomIn.delay(f.delay + 220).springify().damping(10))}>
+                    <Animated.View entering={enter(FadeIn.delay(f.delay + 220).duration(300))}>
                       <Feather name={f.icon} size={22} color={f.color} />
                     </Animated.View>
                   </View>
@@ -280,11 +267,11 @@ export default function LandingScreen() {
             entering={enter(FadeInUp.delay(CTA_DELAY).duration(500))}
             style={{ gap: 12, marginBottom: 28 }}
           >
-            {/* Primary CTA — presses down slightly, and "breathes" once after the entrance */}
+            {/* Primary CTA — presses down slightly when tapped */}
             <AnimatedPressable
               onPress={handleGetStarted}
-              onPressIn={() => ctaPress.set(withSpring(0.96, { damping: 15, stiffness: 300 }))}
-              onPressOut={() => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }))}
+              onPressIn={() => ctaPress.set(withTiming(0.96, { duration: 120 }))}
+              onPressOut={() => ctaPress.set(withTiming(1, { duration: 120 }))}
               accessibilityRole="button"
               accessibilityLabel="Get Started"
               style={[

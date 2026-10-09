@@ -19,7 +19,7 @@
  * Assignment attachments can be previewed in a modal. Not signed in -> redirect to `/auth/login`.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Image } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Image, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -54,20 +54,21 @@ export default function ScribeApplyDetailsPage() {
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
   /**
-   * Decodes `exam.attachments`, an array of `"<filename>::<data URI>"` strings, into
-   * `{ uri, name, mimeType, dataUri }` objects. The MIME type is guessed from the file extension
-   * (pdf, otherwise `image/<ext>`). Malformed entries (no `::`) are dropped.
+   * Decodes `exam.attachments`: `"<filename>::<public URL>"` strings (older rows:
+   * `"<filename>::…::<data URI>"` — the file is always the part after the last `::`) into
+   * `{ uri, name, mimeType }` objects. The type is guessed from the extension. Entries without `::` are dropped.
    */
   const parsedAttachments = React.useMemo(() => {
     if (!exam || !exam.attachments || !Array.isArray(exam.attachments)) return [];
     return exam.attachments.map((entry: string) => {
-      const sepIdx = entry.indexOf('::');
-      if (sepIdx === -1) return null;
-      const name = entry.substring(0, sepIdx);
-      const dataUri = entry.substring(sepIdx + 2);
+      if (!entry.includes('::')) return null;
+      const name = entry.substring(0, entry.indexOf('::'));
+      const uri = entry.substring(entry.lastIndexOf('::') + 2);
       const ext = name.split('.').pop()?.toLowerCase() || '';
-      const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext}`;
-      return { uri: dataUri, name, mimeType, dataUri };
+      const mimeType = ext === 'pdf' ? 'application/pdf'
+        : ext === 'doc' || ext === 'docx' ? 'application/msword'
+        : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      return { uri, name, mimeType };
     }).filter(Boolean) as any[];
   }, [exam]);
 
@@ -489,7 +490,7 @@ export default function ScribeApplyDetailsPage() {
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Attachments</Text>
             <View className="space-y-2.5">
               {parsedAttachments.map((file, index) => {
-                const isPdf = file.mimeType.includes('pdf');
+                const isPdf = !file.mimeType.startsWith('image/');
                 return (
                   <View key={index} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex-row items-center justify-between">
                     <View className="flex-row items-center flex-1 pr-2">
@@ -500,7 +501,7 @@ export default function ScribeApplyDetailsPage() {
                       </View>
                       <View className="flex-1">
                         <Text className="text-xs font-bold text-slate-850" numberOfLines={1}>{file.name}</Text>
-                        <Text className="text-[9px] text-slate-400 mt-0.5">{isPdf ? 'PDF Document' : 'Image File'}</Text>
+                        <Text className="text-[9px] text-slate-400 mt-0.5">{file.mimeType.includes('pdf') ? 'PDF Document' : isPdf ? 'Word Document' : 'Image File'}</Text>
                       </View>
                     </View>
                     <TouchableOpacity 
@@ -679,13 +680,21 @@ export default function ScribeApplyDetailsPage() {
 
           {/* Body */}
           <View className="flex-1 items-center justify-center p-6">
-            {selectedAttachment?.mimeType.includes('pdf') ? (
+            {selectedAttachment && !selectedAttachment.mimeType.startsWith('image/') ? (
               <View className="items-center bg-slate-900 p-8 rounded-3xl border border-slate-800">
                 <Feather name="file-text" size={64} color="#ef4444" className="mb-4" />
-                <Text className="text-base font-bold text-white text-center">PDF Document</Text>
-                <Text className="text-xs text-slate-400 text-center mt-2 max-w-[240px]">
-                  PDF documents are securely stored inside the application database.
-                </Text>
+                <Text className="text-base font-bold text-white text-center">{selectedAttachment.name}</Text>
+                {/^https?:\/\//.test(selectedAttachment.uri) ? (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(selectedAttachment.uri)}
+                    accessibilityRole="button"
+                    style={{ marginTop: 16, backgroundColor: '#059669', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12 }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>Open document</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text className="text-xs text-slate-400 text-center mt-2 max-w-[240px]">This older attachment cannot be opened here.</Text>
+                )}
               </View>
             ) : (
               selectedAttachment?.uri ? (

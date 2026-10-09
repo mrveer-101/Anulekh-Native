@@ -6,14 +6,14 @@
  * desktop counterparts components/pc_view/ConsoleStudentPC.tsx and ConsoleScribePC.tsx. The colour theme
  * follows the account's role (STUDENT_THEME or SCRIBE_THEME from core/portalTheme.ts).
  *
- * Sections: profile header with a device-local photo, editable "Basic Information" (with scribe-only
+ * Sections: profile header with the profile photo (uploaded to storage, `profiles.avatar_url`), editable "Basic Information" (with scribe-only
  * languages / availability / first-time options), app language picker, a demo card for test push
  * notifications, and Save / Sign Out / Delete Account buttons.
  *
  * Data: `supabase` is the custom shim in core/supabase.ts that sends queries to the Rust/Axum backend
  * (`POST /api/query`); it is not real Supabase. Reads and updates the user's `profiles` row; account
- * deletion calls the backend directly at `POST /api/auth/delete-account`. The profile photo and the
- * welcome flags live only in AsyncStorage.
+ * deletion calls the backend directly at `POST /api/auth/delete-account`. The welcome flags live only
+ * in AsyncStorage; the photo URL is cached there too (`profile_photo_<userId>`).
  */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Pressable, Switch } from 'react-native';
@@ -25,6 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
 import { triggerTestNotification } from '@/core/notifications';
+import { fileLabel, storageService } from '@/services/storageService';
 import { haptic, HapticKind, loadHapticsEnabled, setHapticsEnabled } from '@/core/haptics';
 import { announceForAccessibility } from '@/core/a11y';
 import { gradient, portalCardStyle, PortalTheme, SCRIBE_THEME, STUDENT_THEME } from '@/core/portalTheme';
@@ -205,7 +206,7 @@ export default function SharedSettingsView() {
 
   /**
    * Loads the signed-in user's `profiles` row into the form, or redirects to /auth/login when there is
-   * no session. The profile photo comes from AsyncStorage (`profile_photo_<userId>`), not the backend.
+   * no session. The profile photo comes from the cache, then from `profiles.avatar_url`.
    */
   const fetchUserData = async () => {
     try {
@@ -217,7 +218,7 @@ export default function SharedSettingsView() {
       setUser(session.user);
       setEmail(session.user.email || '');
 
-      // The photo is device-local only (see handleSelectPhoto).
+      // Cached photo first (instant), then the saved avatar_url from the profile below.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
@@ -232,6 +233,11 @@ export default function SharedSettingsView() {
 
       if (error) throw error;
       if (profile) {
+        // Profile photo saved in storage: show it on every device and refresh the local cache.
+        if (profile.avatar_url) {
+          setProfilePhoto(profile.avatar_url);
+          AsyncStorage.setItem(`profile_photo_${session.user.id}`, profile.avatar_url).catch(() => {});
+        }
         setFullName(profile.full_name || '');
         setPhone(profile.phone || '');
         setRole(profile.role || '');
@@ -266,25 +272,12 @@ export default function SharedSettingsView() {
     }
   };
   /**
-   * Reads a local image URI and returns it as a base64 `data:` URI.
-   * @param uri File/blob URI returned by expo-image-picker.
-   */
-  const toDataUri = async (uri: string): Promise<string> => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  /**
-   * Lets the user pick a square photo from the library, converts it to a data URI and stores it in
-   * AsyncStorage under `profile_photo_<userId>`. It is shown in the header but never sent to the backend.
+   * Lets the user pick a square photo, uploads it straight to storage (kind `avatar`) and saves the
+   * public URL in `profiles.avatar_url`, so it shows on every device. The URL is also cached in
+   * AsyncStorage (`profile_photo_<userId>`), which the console headers read.
    */
   const handleSelectPhoto = async () => {
+    if (!user) return;
     try {
       // Photo-library permission is required before opening the picker.
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -292,7 +285,7 @@ export default function SharedSettingsView() {
         Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
         return;
       }
-      // Square crop at reduced quality keeps the stored data URI small.
+      // Square crop at reduced quality keeps the photo small.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -301,14 +294,21 @@ export default function SharedSettingsView() {
       });
       if (result.canceled || !result.assets?.length) return;
       const asset = result.assets[0];
-      // Show it immediately and remember it on this device.
-      const dataUri = await toDataUri(asset.uri);
-      setProfilePhoto(dataUri);
-      if (user) {
-        await AsyncStorage.setItem(`profile_photo_${user.id}`, dataUri);
+
+      // Show it immediately, then upload and save.
+      setProfilePhoto(asset.uri);
+      const isPng = asset.uri.toLowerCase().endsWith('.png') || asset.mimeType === 'image/png';
+      const res = await storageService.uploadFile(asset.uri, { kind: 'avatar', contentType: isPng ? 'image/png' : 'image/jpeg' });
+      if (!res.publicUrl) {
+        Alert.alert('Upload failed', res.error || 'Could not upload the photo.');
+        return;
       }
+      const { error } = await supabase.from('profiles').update({ avatar_url: res.publicUrl }).eq('id', user.id);
+      if (error) throw error;
+      setProfilePhoto(res.publicUrl);
+      await AsyncStorage.setItem(`profile_photo_${user.id}`, res.publicUrl);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to select image.');
+      Alert.alert('Error', e.message || 'Failed to update the photo.');
     }
   };
 
@@ -668,8 +668,8 @@ export default function SharedSettingsView() {
                 <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Verification Documents</Text>
 
                 {/* Shows the stored file names only; "View" is a simulated preview */}
-                {[aadharImageProof || 'government_id_proof.jpg', certificationProof || 'educational_certificate.pdf'].map((fileName) => (
-                  <View key={fileName} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.soft, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.softBorder }}>
+                {[fileLabel(aadharImageProof || 'government_id_proof.jpg'), fileLabel(certificationProof || 'educational_certificate.pdf')].map((fileName, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.soft, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.softBorder }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                       <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
                         <Feather name="file-text" size={15} color={theme.accentText} />

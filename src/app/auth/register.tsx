@@ -42,13 +42,11 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -137,8 +135,8 @@ export default function RegisterScreen() {
   // Primary button presses down slightly.
   const ctaPress = useSharedValue(1);
   const ctaPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPress.get() }] }));
-  const pressIn = () => ctaPress.set(withSpring(0.97, { damping: 15, stiffness: 300 }));
-  const pressOut = () => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }));
+  const pressIn = () => ctaPress.set(withTiming(0.97, { duration: 120 }));
+  const pressOut = () => ctaPress.set(withTiming(1, { duration: 120 }));
 
   // Top background orb glides between blue (student) and green (scribe).
   const roleProgress = useSharedValue(isScribe ? 1 : 0);
@@ -340,7 +338,7 @@ export default function RegisterScreen() {
                 <Text style={{ fontSize: 32, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
                   Create account
                 </Text>
-                <Animated.View entering={enter(ZoomIn.delay(250).springify().damping(12))}>
+                <Animated.View entering={enter(FadeIn.delay(250).duration(300))}>
                   <FontAwesome5 name="user-plus" size={24} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </Animated.View>
               </View>
@@ -412,7 +410,7 @@ export default function RegisterScreen() {
                     {/* Re-keyed on selection so the icon replays its zoom-in when this role is chosen */}
                     <Animated.View
                       key={isSelected ? 'selected' : 'idle'}
-                      entering={isSelected ? enter(ZoomIn.springify().damping(12)) : undefined}
+                      entering={isSelected ? enter(FadeIn.duration(300)) : undefined}
                     >
                       <FontAwesome5
                         name={r === 'student' ? 'user-graduate' : 'pen-nib'}
@@ -683,7 +681,7 @@ export default function RegisterScreen() {
                 }}
               >
                 {agreedToTerms && (
-                  <Animated.View entering={enter(ZoomIn.springify().damping(12))}>
+                  <Animated.View entering={enter(FadeIn.duration(300))}>
                     <Feather name="check" size={14} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </Animated.View>
                 )}

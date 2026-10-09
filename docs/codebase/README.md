@@ -9,6 +9,7 @@ Anulekh (अनुलेख) matches visually-impaired and differently-abled **s
 | [DATA.md](DATA.md) | Database tables and status lifecycles |
 | [OPERATIONS.md](OPERATIONS.md) | Run locally, checks, deploy, known issues |
 | [Backend API](../../../Anulekh-Axum/docs/codebase/API.md) | Rust/Axum modules, endpoints, configuration |
+| [APL — media upload plan](../plans/APL.md) | Direct-to-R2 uploads: Turso, chat media, voice notes, private ID proofs |
 
 ## System at a glance
 

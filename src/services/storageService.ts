@@ -1,193 +1,180 @@
 /**
- * File-upload client for the Anulekh backend (Rust/Axum, see Anulekh-Axum/src/storage.rs).
+ * File uploads: the app sends files **directly** to Cloudflare R2 (or, in local development, to the
+ * backend's stand-in), never as base64 through the API. See docs/plans/APL.md and
+ * Anulekh-Axum/src/storage.rs.
  *
- * Used by the chat screen (app/console/common/chat.tsx) to upload images and
- * documents. The backend stores files in Cloudflare R2 when R2 credentials are
- * configured, otherwise on its own local disk (development). Two endpoints are used:
- *   - POST /api/storage/presigned-url : returns a short-lived (15 min) PUT URL
- *   - POST /api/storage/upload        : accepts the file as a base64 string
- * `uploadFile` prefers a direct presigned PUT to R2 (no base64 overhead through the
- * server) and falls back to the base64 endpoint. Functions never throw; failures
- * are reported through `null` / `UploadResult.error`.
- * Note: these requests are sent without an auth header (the backend routes do not require one).
+ * Three steps, all inside `uploadFile`:
+ *   1. Ask the backend for an upload link: POST /api/storage/presigned-url
+ *      { kind, content_type, size_bytes, user_id }. The backend checks the type and size for that kind.
+ *   2. PUT the file to the link — phones stream it from disk (expo-file-system upload task, no JS
+ *      memory copy); web sends the Blob with XMLHttpRequest so progress can be reported.
+ *   3. The caller saves the result (key / URL) in Turso — only after step 2 succeeded.
+ *
+ * Public kinds return a `publicUrl`. Private kinds (ID proofs, support screenshots) return no URL;
+ * store `storedValue` (`r2p:<key>`) instead — only a logged-in admin can open those.
+ * `uploadFile` never throws: failures come back in `error` as a short, user-facing message.
  */
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { API_URL } from '@/core/supabase';
+// SDK 56: the classic upload/info functions live in the "legacy" entry (the main entry throws).
+import * as FileSystem from 'expo-file-system/legacy';
+import { API_URL, supabase } from '@/core/supabase';
+import * as DocumentPicker from 'expo-document-picker';
 
-/**
- * Response of POST /api/storage/presigned-url.
- * `upload_url` is where to PUT the raw bytes, `public_url` is the final readable URL,
- * `file_key` is the object key (`<folder>/<uuid>.<ext>`), and `storage_type` says
- * whether the backend is using R2 or its local-disk fallback.
- */
-export interface PresignedUrlResponse {
-  upload_url: string;
-  public_url: string;
-  file_key: string;
-  storage_type: 'r2' | 'local';
-}
+/** Upload kinds — must match `RULES` in Anulekh-Axum/src/storage.rs. */
+export type UploadKind = 'chat_image' | 'chat_pdf' | 'voice' | 'assignment' | 'avatar' | 'proof' | 'ticket';
 
-/**
- * Options shared by all upload functions.
- * `folder` is the top-level key prefix in the bucket (defaults to 'general'),
- * `fileExt` the extension without dot (defaults to 'bin') and `contentType` the
- * MIME type (defaults to 'application/octet-stream').
- */
 export interface UploadOptions {
-  folder?: 'chat' | 'proofs' | 'avatars' | 'tickets' | 'general';
-  fileExt?: string;
-  contentType?: string;
+  kind: UploadKind;
+  /** MIME type of the file, e.g. 'image/jpeg', 'application/pdf', 'audio/mp4'.
+   *  Web only: '' means "use the type the browser reports for the file" (e.g. recorded audio). */
+  contentType: string;
+  /** File size in bytes when known (the picker usually provides it); otherwise it is measured. */
+  sizeBytes?: number;
+  /** Called with 0..1 while the file is being sent. */
+  onProgress?: (fraction: number) => void;
 }
 
-/**
- * Result of an upload. On success `error` is null and `publicUrl` / `fileKey` are
- * set; on failure both strings are empty and `error` holds a readable message.
- */
 export interface UploadResult {
-  publicUrl: string;
-  fileKey: string;
+  /** Storage key, e.g. `chat_image/<user>/<uuid>.jpg` (null on failure). */
+  fileKey: string | null;
+  /** Public URL for public kinds; null for private kinds and on failure. */
+  publicUrl: string | null;
+  /** What to save in the database: the public URL, or `r2p:<key>` for private files. */
+  storedValue: string | null;
+  /** MIME type and size actually uploaded (for `chat_messages.mime_type` / `size_bytes`). */
+  mimeType: string;
+  sizeBytes: number;
   error: string | null;
 }
 
-/**
- * Storage Service for Cloudflare R2 (and local fallback)
- */
+/** Backend response of POST /api/storage/presigned-url. */
+interface PresignedUrlResponse {
+  upload_url: string;
+  file_key: string;
+  public_url: string | null;
+  storage_type: 'r2' | 'local';
+  content_type: string;
+  private: boolean;
+}
+
+const fail = (error: string, mimeType = '', sizeBytes = 0): UploadResult =>
+  ({ fileKey: null, publicUrl: null, storedValue: null, mimeType, sizeBytes, error });
+
+/** Web: PUT a Blob with progress (fetch cannot report upload progress). Resolves with the HTTP status. */
+function putBlobWithProgress(url: string, blob: Blob, contentType: string, onProgress?: (f: number) => void): Promise<number> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', contentType);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    xhr.onload = () => resolve(xhr.status);
+    xhr.onerror = () => resolve(0);
+    xhr.ontimeout = () => resolve(0);
+    xhr.timeout = 5 * 60 * 1000;
+    xhr.send(blob);
+  });
+}
+
+/** Friendly label for a stored file value: private keys show as "Uploaded document (private)". */
+export function fileLabel(value: string | null | undefined, fallback = 'Not uploaded'): string {
+  if (!value) return fallback;
+  if (value.startsWith('r2p:')) return 'Uploaded document (private)';
+  if (/^https?:\/\//.test(value)) return decodeURIComponent(value.split('?')[0].split('/').pop() || fallback);
+  return value;
+}
+
 export const storageService = {
   /**
-   * Request a presigned URL from backend
+   * Uploads one file (a local `file://` / `content://` URI on phones, a `blob:` / `data:` URI on web).
+   * Call again to retry — every attempt gets a fresh upload link.
    */
-  async getPresignedUrl(options: UploadOptions): Promise<PresignedUrlResponse | null> {
-    // Returns null on any HTTP or network error so callers can fall back to base64 upload.
+  async uploadFile(uri: string, options: UploadOptions): Promise<UploadResult> {
+    const { kind, onProgress } = options;
+    const clean = (t: string) => t.split(';')[0].trim().toLowerCase();
+    let contentType = clean(options.contentType);
     try {
+      // Who is uploading (the backend only issues links for existing accounts).
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) return fail('Please sign in again to upload files.', contentType);
+
+      // File size: web reads the Blob (needed for the PUT anyway); phones ask the file system.
+      let blob: Blob | null = null;
+      let sizeBytes = options.sizeBytes ?? 0;
+      if (Platform.OS === 'web') {
+        blob = await (await fetch(uri)).blob();
+        sizeBytes = blob.size;
+        if (!contentType) contentType = clean(blob.type);
+      } else if (!sizeBytes) {
+        const info = await FileSystem.getInfoAsync(uri);
+        sizeBytes = info.exists ? info.size : 0;
+      }
+      if (!sizeBytes) return fail('Could not read the file.', contentType);
+
+      // 1. Upload link (the backend validates kind, type and size).
       const res = await fetch(`${API_URL}/api/storage/presigned-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folder: options.folder || 'general',
-          file_ext: options.fileExt || 'bin',
-          content_type: options.contentType || 'application/octet-stream',
-        }),
+        body: JSON.stringify({ kind, content_type: contentType, size_bytes: sizeBytes, user_id: userId }),
       });
-
-      if (!res.ok) return null;
-      return (await res.json()) as PresignedUrlResponse;
-    } catch (e) {
-      console.warn('Failed to get presigned URL:', e);
-      return null;
-    }
-  },
-
-  /**
-   * Direct Base64 upload to backend (works with R2 and local fallback)
-   */
-  async uploadBase64(base64Data: string, options: UploadOptions): Promise<UploadResult> {
-    // `base64Data` may be raw base64 or a full data: URI — the backend strips any "data:...," prefix.
-    try {
-      const res = await fetch(`${API_URL}/api/storage/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folder: options.folder || 'general',
-          file_ext: options.fileExt || 'bin',
-          content_type: options.contentType || 'application/octet-stream',
-          file_base64: base64Data,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        return { publicUrl: '', fileKey: '', error: data.error || 'Upload failed' };
+      const link = (await res.json().catch(() => ({}))) as Partial<PresignedUrlResponse> & { error?: string };
+      if (!res.ok || !link.upload_url || !link.file_key || !link.content_type) {
+        return fail(link.error || 'Upload is not available right now. Please try again.', contentType, sizeBytes);
       }
 
-      return { publicUrl: data.public_url, fileKey: data.file_key, error: null };
-    } catch (err: any) {
-      return { publicUrl: '', fileKey: '', error: err.message || 'Network error during upload' };
-    }
-  },
-
-  /**
-   * Universal upload function: accepts local file URI or base64 string
-   */
-  async uploadFile(fileUriOrBase64: string, options: UploadOptions): Promise<UploadResult> {
-    // Heuristic: a data: URI, or a long string that is not a file://, http(s) or blob: URI, is treated as base64.
-    const isBase64 = fileUriOrBase64.startsWith('data:') || (!fileUriOrBase64.startsWith('file://') && !fileUriOrBase64.startsWith('http') && !fileUriOrBase64.startsWith('blob:') && fileUriOrBase64.length > 500);
-
-    // 1. If it's already a base64 string, upload directly
-    if (isBase64) {
-      return this.uploadBase64(fileUriOrBase64, options);
-    }
-
-    // 2. Try presigned PUT upload
-    // Only attempted when the backend is on R2; with local storage we skip straight to step 3.
-    const presigned = await this.getPresignedUrl(options);
-    if (presigned && presigned.storage_type === 'r2') {
-      try {
-        // Web: the URI is a blob:/http URL, so fetch it into a Blob and PUT that.
-        if (Platform.OS === 'web') {
-          const blobRes = await fetch(fileUriOrBase64);
-          const blob = await blobRes.blob();
-          const putRes = await fetch(presigned.upload_url, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': options.contentType || 'application/octet-stream',
-            },
-            body: blob,
-          });
-
-          if (putRes.ok) {
-            return {
-              publicUrl: presigned.public_url,
-              fileKey: presigned.file_key,
-              error: null,
-            };
-          }
-        } else {
-          // Native: stream the local file's raw bytes with expo-file-system (BINARY_CONTENT = body is the file itself).
-          const uploadRes = await FileSystem.uploadAsync(presigned.upload_url, fileUriOrBase64, {
-            httpMethod: 'PUT',
-            uploadType: (FileSystem.UploadType?.BINARY_CONTENT ?? 0) as any,
-            headers: {
-              'Content-Type': options.contentType || 'application/octet-stream',
-            },
-          });
-
-          if (uploadRes.status >= 200 && uploadRes.status < 300) {
-            return {
-              publicUrl: presigned.public_url,
-              fileKey: presigned.file_key,
-              error: null,
-            };
-          }
-        }
-      } catch (uploadErr) {
-        console.warn('Presigned PUT failed, falling back to direct upload:', uploadErr);
-      }
-    }
-
-    // 3. Fallback: read file and send via direct base64 upload
-    // Reached when R2 is not configured, the presigned request failed, or the PUT returned non-2xx.
-    try {
-      let base64Data = '';
-      // Web: FileReader yields a data: URI (prefix is stripped server-side). Native: read the file as base64.
-      if (Platform.OS === 'web') {
-        const response = await fetch(fileUriOrBase64);
-        const blob = await response.blob();
-        base64Data = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
+      // 2. Send the bytes straight to storage, with the exact Content-Type the link was signed for.
+      onProgress?.(0);
+      let status = 0;
+      if (blob) {
+        status = await putBlobWithProgress(link.upload_url, blob, link.content_type, onProgress);
       } else {
-        base64Data = await FileSystem.readAsStringAsync(fileUriOrBase64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
+        const task = FileSystem.createUploadTask(
+          link.upload_url,
+          uri,
+          { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: { 'Content-Type': link.content_type } },
+          (p) => { if (p.totalBytesExpectedToSend > 0) onProgress?.(p.totalBytesSent / p.totalBytesExpectedToSend); },
+        );
+        status = (await task.uploadAsync())?.status ?? 0;
       }
+      if (status < 200 || status >= 300) {
+        return fail(status ? `Upload failed (${status}). Please try again.` : 'Network problem — check your connection and try again.', contentType, sizeBytes);
+      }
+      onProgress?.(1);
 
-      return this.uploadBase64(base64Data, options);
-    } catch (err: any) {
-      return { publicUrl: '', fileKey: '', error: err.message || 'Failed to read file for upload' };
+      // 3. Hand back what the caller should save.
+      const publicUrl = link.private ? null : link.public_url ?? null;
+      return {
+        fileKey: link.file_key,
+        publicUrl,
+        storedValue: link.private ? `r2p:${link.file_key}` : publicUrl,
+        mimeType: link.content_type,
+        sizeBytes,
+        error: null,
+      };
+    } catch (e: any) {
+      console.warn('Upload failed:', e);
+      return fail('Upload failed — check your connection and try again.', contentType);
     }
+  },
+
+  /**
+   * Lets the user pick one file (JPEG/PNG image, or a PDF when `allowPdf`) and uploads it as `kind`.
+   * Returns null when the user cancels; otherwise the value to save (URL, or `r2p:<key>` for private
+   * kinds), the file name and local `uri` (for an on-screen preview), and `error` (null on success).
+   */
+  async pickAndUpload(
+    kind: UploadKind,
+    { allowPdf = true, onProgress }: { allowPdf?: boolean; onProgress?: (f: number) => void } = {},
+  ): Promise<{ value: string | null; name: string; uri: string; error: string | null } | null> {
+    const types = ['image/jpeg', 'image/png', ...(allowPdf ? ['application/pdf'] : [])];
+    const picked = await DocumentPicker.getDocumentAsync({ type: types, copyToCacheDirectory: true });
+    if (picked.canceled || !picked.assets?.length) return null;
+    const asset = picked.assets[0];
+    const name = asset.name || 'document';
+    // Phones sometimes report no type; fall back to the file extension.
+    const ext = name.split('.').pop()?.toLowerCase();
+    const type = asset.mimeType || (ext === 'pdf' ? 'application/pdf' : ext === 'png' ? 'image/png' : 'image/jpeg');
+    const res = await this.uploadFile(asset.uri, { kind, contentType: type, onProgress });
+    return { value: res.storedValue, name, uri: asset.uri, error: res.error };
   },
 };

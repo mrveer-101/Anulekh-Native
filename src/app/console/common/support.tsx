@@ -13,8 +13,8 @@
  *
  * Submitting POSTs the ticket directly (plain `fetch`, not the shim) to the backend's
  * `/api/support/create`, which inserts a 'pending' row into `support_tickets`.
- * Note: the screenshot attachment is simulated — it attaches a fixed placeholder base64 PNG,
- * not a real image picked by the user.
+ * The optional screenshot is picked with the file picker and uploaded straight to **private**
+ * storage (`kind: ticket`); the ticket stores `r2p:<key>`, which only an admin can open.
  */
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Modal, FlatList, Image } from 'react-native';
@@ -23,6 +23,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
+import { storageService } from '@/services/storageService';
 
 /** Categories offered in the issue-type picker; the chosen string is sent as `issue_type`. */
 const ISSUE_TYPES = [
@@ -50,6 +51,10 @@ export default function SupportScreen() {
   const [issueType, setIssueType] = useState('Select Issue Type');
   const [description, setDescription] = useState('');
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  // Local preview of the picked screenshot (the saved value is a private key) and upload state.
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const [previewName, setPreviewName] = useState('');
+  const [attaching, setAttaching] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [sending, setSending] = useState(false);
 
@@ -93,16 +98,26 @@ export default function SupportScreen() {
     }
   };
 
-  /** "Attach screenshot" handler: attaches a fixed placeholder image (no real picker yet). */
-  const handleSimulateAttachment = () => {
-    // Simulated base64 mockup screenshot of the app
-    setReferenceImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAYAAAAeP4ixAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAMklEQVR4nO3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADgBC1iAAEJf8pIAAAAAElFTkSuQmCC');
-    Alert.alert('Image Attached', 'Mock reference screenshot "support_screenshot.png" attached to ticket.');
+  /** "Attach screenshot": pick a JPG/PNG and upload it to private storage (only admins can open it). */
+  const handleAttachScreenshot = async () => {
+    if (attaching) return;
+    setAttaching(true);
+    const res = await storageService.pickAndUpload('ticket', { allowPdf: false });
+    setAttaching(false);
+    if (!res) return; // cancelled
+    if (res.error || !res.value) {
+      Alert.alert('Upload failed', res.error || 'Please try again.');
+      return;
+    }
+    setReferenceImage(res.value);
+    setPreviewUri(res.uri);
+    setPreviewName(res.name);
   };
 
   /** Clears the attached reference image. */
   const handleRemoveAttachment = () => {
     setReferenceImage(null);
+    setPreviewUri(null);
   };
 
   /**
@@ -288,9 +303,9 @@ export default function SupportScreen() {
               <View className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex-row items-center justify-between">
                 <View className="flex-row items-center space-x-3">
                   <View className="w-12 h-12 bg-slate-200 rounded-lg overflow-hidden border border-slate-300">
-                    <Image source={{ uri: referenceImage }} className="w-full h-full" resizeMode="cover" />
+                    {!!previewUri && <Image source={{ uri: previewUri }} className="w-full h-full" resizeMode="cover" />}
                   </View>
-                  <Text className="text-xs font-bold text-slate-600">support_screenshot.png</Text>
+                  <Text className="text-xs font-bold text-slate-600" numberOfLines={1}>{previewName || 'Screenshot'}</Text>
                 </View>
                 <TouchableOpacity onPress={handleRemoveAttachment} className="p-2 rounded-full bg-rose-50 active:bg-rose-100">
                   <Feather name="trash-2" size={16} color="#ef4444" />
@@ -298,11 +313,11 @@ export default function SupportScreen() {
               </View>
             ) : (
               <TouchableOpacity 
-                onPress={handleSimulateAttachment}
+                onPress={handleAttachScreenshot}
                 className="w-full border border-slate-200 rounded-xl p-4 bg-slate-50 flex-row justify-center items-center space-x-2 border-dashed"
               >
                 <Feather name="image" size={18} color={isStudent ? '#2563eb' : '#059669'} />
-                <Text className={`font-bold text-xs ${themeTextClass}`}>Attach Screenshot / Photo</Text>
+                <Text className={`font-bold text-xs ${themeTextClass}`}>{attaching ? 'Uploading…' : 'Attach Screenshot / Photo'}</Text>
               </TouchableOpacity>
             )}
           </View>

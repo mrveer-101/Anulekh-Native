@@ -161,8 +161,8 @@ export default function StudentDashboard() {
       setProfile(profileData);
       fetchUnread(session.user.id);
 
-      // 4. Avatar photo is cached on the device only, keyed by user id.
-      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      // Avatar: the uploaded photo (profiles.avatar_url) wins; otherwise the copy cached on this device.
+      const localPhoto = profileData?.avatar_url || await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }

@@ -9,15 +9,16 @@
  *     (assignment requests are not looked up here);
  *   - reads/writes `chat_messages` for the request. There is no realtime socket: messages are
  *     re-fetched every 2 seconds by polling.
- *   - images/PDFs are uploaded through `storageService.uploadFile` (folder 'chat') and the returned
- *     public URL is stored on the message.
+ *   - photos, PDFs and voice notes go straight to storage via `storageService.uploadFile` (kinds
+ *     chat_image / chat_pdf / voice); only after a successful upload is the message saved with its
+ *     `media_url`, `file_key`, `mime_type` and `size_bytes` (`sendMedia`). A banner shows progress / Retry.
  *
  * Notable behaviour:
  *   - Theme follows the viewer's role: Telegram-style blue for students, WhatsApp-style green for scribes.
  *   - Calling is time-restricted (see the comment near `canCall`): the phone icon only appears on the
  *     exam day and is locked once the exam is over.
  *   - The header's document icon (shown once a scribe is assigned) opens the scribe declaration letter.
- *   - Voice notes are a stub: the timer runs locally and a fixed sample audio URL is sent.
+ *   - Voice notes are recorded with expo-audio (m4a on phones, the browser's format on web).
  *   - Messages also understand an older inline format (`[audio/m4a;base64]...`, `[file/image;name=...;base64]...`,
  *     `[file/pdf;name=...;base64]...`) for rows that predate `message_type` / `media_url`.
  *   - A copy of the portal's bottom tab bar is rendered so users can jump back to a portal tab.
@@ -34,7 +35,8 @@ import { isExamToday, isExamPast } from '@/core/examDate';
 
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { storageService } from '@/services/storageService';
+import { storageService, UploadKind } from '@/services/storageService';
+import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { useInDesktopFrame } from '@/components/ui/DesktopShell';
 
 /**
@@ -84,9 +86,8 @@ export default function ChatRoomScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
 
-  // Voice recording state
-  // Note: `recording` (an audio recorder object) is never assigned by startRecording, so it stays null.
-  const [recording, setRecording] = useState<any>(null);
+  // Voice notes: expo-audio recorder (AAC .m4a on phones, webm/mp4 on web) + an elapsed-seconds timer.
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [recordDuration, setRecordDuration] = useState(0);
   const recordInterval = useRef<any>(null);
@@ -97,6 +98,8 @@ export default function ChatRoomScreen() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
   const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
+  // File being sent, shown above the composer: progress, or an error with Retry.
+  const [upload, setUpload] = useState<{ label: string; progress: number; error: string | null; retry: () => void } | null>(null);
 
   // One-time setup per request: who am I, which request is this, and who is on the other side.
   useEffect(() => {
@@ -238,157 +241,159 @@ export default function ChatRoomScreen() {
     }
   };
 
+  /** A photo, PDF or voice note to upload and send as one chat message. */
+  type MediaItem = {
+    uri: string;
+    kind: UploadKind;
+    contentType: string;
+    messageType: 'image' | 'pdf' | 'voice';
+    label: string;
+    duration?: number;
+  };
+
   /**
-   * "Upload Photo" option: closes the attachment sheet, opens the photo library (base64 requested so
-   * the upload can skip a file read), uploads via `storageService` to the 'chat' folder as JPEG, and
-   * inserts an 'image' message with the public URL. Shows an alert if the upload fails.
+   * Uploads one file straight to storage (progress shown above the composer). Only when the upload
+   * succeeded is the chat message saved, with the file's URL, key, type and size. On failure nothing
+   * is saved and the banner offers Retry (each attempt gets a fresh upload link).
    */
+  const sendMedia = async (item: MediaItem) => {
+    if (!currentUser || !exam) return;
+    const retry = () => sendMedia(item);
+    setUpload({ label: item.label, progress: 0, error: null, retry });
+
+    const res = await storageService.uploadFile(item.uri, {
+      kind: item.kind,
+      contentType: item.contentType,
+      onProgress: (p) => setUpload((u) => (u ? { ...u, progress: p } : u)),
+    });
+    if (res.error || !res.publicUrl) {
+      setUpload({ label: item.label, progress: 0, error: res.error || 'Upload failed.', retry });
+      return;
+    }
+
+    const { error } = await supabase.from('chat_messages').insert({
+      request_id: exam.id,
+      sender_id: currentUser.id,
+      message: item.label,
+      message_type: item.messageType,
+      media_url: res.publicUrl,
+      file_key: res.fileKey,
+      mime_type: res.mimeType,
+      size_bytes: res.sizeBytes,
+      media_duration: item.duration ?? 0,
+      created_at: new Date().toISOString(),
+    });
+    if (error) {
+      setUpload({ label: item.label, progress: 1, error: 'The file was uploaded but the message could not be saved.', retry });
+      return;
+    }
+    setUpload(null);
+    loadMessages();
+  };
+
+  /**
+   * Image type from the file: phones use the file extension (the picker re-encodes to JPEG),
+   * web uses the browser-reported type.
+   */
+  const imageType = (uri: string, reported?: string | null) => {
+    if (Platform.OS === 'web' && reported) return reported;
+    const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+    return ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  };
+
+  /** "Upload Photo": pick from the library, then send it as an 'image' message. */
   const handlePickAndSendImage = async () => {
     if (!currentUser || !exam) return;
     setIsAttachmentModalOpen(false);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.8,
-        base64: true,
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      await sendMedia({
+        uri: asset.uri,
+        kind: 'chat_image',
+        contentType: imageType(asset.uri, asset.mimeType),
+        messageType: 'image',
+        label: asset.fileName || 'Photo',
       });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const res = await storageService.uploadFile(asset.base64 || asset.uri, {
-          folder: 'chat',
-          fileExt: 'jpg',
-          contentType: 'image/jpeg',
-        });
-
-        if (res.publicUrl) {
-          await supabase.from('chat_messages').insert({
-            request_id: exam.id,
-            sender_id: currentUser.id,
-            message: asset.fileName || 'Photo',
-            message_type: 'image',
-            media_url: res.publicUrl,
-            created_at: new Date().toISOString(),
-          });
-          loadMessages();
-        } else {
-          Alert.alert('Upload Failed', res.error || 'Could not upload image.');
-        }
-      }
     } catch (err: any) {
       console.error('Error picking image:', err);
     }
   };
 
-  /**
-   * "Upload PDF/Document" option: picks a PDF or image file, uploads it by URI with the file's own
-   * extension/MIME type, and inserts an 'image' or 'pdf' message depending on the MIME type.
-   */
+  /** "Upload PDF/Document": pick a PDF or image, then send it as a 'pdf' or 'image' message. */
   const handlePickAndSendDocument = async () => {
     if (!currentUser || !exam) return;
     setIsAttachmentModalOpen(false);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
+      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const isImg = !!asset.mimeType?.startsWith('image/');
+      await sendMedia({
+        uri: asset.uri,
+        kind: isImg ? 'chat_image' : 'chat_pdf',
+        contentType: isImg ? imageType(asset.uri, asset.mimeType) : 'application/pdf',
+        messageType: isImg ? 'image' : 'pdf',
+        label: asset.name || (isImg ? 'Photo.jpg' : 'Document.pdf'),
       });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const isImg = asset.mimeType?.startsWith('image/');
-        const res = await storageService.uploadFile(asset.uri, {
-          folder: 'chat',
-          fileExt: asset.name?.split('.').pop() || (isImg ? 'jpg' : 'pdf'),
-          contentType: asset.mimeType || (isImg ? 'image/jpeg' : 'application/pdf'),
-        });
-
-        if (res.publicUrl) {
-          await supabase.from('chat_messages').insert({
-            request_id: exam.id,
-            sender_id: currentUser.id,
-            message: asset.name || (isImg ? 'Photo.jpg' : 'Document.pdf'),
-            message_type: isImg ? 'image' : 'pdf',
-            media_url: res.publicUrl,
-            created_at: new Date().toISOString(),
-          });
-          loadMessages();
-        } else {
-          Alert.alert('Upload Failed', res.error || 'Could not upload document.');
-        }
-      }
     } catch (err: any) {
       console.error('Error picking document:', err);
     }
   };
 
-  /**
-   * Mic button: switches the composer into "recording" mode and starts a 1-second timer.
-   * No microphone audio is actually captured yet (UI-only stub).
-   */
-  const startRecording = async () => {
-    setIsRecording(true);
-    setRecordDuration(0);
-    recordInterval.current = setInterval(() => {
-      setRecordDuration(prev => prev + 1);
-    }, 1000);
+  /** Voice note type from the recorded file (phones: .m4a; web: empty → the browser's own type). */
+  const voiceType = (uri: string) => {
+    const ext = uri.split('?')[0].split('.').pop()?.toLowerCase();
+    if (ext === 'm4a' || ext === 'mp4') return 'audio/mp4';
+    if (ext === 'webm') return 'audio/webm';
+    if (ext === 'ogg') return 'audio/ogg';
+    return '';
   };
 
-  /**
-   * Tick button while recording: stops the timer and inserts a 'voice' message whose audio is a
-   * fixed sample clip, with the elapsed seconds (minimum 3) as its duration. Both the new
-   * `media_*` and legacy `voice_*` columns are filled.
-   */
+  /** Mic button: asks for microphone access, then starts recording and the on-screen timer. */
+  const startRecording = async () => {
+    try {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Microphone needed', 'Allow microphone access to send voice notes.');
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      setIsRecording(true);
+      setRecordDuration(0);
+      recordInterval.current = setInterval(() => setRecordDuration((s) => s + 1), 1000);
+    } catch (e) {
+      console.error('Could not start recording:', e);
+      Alert.alert('Recording failed', 'Could not start the microphone.');
+    }
+  };
+
+  /** Stops the recorder and the timer; returns the recorded file's URI (or null). */
+  const stopRecorder = async () => {
+    clearInterval(recordInterval.current);
+    setIsRecording(false);
+    setRecordDuration(0);
+    try {
+      await recorder.stop();
+    } catch {}
+    setAudioModeAsync({ allowsRecording: false }).catch(() => {});
+    return recorder.uri;
+  };
+
+  /** Tick button: stops recording and sends the note (upload first, then the message). */
   const stopAndSendRecording = async () => {
     const duration = recordDuration;
-    clearInterval(recordInterval.current);
-    setIsRecording(false);
-    setRecordDuration(0);
-
-    if (!currentUser || !exam) return;
-
-    try {
-      // Voice clip stream sample for testing audio playback
-      const voiceSample = 'https://actions.google.com/sounds/v1/speech/greeting.ogg';
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          request_id: exam.id,
-          sender_id: currentUser.id,
-          message: '🎤 Voice Note',
-          message_type: 'voice',
-          media_url: voiceSample,
-          media_duration: duration || 3,
-          is_voice: true,
-          voice_url: voiceSample,
-          voice_duration: duration || 3,
-          created_at: new Date().toISOString(),
-        });
-
-      if (error) throw error;
-      loadMessages();
-    } catch (e) {
-      console.error('Error sending voice message:', e);
-    }
+    const uri = await stopRecorder();
+    if (!uri || duration < 1) return;
+    await sendMedia({ uri, kind: 'voice', contentType: voiceType(uri), messageType: 'voice', label: 'Voice note', duration });
   };
 
-  /**
-   * Trash button while recording: meant to stop the timer and discard the recording.
-   * Note: it returns early when `recording` is null, which is always the case today, so the
-   * timer and recording UI are not actually cleared.
-   */
+  /** Trash button: stops recording and throws the note away. */
   const cancelRecording = async () => {
-    if (!recording) return;
-
-    clearInterval(recordInterval.current);
-    setIsRecording(false);
-    setRecordDuration(0);
-
-    try {
-      await recording.stopAndUnloadAsync();
-      setRecording(null);
-    } catch (err) {
-      console.error('Failed to cancel recording:', err);
-    }
+    await stopRecorder();
   };
 
   /** Formats a second count as `m:ss` for the recording timer. */
@@ -674,6 +679,38 @@ export default function ChatRoomScreen() {
         </ScrollView>
 
         <View style={{ backgroundColor: inputBarBg, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingBottom: Platform.OS === 'ios' ? 4 : 8, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 }}>
+          {/* Upload status: progress while a file is being sent, or the error with Retry */}
+          {upload && (
+            <View
+              accessibilityLiveRegion="polite"
+              style={{ marginHorizontal: 16, marginTop: 10, padding: 10, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: upload.error ? '#fef2f2' : '#fff', borderWidth: 1, borderColor: upload.error ? '#fecaca' : 'rgba(0,0,0,0.06)' }}
+            >
+              <Feather name={upload.error ? 'alert-circle' : 'upload-cloud'} size={16} color={upload.error ? '#dc2626' : themeColor} />
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>
+                  {upload.error ? `Couldn't send ${upload.label}` : `Sending ${upload.label}… ${Math.round(upload.progress * 100)}%`}
+                </Text>
+                {upload.error ? (
+                  <Text numberOfLines={2} style={{ fontFamily: 'Roboto', fontSize: 11, color: '#b91c1c', marginTop: 2 }}>{upload.error}</Text>
+                ) : (
+                  <View style={{ height: 4, borderRadius: 2, backgroundColor: '#e2e8f0', marginTop: 6, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${Math.round(upload.progress * 100)}%`, backgroundColor: themeColor }} />
+                  </View>
+                )}
+              </View>
+              {upload.error && (
+                <>
+                  <TouchableOpacity onPress={upload.retry} accessibilityRole="button" accessibilityLabel="Retry upload" style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, backgroundColor: themeColor }}>
+                    <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 12, fontWeight: '800' }}>Retry</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setUpload(null)} accessibilityRole="button" accessibilityLabel="Dismiss" style={{ padding: 4 }}>
+                    <Feather name="x" size={16} color="#64748b" />
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
           {/* 1. INPUT ROW */}
           <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}>
             {isRecording ? (

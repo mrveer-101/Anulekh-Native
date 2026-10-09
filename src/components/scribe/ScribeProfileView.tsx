@@ -27,6 +27,7 @@ import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
+import { fileLabel } from '@/services/storageService';
 
 /** Exam languages a scribe can offer; saved as an array in `profiles.languages`. */
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
@@ -473,7 +474,7 @@ export default function ScribeProfileView() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                     <Feather name="file-text" size={16} color="#16a34a" style={{ marginRight: 8 }} />
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }} numberOfLines={1}>
-                      {aadharImageProof || 'government_id_proof.jpg'}
+                      {fileLabel(aadharImageProof || 'government_id_proof.jpg')}
                     </Text>
                   </View>
                   <TouchableOpacity onPress={() => Alert.alert('Preview', 'Simulated document viewer opening.')} style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 }}>
@@ -486,7 +487,7 @@ export default function ScribeProfileView() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
                     <Feather name="file-text" size={16} color="#16a34a" style={{ marginRight: 8 }} />
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }} numberOfLines={1}>
-                      {certificationProof || 'educational_certificate.pdf'}
+                      {fileLabel(certificationProof || 'educational_certificate.pdf')}
                     </Text>
                   </View>
                   <TouchableOpacity onPress={() => Alert.alert('Preview', 'Simulated document viewer opening.')} style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 }}>

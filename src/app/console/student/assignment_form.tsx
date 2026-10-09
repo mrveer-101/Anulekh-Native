@@ -15,10 +15,10 @@
  *   - reads the student's `profiles` row (name used for attachment file names)
  *   - edit mode: reads the existing `assignment_requests` row
  *   - save: inserts or updates `assignment_requests` with status 'pending'
- * Attachments are not uploaded to storage: each file is read into a base64 data
- * URI and saved inline in the `attachments` column. If that save fails (e.g. the
- * payload is too large) it retries with path-only references, and finally saves
- * without the column, listing file names at the end of the description.
+ * Attachments (PDF, Word, JPG, PNG) upload straight to storage as soon as they are picked
+ * (`storageService.uploadFile`, kind `assignment`, progress shown per file). The `attachments`
+ * column stores `"<name>::<public URL>"` strings. Old rows may still hold `"<name>::…::<data URI>"`;
+ * readers take the part after the last `::`, so both formats keep working.
  *
  * Layout: one layout for every screen size, built from components/student/RequestKit (page,
  * header, section cards, submit button — shared with request_form). On desktop the root layout
@@ -33,6 +33,7 @@ import { supabase } from '@/core/supabase';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { FormSection, RequestHeader, RequestPage, SubmitButton } from '@/components/student/RequestKit';
+import { storageService } from '@/services/storageService';
 
 /**
  * A reference file attached to the request while the form is open.
@@ -45,9 +46,22 @@ interface Attachment {
   name: string;
   mimeType: string;
   size?: number;
-  /** base64 data URI stored inline in the DB */
-  dataUri?: string;
+  /** Public URL once uploaded (or an old inline data URI when editing an old request). */
+  url?: string;
+  /** Upload progress 0..1 while sending. */
+  progress?: number;
+  /** Upload error message, if the upload failed. */
+  error?: string;
 }
+
+/** File types the backend accepts for assignments (see Anulekh-Axum/src/storage.rs). */
+const ATTACHMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+];
 
 /**
  * Assignment request create/edit screen (default export for the route; no props).
@@ -72,7 +86,7 @@ export default function AssignmentRequestForm() {
   const [deadline, setDeadline] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   // True while picked files are being read into base64; saving is blocked meanwhile.
-  const [convertingFiles, setConvertingFiles] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   // Deadline picker modal state: visible month/year, chosen day and 12-hour time.
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -111,16 +125,15 @@ export default function AssignmentRequestForm() {
           setPageCount(requestData.page_count || '10');
           setDescription(requestData.description || '');
           setDeadline(requestData.deadline || '');
-          // Restore saved attachments (stored as name::dataUri pairs)
+          // Restore saved attachments: "<name>::<url>" (old rows: "<name>::…::<data URI>").
           if (requestData.attachments && Array.isArray(requestData.attachments)) {
             const restored: Attachment[] = requestData.attachments.map((entry: string) => {
-              const sepIdx = entry.indexOf('::');
-              if (sepIdx === -1) return null;
-              const name = entry.substring(0, sepIdx);
-              const dataUri = entry.substring(sepIdx + 2);
+              if (!entry.includes('::')) return null;
+              const name = entry.substring(0, entry.indexOf('::'));
+              const url = entry.substring(entry.lastIndexOf('::') + 2);
               const ext = name.split('.').pop()?.toLowerCase() || '';
-              const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext}`;
-              return { uri: dataUri, name, mimeType, dataUri };
+              const mimeType = ext === 'pdf' ? 'application/pdf' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+              return { uri: url, name, mimeType, url };
             }).filter(Boolean) as Attachment[];
             setAttachments(restored);
           }
@@ -131,18 +144,6 @@ export default function AssignmentRequestForm() {
     } finally {
       setLoading(false);
     }
-  };
-
-  /** Convert a file URI to base64 data URI using fetch + FileReader (works on web & native) */
-  const toDataUri = async (uri: string, mimeType: string): Promise<string> => {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
   };
 
   /**
@@ -167,35 +168,36 @@ export default function AssignmentRequestForm() {
     return `${sanitizedUser}_${sanitizedBase}_${fileType}.${ext}`;
   };
 
+  /** Updates one attachment (matched by its local uri). */
+  const patchAttachment = (uri: string, patch: Partial<Attachment>) =>
+    setAttachments((prev) => prev.map((a) => (a.uri === uri ? { ...a, ...patch } : a)));
+
   /**
-   * Renames each picked file and reads it into a base64 data URI, then appends the
-   * results to `attachments`. A file that cannot be read is still added, without a
-   * data URI (shown as "Processing…" in the mobile list).
+   * Renames the picked files, shows them in the list at once, then uploads them one by one straight
+   * to storage (kind `assignment`), updating each row's progress. Failed files show their error and
+   * can be removed and picked again.
    * @param newFiles - files returned by the document or image picker.
    */
-  const addFiles = async (newFiles: Omit<Attachment, 'dataUri'>[]) => {
-    setConvertingFiles(true);
-    const converted: Attachment[] = [];
+  const addFiles = async (newFiles: Omit<Attachment, 'url' | 'progress' | 'error'>[]) => {
     const username = profile?.official_name || profile?.full_name || 'student';
-    for (const file of newFiles) {
-      try {
-        const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
-        const dataUri = await toDataUri(file.uri, file.mimeType);
-        converted.push({ ...file, name: formattedName, dataUri });
-      } catch {
-        console.warn('Failed to read file:', file.name);
-        const formattedName = formatAttachmentFileName(username, file.name, file.mimeType);
-        converted.push({ ...file, name: formattedName });
-      }
+    const named = newFiles.map((f) => ({ ...f, name: formatAttachmentFileName(username, f.name, f.mimeType), progress: 0 }));
+    setAttachments((prev) => [...prev, ...named]);
+    setUploadingFiles(true);
+    for (const file of named) {
+      const res = await storageService.uploadFile(file.uri, {
+        kind: 'assignment',
+        contentType: file.mimeType,
+        onProgress: (p) => patchAttachment(file.uri, { progress: p }),
+      });
+      patchAttachment(file.uri, res.publicUrl ? { url: res.publicUrl, progress: 1 } : { error: res.error || 'Upload failed' });
     }
-    setAttachments((prev) => [...prev, ...converted]);
-    setConvertingFiles(false);
+    setUploadingFiles(false);
   };
 
   /** Opens the system document picker (any file type, multiple selection) and adds the chosen files. */
   const pickDocument = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: ['*/*'], multiple: true, copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({ type: ATTACHMENT_TYPES, multiple: true, copyToCacheDirectory: true });
       if (result.canceled || !result.assets?.length) return;
       const newFiles = result.assets.map((a) => ({ uri: a.uri, name: a.name || `file_${Date.now()}`, mimeType: a.mimeType || 'application/pdf', size: a.size }));
       await addFiles(newFiles);
@@ -214,7 +216,7 @@ export default function AssignmentRequestForm() {
       if (result.canceled || !result.assets?.length) return;
       const newFiles = result.assets.map((a) => {
         const ext = a.uri.split('.').pop()?.toLowerCase() || 'jpg';
-        return { uri: a.uri, name: a.fileName || `image_${Date.now()}.${ext}`, mimeType: `image/${ext}`, size: a.fileSize };
+        return { uri: a.uri, name: a.fileName || `image_${Date.now()}.${ext}`, mimeType: ext === 'png' ? 'image/png' : 'image/jpeg', size: a.fileSize };
       });
       await addFiles(newFiles);
     } catch (e: any) { Alert.alert('Error', e.message || 'Failed to pick image.'); }
@@ -240,15 +242,14 @@ export default function AssignmentRequestForm() {
 
   /**
    * Validates the form and inserts (or, in edit mode, updates) the
-   * `assignment_requests` row with status 'pending'. Tries up to three payloads
-   * (inline data URIs -> path references -> no attachments column) before giving up.
+   * `assignment_requests` row with status 'pending', saving only attachments that finished uploading.
    * On success shows an alert and replaces the route with /console/student?tab=requests.
    */
   const handleSave = async () => {
     // Validation: subject and deadline are required, and file reading must have finished.
     if (!subject.trim()) { Alert.alert('Error', 'Subject is required.'); return; }
     if (!deadline.trim()) { Alert.alert('Error', 'Deadline is required.'); return; }
-    if (convertingFiles) { Alert.alert('Please Wait', 'Files are still being processed.'); return; }
+    if (uploadingFiles) { Alert.alert('Please Wait', 'Files are still uploading.'); return; }
 
     setLoading(true);
     try {
@@ -256,18 +257,12 @@ export default function AssignmentRequestForm() {
       if (!session) throw new Error('You must be logged in.');
 
       // Title is optional in the UI; fall back to the subject so the request always has one.
-      const username = profile?.official_name || profile?.full_name || 'student';
       const formattedTitle = title.trim() || subject.trim();
 
-      // Format attachments with naming convention: username_filename_filetype.ext
-      const attachmentEntries = attachments
-        .map((a) => {
-          const formattedName = formatAttachmentFileName(username, a.name, a.mimeType);
-          const relativePath = `/media/assignment/attachments/${formattedName}`;
-          return `${formattedName}::${relativePath}::${a.dataUri || a.uri}`;
-        });
+      // Uploaded attachments only, stored as "<name>::<url>".
+      const attachmentEntries = attachments.filter((a) => a.url).map((a) => `${a.name}::${a.url}`);
 
-      // Columns common to every save attempt. Note: editing also resets status to 'pending'.
+      // Columns to save. Note: editing also resets status to 'pending'.
       const basePayload = {
         student_id: session.user.id,
         student_name: profile?.official_name || profile?.full_name || 'Student',
@@ -286,28 +281,7 @@ export default function AssignmentRequestForm() {
           ? supabase.from('assignment_requests').update(payload).eq('id', params.id)
           : supabase.from('assignment_requests').insert(payload);
 
-      // Attempt save with attachments column
-      let res = await save({ ...basePayload, attachments: attachmentEntries });
-
-      if (res.error) {
-        console.warn('Primary save with full data URIs failed, retrying with file reference paths:', res.error.message);
-        // Fallback 1: Save with file paths instead of huge base64
-        const pathEntries = attachments.map((a) => {
-          const formattedName = formatAttachmentFileName(username, a.name, a.mimeType);
-          return `${formattedName}::/media/assignment/attachments/${formattedName}`;
-        });
-        res = await save({ ...basePayload, attachments: pathEntries });
-      }
-
-      if (res.error) {
-        console.warn('Secondary save with path references failed, falling back to base payload:', res.error.message);
-        // Fallback 2: Append attachment summary to description & save base payload
-        const attachmentSummary = attachments.length > 0
-          ? `\n\n[Attachments: ${attachments.map(a => formatAttachmentFileName(username, a.name, a.mimeType)).join(', ')}]`
-          : '';
-        res = await save({ ...basePayload, description: `${basePayload.description}${attachmentSummary}`.trim() });
-      }
-
+      const res = await save({ ...basePayload, attachments: attachmentEntries });
       if (res.error) throw new Error(res.error.message || 'Failed to save.');
 
       // Success: confirm and return to the student console's Requests tab.
@@ -491,17 +465,17 @@ export default function AssignmentRequestForm() {
           ) : undefined}
         >
 
-          {convertingFiles && (
+          {uploadingFiles && (
             <View style={[s.banner, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
               <ActivityIndicator size="small" color="#2563eb" />
-              <Text style={[s.bannerText, { color: '#1d4ed8' }]}>Reading files…</Text>
+              <Text style={[s.bannerText, { color: '#1d4ed8' }]}>Uploading files…</Text>
             </View>
           )}
 
           {/* One row per attachment; "Ready" once its base64 data URI exists */}
           {attachments.map((file) => {
             const icon = getFileIcon(file.mimeType);
-            const ready = !!file.dataUri;
+            const ready = !!file.url;
             return (
               <View key={file.uri} style={[s.attachRow, { backgroundColor: icon.bg, borderColor: icon.border }]}>
                 <View style={[s.attachIcon, { borderColor: icon.border }]}>
@@ -510,7 +484,7 @@ export default function AssignmentRequestForm() {
                 <View style={{ flex: 1 }}>
                   <Text numberOfLines={1} style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>{file.name}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>
-                    {ready ? `Ready${file.size ? ' · ' + formatSize(file.size) : ''}` : 'Processing…'}
+                    {file.error ? file.error : ready ? `Uploaded${file.size ? ' · ' + formatSize(file.size) : ''}` : `Uploading ${Math.round((file.progress || 0) * 100)}%`}
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -541,7 +515,7 @@ export default function AssignmentRequestForm() {
           label={isEditing ? 'Update Request' : 'Post Assignment Request'}
           onPress={handleSave}
           loading={loading}
-          disabled={convertingFiles}
+          disabled={uploadingFiles}
         />
 
       </ScrollView>

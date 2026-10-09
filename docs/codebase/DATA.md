@@ -8,15 +8,15 @@ columns are added by the migrations in `Anulekh-Axum/src/db.rs` at every start.
 | Table | Holds | Key columns |
 |---|---|---|
 | `users` | Login | `id`, `email` (email, phone address or username), `password` ⚠️ plain text |
-| `profiles` | One per user | `role`, `verification_status`, `full_name`, `phone`, `languages`, `location`, ID / certificate proofs, `availability_slots`, SOS fields |
+| `profiles` | One per user | `role`, `verification_status`, `full_name`, `phone`, `languages`, `location`, ID / certificate proofs (`r2p:<key>`, private), `avatar_url`, `availability_slots`, SOS fields |
 | `exam_requests` | Exam scribe requests | `student_id`, `subject`, `exam_date` (text), `exam_venue`, `status`, `scribe_id`, `is_emergency`, `private_scribe_id` |
-| `assignment_requests` | Assignment help | `student_id`, `assignment_title`, `deadline`, `status`, `scribe_id` |
+| `assignment_requests` | Assignment help | `student_id`, `assignment_title`, `deadline`, `status`, `scribe_id`, `attachments` (`"<name>::<url>"` list) |
 | `scribe_applications` | Applications + invites | `request_id`, `scribe_id`, `status`, `type` (`exam`/`assignment`) |
-| `chat_messages` | Per-request chat | `request_id`, `sender_id`, `message_type` (`text`/`image`/`pdf`/`audio`), `media_url` |
+| `chat_messages` | Per-request chat | `request_id`, `sender_id`, `message_type` (`text`/`image`/`pdf`/`voice`), `media_url`, `file_key`, `mime_type`, `size_bytes`, `media_duration` |
 | `notifications` | In-app alerts | `user_id`, `title`, `message`, `is_read` |
 | `scribe_reviews` / `student_reviews` | Ratings after an exam | `request_id`, ratings, `remark` |
 | `scribe_achievements`, `certificates` | Badges, verifiable certificates | `scribe_id`, … |
-| `support_tickets` | Help requests (admin panel) | `user_id`, `issue_type`, `status` |
+| `support_tickets` | Help requests (admin panel) | `user_id`, `issue_type`, `status`, `reference_image` (`r2p:<key>`, private) |
 
 ## Status lifecycles
 

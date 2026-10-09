@@ -25,7 +25,7 @@ npx expo export -p web -p android -p ios --output-dir /tmp/check
 |---|---|---|
 | Web | Cloud Run `anulekh-web` (Mumbai), `anulekh-web-us`; `anulekh.green-era.org` | `bash scripts/deploy-web.sh` (`--dry-run` = build only) |
 | Android / iOS | EAS | `eas build --profile preview --platform android` — native changes (splash, icons, new native packages such as `expo-haptics`) need a new build |
-| Backend | Render (`render.yaml`) | Deploys from the backend repo; free plan sleeps when idle |
+| Backend | Render (`render.yaml`) | Deploys from the backend repo; free plan sleeps when idle. R2 + CORS settings: see [APL §5](../plans/APL.md) |
 
 Bump `app.json` `version` / `versionCode` (and backend `LATEST_VERSION*`) for store releases.
 
@@ -35,14 +35,16 @@ Bump `app.json` `version` / `versionCode` (and backend `LATEST_VERSION*`) for st
 
 * Passwords stored in plain text; the `pass` / `Aditya@3205` shortcut in `auth.rs` (commit `291bf72`).
 * `POST /api/query` has no auth or table allow-list, and interpolates column names into SQL.
-* Approval bypass: any ID/location field counts as approved, and the Home screens then set `approved`.
+* Approval bypass: any ID/location field counts as approved; the Home screens and both
+  `complete_profile` forms set `verification_status = 'approved'` themselves.
 * `seed_test_accounts` writes to the live DB; delete test accounts `uistd` / `uiscribe` from production.
+* `Anulekh-Axum/.env` (admin password, Turso token, API keys) is **tracked in git** — untrack it and rotate the secrets.
 
 **Functional**
 
-* Voice notes use the browser `Audio` API (not on phones → use `expo-audio`); iOS icon is the Expo default.
+* iOS icon is the Expo default.
 * Plan "today" uses UTC dates; some Plan / chat text is hard-coded Gujarati.
-* Account: gender not saved, photo stays on the device, Delete Account ignores the server reply.
+* Account: gender not saved, Delete Account ignores the server reply.
 * Apply page shows "(null)" when the student's date of birth is missing.
 * Unused code: `pc_view/StudentHomePCView`, `StudentRequestsPCView`, `services/api/*` (except `client.ts`).
 

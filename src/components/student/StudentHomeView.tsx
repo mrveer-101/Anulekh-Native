@@ -23,7 +23,7 @@ import { useLanguage } from '@/core/translation';
 import { hoursUntilExam } from '@/core/examDate';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
-import Animated, { FadeInDown, ZoomIn, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, STUDENT_THEME as THEME } from '@/core/portalTheme';
 import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
 import { useTabActive } from '@/components/ui/TabPane';
@@ -68,7 +68,7 @@ export default function StudentHomeView() {
   // Sections and cards rise in one after another (off with Reduce Motion).
   const reduceMotion = useReducedMotion();
   const rise = (index: number) => (reduceMotion ? undefined : FadeInDown.delay(Math.min(index, 8) * 70).duration(420));
-  const pop = reduceMotion ? undefined : ZoomIn.delay(350).springify().damping(12);
+  const pop = reduceMotion ? undefined : FadeIn.delay(350).duration(300);
   // Session user, loaded profile, schedule and the counts shown in the stats strip.
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -563,7 +563,7 @@ export default function StudentHomeView() {
             <FontAwesome5 name="file-alt" size={12} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
             <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Exams</Text>
           </View>
-          {/* Keyed by the value so the number pops in again whenever it changes */}
+          {/* Keyed by the value so the number fades in again whenever it changes */}
           <Animated.View key={`stat-${examRequestsCount}`} entering={pop}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{examRequestsCount}</Text>
           </Animated.View>

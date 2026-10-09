@@ -49,6 +49,24 @@ const { data } = await supabase.from('exam_requests').select('*').eq('student_id
   `DesktopPageFrame` — a centred window; sign-in gets a brand panel. List: `DESKTOP_FRAMED_ROUTES` in
   `app/_layout.tsx`. `useInDesktopFrame()` hides phone-only bars.
 
+## File uploads — `services/storageService.ts` (plan: [APL](../plans/APL.md))
+
+Files go **straight from the device to Cloudflare R2**; the API never carries file bytes.
+
+1. `POST /api/storage/presigned-url {kind, content_type, size_bytes, user_id}` → the backend checks the
+   rules for that kind (`chat_image`, `chat_pdf`, `voice`, `assignment`, `avatar` = public;
+   `proof`, `ticket` = private) and returns a 15-min link with type + size signed in.
+2. PUT the file: phones stream it from disk (`expo-file-system/legacy` upload task), web uses
+   `XMLHttpRequest` (progress). 3. Save the result — only after the upload succeeded.
+
+| Saved as | Where |
+|---|---|
+| Public URL (+ `file_key`, `mime_type`, `size_bytes`) | `chat_messages` (photos, PDFs, voice notes), `profiles.avatar_url`, assignment `attachments` |
+| `r2p:<key>` — private, admin-only (`/api/admin/private-file`) | `profiles` ID proofs, `support_tickets.reference_image` |
+
+Voice notes: recorded and played with `expo-audio` (`VoiceMessageBubble`). Without R2 settings the backend
+stores files locally (`uploads/`, `uploads-private/`) through the same flow.
+
 ## Performance
 
 | Mechanism | Where | Effect |
@@ -78,5 +96,5 @@ const { data } = await supabase.from('exam_requests').select('*').eq('student_id
 * **Icons, not emoji** (Feather / Ionicons / FontAwesome5). Web fonts are embedded as base64 by
   `npm run build:fonts` → `src/vector-fonts-b64.css`.
 * **Splash:** paper `#FBF8F3` + logo tile (native) → `BrandSplash` overlay with colour clouds.
-* **Motion:** Reanimated, always behind `useReducedMotion()`; loops pause on hidden tabs.
+* **Motion:** Reanimated, always behind `useReducedMotion()`. Calm by design: one gentle fade/rise on entry, no springs, bounces or endless loops (only the admit-card scanning indicator loops).
 * **Accessibility:** labels/roles on every control, `aria-*` on web, ≥ 44 px touch targets.

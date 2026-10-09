@@ -31,7 +31,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+// SDK 56: readAsStringAsync lives in the "legacy" entry (the main entry throws on phones).
+import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '@/core/supabase';
 import { FormSection, RequestHeader, RequestPage, RequestTabBar, RequestTypeChooser, SubmitButton } from '@/components/student/RequestKit';
 import { announceForAccessibility } from '@/core/a11y';

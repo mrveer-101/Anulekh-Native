@@ -31,13 +31,10 @@ import Animated, {
   FadeInLeft,
   FadeInRight,
   SlideInDown,
-  ZoomIn,
   interpolateColor,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { useLanguage } from '@/core/translation';
@@ -229,20 +226,6 @@ export default function OnboardingCarousel() {
     backgroundColor: interpolateColor(stepProgress.get(), [0, 1, 2, 3], ORB_BOTTOM_COLORS),
   }));
 
-  // Slide icons float gently up and down.
-  const floatY = useSharedValue(0);
-  useEffect(() => {
-    if (reduceMotion) return;
-    floatY.set(withRepeat(
-      withSequence(
-        withTiming(-6, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
-        withTiming(0, { duration: 1600, easing: Easing.inOut(Easing.sin) }),
-      ),
-      -1,
-    ));
-  }, [reduceMotion, floatY]);
-  const floatStyle = useAnimatedStyle(() => ({ transform: [{ translateY: floatY.get() }] }));
-
   // Fetch active translation strings
   // (local table, not the shared `t()` from useLanguage — keys must match its language names)
   const t = TRANSLATIONS[appLanguage];
@@ -399,9 +382,8 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Clean rounded container for the logo — pops in, then floats */}
-            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
-            <Animated.View style={floatStyle}>
+            {/* Clean rounded container for the logo — fades in once */}
+            <Animated.View entering={enter(FadeIn.delay(120).duration(300))}>
             <View style={{
               width: 110,
               height: 110,
@@ -432,7 +414,6 @@ export default function OnboardingCarousel() {
               />
             </View>
             </Animated.View>
-            </Animated.View>
 
             <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
             <Text
@@ -462,9 +443,8 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Minimalist Book-open outline icon — pops in, then floats */}
-            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
-            <Animated.View style={floatStyle}>
+            {/* Minimalist Book-open outline icon — fades in once */}
+            <Animated.View entering={enter(FadeIn.delay(120).duration(300))}>
             <View  
               style={{
                 width: 96, height: 96,
@@ -479,7 +459,6 @@ export default function OnboardingCarousel() {
             >
               <Feather name="book-open" size={42} color="#2563eb" />
             </View>
-            </Animated.View>
             </Animated.View>
 
             <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
@@ -510,9 +489,8 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 400, justifyContent: 'center',
           }}>
-            {/* Minimalist Users outline icon representing community connection — pops in, then floats */}
-            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
-            <Animated.View style={floatStyle}>
+            {/* Minimalist Users outline icon representing community connection — fades in once */}
+            <Animated.View entering={enter(FadeIn.delay(120).duration(300))}>
             <View  
               style={{
                 width: 96, height: 96,
@@ -527,7 +505,6 @@ export default function OnboardingCarousel() {
             >
               <Feather name="users" size={42} color="#10b981" />
             </View>
-            </Animated.View>
             </Animated.View>
 
             <Animated.View entering={enter(FadeInDown.delay(180).duration(420))} style={{ width: '100%', alignItems: 'center' }}>
@@ -558,8 +535,8 @@ export default function OnboardingCarousel() {
             width: '100%', maxWidth: 340, alignSelf: 'center',
             minHeight: 450, justifyContent: 'center',
           }}>
-            {/* White rounded corner square container for the logo — pops in */}
-            <Animated.View entering={enter(ZoomIn.delay(120).springify().damping(14))}>
+            {/* White rounded corner square container for the logo — fades in once */}
+            <Animated.View entering={enter(FadeIn.delay(120).duration(300))}>
             <View style={{
               width: 100,
               height: 100,
@@ -750,7 +727,7 @@ export default function OnboardingCarousel() {
                       {localizedNames[lang]}
                     </Text>
                     {isSelected && (
-                      <Animated.View entering={enter(ZoomIn.springify().damping(12))}>
+                      <Animated.View entering={enter(FadeIn.duration(300))}>
                         <Feather name="check-circle" size={20} color="#3b82f6" />
                       </Animated.View>
                     )}

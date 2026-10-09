@@ -15,8 +15,9 @@
  * `verification_status: 'approved'` immediately, then shows a success overlay and redirects
  * to `/console/scribe` after 3 seconds.
  *
- * Note: the document "uploads" only record the picked file NAME in the profile; the file
- * contents are not uploaded anywhere (hence the `handleSimulate...` names).
+ * Uploads: the Aadhaar card and the optional certificate are picked with the file picker and uploaded
+ * straight to **private** storage (`storageService.pickAndUpload('proof')`); the profile stores
+ * `r2p:<key>`, which only an admin can open (admin panel → /api/admin/private-file).
  * Styling uses NativeWind `className` utilities.
  */
 import React, { useState } from 'react';
@@ -26,8 +27,7 @@ import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
-import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
+import { storageService } from '@/services/storageService';
 import * as Location from 'expo-location';
 
 /**
@@ -144,6 +144,10 @@ export default function CompleteProfileForm() {
   const [availabilitySlots, setAvailabilitySlots] = useState<string[]>([]);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [aadharImage, setAadharImage] = useState<string | null>(null);
+  // File names for display (the saved values are private storage keys `r2p:...`) and which slot is uploading.
+  const [aadharName, setAadharName] = useState('');
+  const [certName, setCertName] = useState('');
+  const [uploadingSlot, setUploadingSlot] = useState<'aadhar' | 'cert' | null>(null);
 
   // Step 3 yes/no toggles, saved as 'yes' / 'no' strings.
   const [urgentCalls, setUrgentCalls] = useState(false);
@@ -155,41 +159,26 @@ export default function CompleteProfileForm() {
   const [calendarYear, setCalendarYear] = useState(2003); // Default start year for volunteers
   const [showYearDropdown, setShowYearDropdown] = useState(false);
 
-  /** Opens the document picker (PDF or image) for the optional certificate and stores just its file name. */
-  const handleSimulateUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true
-      });
-      if (result.canceled || !result.assets?.length) return;
-      const asset = result.assets[0];
-      const filename = asset.name || 'highest_qualification_marksheet.pdf';
-      setUploadedFile(filename);
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to select file.');
+  /**
+   * Lets the scribe pick the Aadhaar card or certificate (image or PDF) and uploads it to **private**
+   * storage (`kind: proof`; only an admin can open it). Saves `r2p:<key>` for the profile.
+   */
+  const uploadProof = async (slot: 'aadhar' | 'cert') => {
+    if (uploadingSlot) return;
+    setUploadingSlot(slot);
+    const res = await storageService.pickAndUpload('proof');
+    setUploadingSlot(null);
+    if (!res) return; // cancelled
+    if (res.error || !res.value) {
+      Alert.alert('Upload failed', res.error || 'Please try again.');
+      return;
     }
-  };
-
-  /** Asks for photo-library permission, lets the user pick the Aadhaar card image and stores just its file name. */
-  const handleSimulateAadharUpload = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to your photo library to select an image.');
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-      if (result.canceled || !result.assets?.length) return;
-      const asset = result.assets[0];
-      const filename = asset.fileName || asset.uri.split('/').pop() || 'aadhar_card_copy.jpg';
-      setAadharImage(filename);
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to select image.');
+    if (slot === 'aadhar') {
+      setAadharImage(res.value);
+      setAadharName(res.name);
+    } else {
+      setUploadedFile(res.value);
+      setCertName(res.name);
     }
   };
 
@@ -323,7 +312,7 @@ export default function CompleteProfileForm() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
-      // Column values for `profiles`; document fields hold file names only.
+      // Column values for `profiles`; document fields hold private storage keys (`r2p:...`).
       const profilePayload = {
         official_name: officialName.trim(),
         aadhar_number: aadharNumber.trim(),
@@ -531,7 +520,7 @@ export default function CompleteProfileForm() {
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image *</Text>
                   <TouchableOpacity 
-                    onPress={handleSimulateAadharUpload}
+                    onPress={() => uploadProof('aadhar')}
                     className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
                       aadharImage ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-300 bg-white'
                     }`}
@@ -539,14 +528,14 @@ export default function CompleteProfileForm() {
                     {aadharImage ? (
                       <View className="items-center">
                         <Feather name="image" size={24} color="#059669" />
-                        <Text className="text-xs font-semibold text-slate-800 mt-1">{aadharImage}</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change image</Text>
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{aadharName || 'Document uploaded'}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change</Text>
                       </View>
                     ) : (
                       <View className="items-center">
                         <Feather name="upload-cloud" size={24} color="#94a3b8" />
-                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Aadhar Card Image</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">{uploadingSlot === 'aadhar' ? 'Uploading…' : 'Select Aadhar Card (photo or PDF)'}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">JPG, PNG or PDF up to 10 MB · private, seen only by the verification team</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -596,7 +585,7 @@ export default function CompleteProfileForm() {
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Certificate Proof (Optional)</Text>
                   <TouchableOpacity 
-                    onPress={handleSimulateUpload}
+                    onPress={() => uploadProof('cert')}
                     className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
                       uploadedFile ? 'border-emerald-300 bg-emerald-50/20' : 'border-slate-300 bg-white'
                     }`}
@@ -604,14 +593,14 @@ export default function CompleteProfileForm() {
                     {uploadedFile ? (
                       <View className="items-center">
                         <Feather name="file-text" size={24} color="#059669" />
-                        <Text className="text-xs font-semibold text-slate-800 mt-1">{uploadedFile}</Text>
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{certName || 'Certificate uploaded'}</Text>
                         <Text className="text-[10px] text-slate-400 mt-0.5">Tap to change file</Text>
                       </View>
                     ) : (
                       <View className="items-center">
                         <Feather name="upload-cloud" size={24} color="#94a3b8" />
-                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Certificate File</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">PDF, PNG, or JPG up to 5MB</Text>
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">{uploadingSlot === 'cert' ? 'Uploading…' : 'Select Certificate File'}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">PDF, PNG or JPG up to 10 MB · private</Text>
                       </View>
                     )}
                   </TouchableOpacity>

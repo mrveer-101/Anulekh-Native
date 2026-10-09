@@ -46,13 +46,11 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  ZoomIn,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
   withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -275,8 +273,8 @@ export default function LoginScreen() {
   // Primary button presses down slightly.
   const ctaPress = useSharedValue(1);
   const ctaPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPress.get() }] }));
-  const pressIn = () => ctaPress.set(withSpring(0.97, { damping: 15, stiffness: 300 }));
-  const pressOut = () => ctaPress.set(withSpring(1, { damping: 12, stiffness: 250 }));
+  const pressIn = () => ctaPress.set(withTiming(0.97, { duration: 120 }));
+  const pressOut = () => ctaPress.set(withTiming(1, { duration: 120 }));
 
   // Greeting hand gives a short wave once the header has appeared.
   const waveRotate = useSharedValue(0);
@@ -434,7 +432,7 @@ export default function LoginScreen() {
                   Welcome back
                 </Text>
                 {/* Waving hand: zooms in, then waveStyle rotates it. Decorative, hidden from screen readers. */}
-                <Animated.View entering={enter(ZoomIn.delay(250).springify().damping(12))}>
+                <Animated.View entering={enter(FadeIn.delay(250).duration(300))}>
                   <Animated.View style={waveStyle}>
                     <FontAwesome5 name="hand-paper" size={26} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
                   </Animated.View>

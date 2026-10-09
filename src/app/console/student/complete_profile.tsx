@@ -13,8 +13,9 @@
  * Supabase), setting `verification_status: 'approved'` immediately. A success overlay is shown
  * and the user is redirected to `/console/student` after 3 seconds.
  *
- * Note: the "uploads" are simulated. No file picker opens and nothing is uploaded; only a
- * placeholder file NAME is saved in the profile (hence the `handleSimulate...` names).
+ * Uploads: the ID document and certificate are picked with the file picker and uploaded straight to
+ * **private** storage (`storageService.pickAndUpload('proof')`); the profile stores `r2p:<key>`,
+ * which only an admin can open (admin panel → /api/admin/private-file).
  * Styling mixes NativeWind `className` utilities and inline `style` objects.
  */
 import React, { useState } from 'react';
@@ -25,6 +26,7 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { announceForAccessibility } from '@/core/a11y';
+import { storageService } from '@/services/storageService';
 
 /**
  * Official ID document choices for step 1. The chosen name is what gets saved in
@@ -65,20 +67,33 @@ export default function StudentCompleteProfileForm() {
   const [isDisabilityDropdownOpen, setIsDisabilityDropdownOpen] = useState(false);
   const [disabilityCertificate, setDisabilityCertificate] = useState<string | null>(null);
 
-  /**
-   * Simulated document "upload": opens no picker. Builds a file name from the document type
-   * (e.g. "aadhar_card_document.jpg"), stores it as docImage and shows an alert.
-   */
-  const handleSimulateDocUpload = () => {
-    const filename = `${docType.toLowerCase().replace(/\s+/g, '_')}_document.jpg`;
-    setDocImage(filename);
-    Alert.alert('Upload Simulated', `Your ${docType} image "${filename}" has been prepared for upload.`);
-  };
+  // File names for display (the saved values are private storage keys `r2p:...`) and which slot is uploading.
+  const [docName, setDocName] = useState('');
+  const [certName, setCertName] = useState('');
+  const [uploadingSlot, setUploadingSlot] = useState<'doc' | 'cert' | null>(null);
 
-  /** Simulated certificate "upload": stores a fixed placeholder file name and shows an alert. */
-  const handleSimulateCertificateUpload = () => {
-    setDisabilityCertificate('medical_disability_certificate.pdf');
-    Alert.alert('Upload Simulated', 'Your Disability Certificate "medical_disability_certificate.pdf" has been prepared for upload.');
+  /**
+   * Lets the student pick the ID document or disability certificate (image or PDF) and uploads it to
+   * **private** storage (`kind: proof`; only an admin can open it). Saves `r2p:<key>` for the profile.
+   */
+  const uploadProof = async (slot: 'doc' | 'cert') => {
+    if (uploadingSlot) return;
+    setUploadingSlot(slot);
+    const res = await storageService.pickAndUpload('proof');
+    setUploadingSlot(null);
+    if (!res) return; // cancelled
+    if (res.error || !res.value) {
+      Alert.alert('Upload failed', res.error || 'Please try again.');
+      return;
+    }
+    if (slot === 'doc') {
+      setDocImage(res.value);
+      setDocName(res.name);
+    } else {
+      setDisabilityCertificate(res.value);
+      setCertName(res.name);
+    }
+    announceForAccessibility(`${res.name} uploaded`);
   };
 
   /** Validates step 1 (document image chosen, emergency phone filled) and moves to step 2. */
@@ -315,10 +330,10 @@ export default function StudentCompleteProfileForm() {
                 <View>
                   <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload {docType} Image *</Text>
                   <TouchableOpacity 
-                    onPress={handleSimulateDocUpload}
+                    onPress={() => uploadProof('doc')}
                     accessible={true}
                     accessibilityRole="button"
-                    accessibilityLabel={docImage ? `${docType} image uploaded: ${docImage}` : `Upload Image of ${docType}`}
+                    accessibilityLabel={docImage ? `${docType} uploaded: ${docName}` : `Upload ${docType}`}
                     accessibilityHint="Opens file selector to choose document image"
                     className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
                       docImage ? 'border-blue-300 bg-blue-50/20' : 'border-slate-200 bg-slate-50'
@@ -328,14 +343,14 @@ export default function StudentCompleteProfileForm() {
                     {docImage ? (
                       <View className="items-center">
                         <Feather name="image" size={24} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text className="text-xs font-semibold text-slate-800 mt-1">{docImage}</Text>
+                        <Text className="text-xs font-semibold text-slate-800 mt-1">{docName || 'Document uploaded'}</Text>
                         <Text className="text-[10px] text-blue-600 font-bold mt-0.5">Tap to change image</Text>
                       </View>
                     ) : (
                       <View className="items-center">
                         <Feather name="upload-cloud" size={24} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text className="text-xs font-semibold text-slate-600 mt-1">Select Image of {docType}</Text>
-                        <Text className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, or JPEG up to 5MB</Text>
+                        <Text className="text-xs font-semibold text-slate-600 mt-1">{uploadingSlot === 'doc' ? 'Uploading…' : `Select ${docType} (photo or PDF)`}</Text>
+                        <Text className="text-[10px] text-slate-400 mt-0.5">JPG, PNG or PDF up to 10 MB · private, seen only by the verification team</Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -452,12 +467,12 @@ export default function StudentCompleteProfileForm() {
               <View style={{ marginTop: 8 }}>
                 <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate *</Text>
                 
-                {/* Tapping only records a placeholder file name (see handleSimulateCertificateUpload) */}
+                {/* Opens the file picker and uploads the certificate to private storage (uploadProof) */}
                 <TouchableOpacity 
-                  onPress={handleSimulateCertificateUpload}
+                  onPress={() => uploadProof('cert')}
                   accessible={true}
                   accessibilityRole="button"
-                  accessibilityLabel={disabilityCertificate ? `Disability certificate uploaded: ${disabilityCertificate}` : "Upload valid Disability Certificate"}
+                  accessibilityLabel={disabilityCertificate ? `Disability certificate uploaded: ${certName}` : "Upload valid Disability Certificate"}
                   accessibilityHint="Select scan or photo of your disability certificate"
                   style={{
                     width: '100%',
@@ -476,12 +491,12 @@ export default function StudentCompleteProfileForm() {
                   </View>
                   
                   <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
-                    {disabilityCertificate ? 'Certificate Uploaded!' : 'Upload valid Certificate'}
+                    {uploadingSlot === 'cert' ? 'Uploading…' : disabilityCertificate ? 'Certificate Uploaded!' : 'Upload valid Certificate'}
                   </Text>
                   
                   <Text style={{ fontSize: 10, color: '#64748b', textAlign: 'center', marginTop: 4, marginHorizontal: 20 }}>
                     {disabilityCertificate 
-                      ? `Selected: ${disabilityCertificate}`
+                      ? `Selected: ${certName}`
                       : 'Upload a high-quality scan or photo of your government-issued certificate (PDF, JPG, PNG).'
                     }
                   </Text>

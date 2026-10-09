@@ -149,8 +149,8 @@ export default function ScribeDashboard() {
       setProfile(profileData);
       fetchUnread(session.user.id);
 
-      // Profile photos are cached on-device (per user id) rather than read from the profile row.
-      const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
+      // Avatar: the uploaded photo (profiles.avatar_url) wins; otherwise the copy cached on this device.
+      const localPhoto = profileData?.avatar_url || await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
