@@ -1,6 +1,8 @@
 {
   "cli": {
-    "version": ">= 9.0.0"
+    "version": ">= 9.0.0",
+    "promptToConfigurePushNotifications": false,
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -35,6 +37,13 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6821392459",
+        "ascApiKeyPath": "./AuthKey_X8RHQ89Y9K.p8",
+        "ascApiKeyId": "X8RHQ89Y9K",
+        "ascApiKeyIssuerId": "67066931-afee-4261-a66c-bc8606529668"
+      }
+    }
   }
 }

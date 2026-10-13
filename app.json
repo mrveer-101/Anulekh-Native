@@ -10,6 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.celestialsteam.anulekh",
+      "buildNumber": "2",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -19,7 +20,7 @@
       }
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
