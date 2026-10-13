@@ -661,7 +661,7 @@ export default function ScribeRequestForm() {
     return (
       <RequestPage>
         <RequestHeader title="New Request" subtitle="Get a scribe for an exam or assignment" onBack={leavePage} />
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 70 }}>
           <RequestTypeChooser
             onAutoFill={startAutoFillEntry}
             onManual={() => {
@@ -687,7 +687,7 @@ export default function ScribeRequestForm() {
       />
 
       {/* Scrollable form: one card per section */}
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 28 }} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 110 }} keyboardShouldPersistTaps="handled">
         <View style={{ gap: 14 }}>
           
           {/* Section: Exam Classification */}

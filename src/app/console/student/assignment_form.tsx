@@ -358,7 +358,7 @@ export default function AssignmentRequestForm() {
         onBack={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }}
       />
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 48, gap: 14 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 90, gap: 14 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Assignment details ── */}
         <FormSection icon="file-text" title="Assignment Details">
@@ -516,6 +516,7 @@ export default function AssignmentRequestForm() {
           onPress={handleSave}
           loading={loading}
           disabled={uploadingFiles}
+          color="#ea580c"
         />
 
       </ScrollView>

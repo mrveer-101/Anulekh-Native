@@ -75,7 +75,7 @@ export const SCRIBE_THEME = PORTAL_THEMES.scribeGreen;
  * experimental_backgroundImage. Always pair it with a solid backgroundColor as the fallback.
  */
 export const gradient = (css: string) =>
-  (Platform.OS === 'web' ? { backgroundImage: css } : { experimental_backgroundImage: css }) as object;
+  (Platform.OS === 'web' ? { backgroundImage: css } : {}) as object;
 
 /**
  * White card with a tinted border and soft coloured shadow.

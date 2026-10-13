@@ -75,9 +75,22 @@ export function FormSection({ icon, title, right, children }: { icon: FeatherNam
   );
 }
 
-/** Full-width gradient button; shows a spinner and ignores taps while `loading`. */
-export function SubmitButton({ label, onPress, loading, disabled }: { label: string; onPress: () => void; loading?: boolean; disabled?: boolean }) {
+/** Full-width button; shows a spinner and ignores taps while `loading`. */
+export function SubmitButton({
+  label,
+  onPress,
+  loading,
+  disabled,
+  color,
+}: {
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  color?: string;
+}) {
   const off = loading || disabled;
+  const bg = color || THEME.solid;
   return (
     <Pressable
       onPress={onPress}
@@ -85,11 +98,31 @@ export function SubmitButton({ label, onPress, loading, disabled }: { label: str
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => [
-        { backgroundColor: THEME.solid, borderRadius: 16, paddingVertical: 15, alignItems: 'center', shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5, opacity: off ? 0.65 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
-        gradient(THEME.buttonGradient),
+        {
+          backgroundColor: bg,
+          borderRadius: 16,
+          paddingVertical: 16,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: bg,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.35,
+          shadowRadius: 14,
+          elevation: 5,
+          opacity: off ? 0.65 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+          marginTop: 12,
+          marginBottom: 20,
+        },
       ]}
     >
-      {loading ? <ActivityIndicator color="#ffffff" /> : <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#ffffff' }}>{label}</Text>}
+      {loading ? (
+        <ActivityIndicator color="#ffffff" />
+      ) : (
+        <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#ffffff', letterSpacing: 0.3 }}>
+          {label}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -131,10 +164,34 @@ export function RequestTabBar() {
 // ── Request-type chooser ──────────────────────────────────────────────────────────────────────
 
 /** One option row: icon tile, title, one-line description, optional badge, chevron. */
-function ChoiceCard({ icon, title, text, badge, tint, filled, onPress, a11yHint }: {
-  icon: FeatherName; title: string; text: string; badge?: string; tint: string; filled?: boolean; onPress: () => void; a11yHint: string;
+function ChoiceCard({
+  icon,
+  title,
+  text,
+  badge,
+  tint,
+  filled,
+  borderColor,
+  badgeBg,
+  badgeTextColor,
+  onPress,
+  a11yHint,
+}: {
+  icon: FeatherName;
+  title: string;
+  text: string;
+  badge?: string;
+  tint: string;
+  filled?: boolean;
+  borderColor?: string;
+  badgeBg?: string;
+  badgeTextColor?: string;
+  onPress: () => void;
+  a11yHint: string;
 }) {
-  const fg = filled ? '#ffffff' : '#0f172a';
+  const isFilled = !!filled;
+  const cardBorder = borderColor || (isFilled ? '#1d4ed8' : '#e2e8f0');
+
   return (
     <Pressable
       onPress={onPress}
@@ -142,57 +199,233 @@ function ChoiceCard({ icon, title, text, badge, tint, filled, onPress, a11yHint 
       accessibilityLabel={`${title}. ${text}`}
       accessibilityHint={a11yHint}
       style={({ pressed }) => [
-        { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 20, marginBottom: 12, transform: [{ scale: pressed ? 0.98 : 1 }] },
-        filled
-          ? [{ backgroundColor: THEME.solid, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 5 }, gradient(THEME.buttonGradient)]
-          : { backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: THEME.cardBorder },
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          padding: 16,
+          borderRadius: 20,
+          marginBottom: 12,
+          borderWidth: 1.5,
+          borderColor: cardBorder,
+          backgroundColor: isFilled ? tint : '#ffffff',
+          shadowColor: tint,
+          shadowOffset: { width: 0, height: isFilled ? 6 : 4 },
+          shadowOpacity: isFilled ? 0.28 : 0.08,
+          shadowRadius: isFilled ? 14 : 10,
+          elevation: isFilled ? 5 : 2,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        },
       ]}
     >
-      <View style={{ width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: filled ? 'rgba(255,255,255,0.18)' : `${tint}14` }}>
-        <Feather name={icon} size={23} color={filled ? '#ffffff' : tint} />
+      {/* Icon tile */}
+      <View
+        style={{
+          width: 50,
+          height: 50,
+          borderRadius: 16,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: isFilled ? 'rgba(255,255,255,0.22)' : `${tint}14`,
+          borderWidth: isFilled ? 0 : 1,
+          borderColor: isFilled ? 'transparent' : `${tint}30`,
+        }}
+      >
+        <Feather name={icon} size={23} color={isFilled ? '#ffffff' : tint} />
       </View>
+
+      {/* Text block */}
       <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 15.5, fontWeight: '900', color: fg }}>{title}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <Text
+            style={{
+              fontFamily: 'Roboto',
+              fontSize: 16,
+              fontWeight: '900',
+              color: isFilled ? '#ffffff' : '#0f172a',
+            }}
+          >
+            {title}
+          </Text>
           {!!badge && (
-            <View style={{ backgroundColor: filled ? 'rgba(255,255,255,0.22)' : THEME.soft, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 2 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '900', color: filled ? '#ffffff' : THEME.accentText, letterSpacing: 0.4 }}>{badge}</Text>
+            <View
+              style={{
+                backgroundColor: badgeBg || (isFilled ? '#ffffff' : `${tint}16`),
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 2.5,
+                borderWidth: isFilled ? 0 : 1,
+                borderColor: isFilled ? 'transparent' : `${tint}35`,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 10,
+                  fontWeight: '900',
+                  color: badgeTextColor || (isFilled ? tint : tint),
+                  letterSpacing: 0.5,
+                }}
+              >
+                {badge}
+              </Text>
             </View>
           )}
         </View>
-        <Text style={{ fontFamily: 'Roboto', fontSize: 12, marginTop: 3, color: filled ? 'rgba(255,255,255,0.85)' : '#64748b' }}>{text}</Text>
+        <Text
+          style={{
+            fontFamily: 'Roboto',
+            fontSize: 12.5,
+            marginTop: 4,
+            lineHeight: 17,
+            color: isFilled ? 'rgba(255,255,255,0.92)' : '#64748b',
+          }}
+        >
+          {text}
+        </Text>
       </View>
-      <Feather name="chevron-right" size={20} color={filled ? '#ffffff' : '#94a3b8'} />
+
+      <Feather
+        name="chevron-right"
+        size={22}
+        color={isFilled ? '#ffffff' : tint}
+      />
     </Pressable>
   );
 }
 
-/** Small uppercase label above a group of choices. */
-function GroupLabel({ icon, label }: { icon: FeatherName; label: string }) {
+/** Section header pill matching category theme colors. */
+function GroupLabel({
+  icon,
+  label,
+  tint,
+  bg,
+  borderColor,
+}: {
+  icon: FeatherName;
+  label: string;
+  tint: string;
+  bg: string;
+  borderColor: string;
+}) {
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, marginTop: 6 }}>
-      <Feather name={icon} size={13} color="#64748b" />
-      <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '900', color: '#64748b', letterSpacing: 1, textTransform: 'uppercase' }}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 14 }}>
+      <View
+        style={{
+          backgroundColor: bg,
+          paddingHorizontal: 10,
+          paddingVertical: 4.5,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: borderColor,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <Feather name={icon} size={12} color={tint} />
+        <Text
+          style={{
+            fontFamily: 'Roboto',
+            fontSize: 11,
+            fontWeight: '900',
+            color: tint,
+            letterSpacing: 0.8,
+            textTransform: 'uppercase',
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+      <View style={{ flex: 1, height: 1, backgroundColor: '#e2e8f0' }} />
     </View>
   );
 }
 
 /**
  * First screen of a new request: Exam (auto-fill from admit card, or manual) or Assignment.
- * The page decides what each choice does.
+ * Beautifully color-coded: Blue for Exam Scribes, Warm Orange for Assignments.
  */
-export function RequestTypeChooser({ onAutoFill, onManual, onAssignment }: { onAutoFill: () => void; onManual: () => void; onAssignment: () => void }) {
+export function RequestTypeChooser({
+  onAutoFill,
+  onManual,
+  onAssignment,
+}: {
+  onAutoFill: () => void;
+  onManual: () => void;
+  onAssignment: () => void;
+}) {
   return (
     <View>
-      <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.4 }}>What do you need help with?</Text>
-      <Text style={{ fontFamily: 'Roboto', fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 18 }}>Pick one to get started.</Text>
+      <Text
+        accessibilityRole="header"
+        style={{
+          fontFamily: 'Roboto',
+          fontSize: 22,
+          fontWeight: '900',
+          color: '#0f172a',
+          letterSpacing: -0.4,
+        }}
+      >
+        What do you need help with?
+      </Text>
+      <Text style={{ fontFamily: 'Roboto', fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 10 }}>
+        Pick a request category below to get started.
+      </Text>
 
-      <GroupLabel icon="edit" label="Exam" />
-      <ChoiceCard filled icon="upload-cloud" title="Scan admit card" text="Upload a photo or PDF — we fill the details" badge="FAST" tint={THEME.primary} onPress={onAutoFill} a11yHint="Opens the file picker to select your hall ticket" />
-      <ChoiceCard icon="edit-3" title="Fill manually" text="Enter subject, date and venue yourself" tint={THEME.primary} onPress={onManual} a11yHint="Opens the exam request form" />
+      {/* ── EXAMS SECTION (Blue #2563eb theme) ── */}
+      <GroupLabel
+        icon="edit-3"
+        label="Exam Scribe Requests"
+        tint="#1d4ed8"
+        bg="#eff6ff"
+        borderColor="#bfdbfe"
+      />
+      <ChoiceCard
+        filled
+        icon="upload-cloud"
+        title="Scan Admit Card"
+        text="Upload photo or PDF hall ticket — exam details auto-filled by AI"
+        badge="FASTEST • AI"
+        tint="#2563eb"
+        badgeBg="#ffffff"
+        badgeTextColor="#1d4ed8"
+        onPress={onAutoFill}
+        a11yHint="Opens file picker to select hall ticket for automatic extraction"
+      />
+      <ChoiceCard
+        icon="edit-3"
+        title="Fill Exam Manually"
+        text="Enter subject, date, time and venue yourself step by step"
+        badge="STEP BY STEP"
+        tint="#2563eb"
+        borderColor="#bfdbfe"
+        badgeBg="#eff6ff"
+        badgeTextColor="#2563eb"
+        onPress={onManual}
+        a11yHint="Opens manual exam request form"
+      />
 
-      <GroupLabel icon="book-open" label="Assignment" />
-      <ChoiceCard icon="file-text" title="Assignment help" text="Get a writer for an assignment" tint="#7c3aed" onPress={onAssignment} a11yHint="Opens the assignment request form" />
+      {/* ── ASSIGNMENTS SECTION (Warm Orange #ea580c theme) ── */}
+      <GroupLabel
+        icon="file-text"
+        label="Academic Writing & Assignments"
+        tint="#c2410c"
+        bg="#fff7ed"
+        borderColor="#fed7aa"
+      />
+      <ChoiceCard
+        icon="file-text"
+        title="Assignment Help"
+        text="Get a verified writer to complete your written homework, reports or projects"
+        badge="WRITING HELP"
+        tint="#ea580c"
+        borderColor="#fed7aa"
+        badgeBg="#fff7ed"
+        badgeTextColor="#ea580c"
+        onPress={onAssignment}
+        a11yHint="Opens assignment request form"
+      />
     </View>
   );
 }
