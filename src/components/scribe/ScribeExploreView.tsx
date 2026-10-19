@@ -491,7 +491,7 @@ export default function ScribeExploreView() {
               }}
             >
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : '#475569' }}>
-                {opt}
+                {opt === 'All' ? t('filter_all') : opt}
               </Text>
             </TouchableOpacity>
           );
@@ -511,34 +511,25 @@ export default function ScribeExploreView() {
         key={exam.id}
         entering={rise(index + 3)}
         style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: isEmergency ? '#fffdfd' : '#ffffff',
           borderRadius: 20,
-          borderWidth: isEmergency ? 2 : (exam.private_scribe_id ? 2 : 1.5),
-          borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : THEME.cardBorder),
-          shadowColor: isEmergency ? '#dc2626' : (exam.private_scribe_id ? '#db2777' : THEME.shadow), 
-          shadowOffset: { width: 0, height: 6 }, 
-          shadowOpacity: isEmergency ? 0.12 : 0.07, 
-          shadowRadius: 16, 
-          elevation: 3, 
-          marginBottom: 10,
+          borderWidth: 1.5,
+          borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : '#e2e8f0'),
+          shadowColor: '#0f172a', 
+          shadowOffset: { width: 0, height: 4 }, 
+          shadowOpacity: 0.05, 
+          shadowRadius: 12, 
+          elevation: 2, 
+          marginBottom: 12,
           overflow: 'hidden'
         }}
       >
-        {/* Status accent strip: red = SOS, pink = private/invited, amber = applied, green = open */}
-        <View style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1,
-          backgroundColor: isEmergency ? '#dc2626'
-            : (exam.private_scribe_id || examStatus === 'invited') ? '#db2777'
-            : examStatus === 'pending' ? '#d97706'
-            : THEME.primary,
-        }} />
-
         {/* Top Banner for Private Invitations */}
         {!!exam.private_scribe_id && (
           <View style={{ backgroundColor: '#fdf2f8', paddingVertical: 6, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#fbcfe8', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Feather name="lock" size={12} color="#db2777" />
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '900', color: '#db2777', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              PRIVATE INVITATION FOR YOU
+              {t('private_invitation_banner')}
             </Text>
           </View>
         )}
@@ -548,71 +539,82 @@ export default function ScribeExploreView() {
           activeOpacity={0.8}
           style={{
             flexDirection: 'row', alignItems: 'center',
-            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+            paddingHorizontal: 16, paddingVertical: 14, gap: 12,
           }}
         >
           {/* Subject icon */}
           <View style={{
-            width: 38, height: 38, borderRadius: 11,
-            backgroundColor: isEmergency ? '#fee2e2' : THEME.soft,
+            width: 42, height: 42, borderRadius: 13,
+            backgroundColor: isEmergency ? '#fef2f2' : '#eff6ff',
             alignItems: 'center', justifyContent: 'center',
             borderWidth: 1,
-            borderColor: isEmergency ? '#fca5a5' : THEME.softBorder,
+            borderColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.15)',
           }}>
-            <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
-              color={isEmergency ? '#dc2626' : THEME.accentText} />
+            <Feather
+              name={isEmergency ? 'alert-triangle' : 'book-open'}
+              size={17}
+              color={isEmergency ? '#dc2626' : '#2563eb'}
+            />
           </View>
 
           {/* Subject Name */}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
-              {exam.subject || 'Exam'}
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }} numberOfLines={1}>
+              {exam.subject || t('exams')}
             </Text>
           </View>
 
           {/* Badges container */}
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
             {isEmergency && (
-              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
+              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                  <Ionicons name="flash" size={8} color="#b91c1c" />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>SOS</Text>
+                  <Ionicons name="flash" size={9} color="#dc2626" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '900', color: '#dc2626', letterSpacing: 0.4 }}>{t('status_sos')}</Text>
                 </View>
               </View>
             )}
             {!!exam.private_scribe_id && (
-              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITE</Text>
+              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fdf2f8', borderWidth: 1, borderColor: '#fbcfe8' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777', letterSpacing: 0.4 }}>{t('status_invited').toUpperCase()}</Text>
               </View>
             )}
             {(() => {
               if (examStatus === 'pending') {
                 return (
-                  <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+                  <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_applied').toUpperCase()}</Text>
                   </View>
                 );
               }
               if (examStatus === 'invited') {
                 return (
-                  <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+                  <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fdf2f8', borderWidth: 1, borderColor: '#fbcfe8' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777', letterSpacing: 0.4 }}>{t('status_invited').toUpperCase()}</Text>
                   </View>
                 );
               }
               return (
-                <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#16a34a' }}>PENDING</Text>
+                <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', letterSpacing: 0.4 }}>{t('status_pending').toUpperCase()}</Text>
                 </View>
               );
             })()}
-          </View>
 
-          {/* Chevron */}
-          <Feather
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={16} color="#64748b"
-          />
+            {/* Circular Chevron Button */}
+            <View style={{
+              width: 28, height: 28, borderRadius: 14,
+              backgroundColor: '#f8fafc',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: '#f1f5f9',
+              marginLeft: 2
+            }}>
+              <Feather
+                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                size={15} color="#64748b"
+              />
+            </View>
+          </View>
         </TouchableOpacity>
 
         {/* ── Expanded Detail Panel ── */}
@@ -623,7 +625,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                  Level: {exam.exam_type}
+                  {t('exam_level')}: {exam.exam_type}
                 </Text>
               </View>
 
@@ -631,7 +633,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                  Date & Time: {exam.exam_date}
+                  {t('date_time')}: {exam.exam_date}
                 </Text>
               </View>
 
@@ -639,7 +641,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                  Location: {exam.exam_venue}
+                  {t('location')}: {exam.exam_venue}
                 </Text>
               </View>
 
@@ -647,7 +649,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="user" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
-                  Student: {exam.student_name} ({exam.education_grade})
+                  {t('student_prefix')}{exam.student_name} ({exam.education_grade})
                 </Text>
               </View>
 
@@ -655,7 +657,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="globe" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
-                  Language: {exam.exam_language}
+                  {t('language')}: {exam.exam_language}
                 </Text>
               </View>
             </View>
@@ -666,7 +668,7 @@ export default function ScribeExploreView() {
                 if (isVerified) {
                   router.push(`/console/scribe/apply?id=${exam.id}&type=exam` as any);
                 } else {
-                  Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                  Alert.alert(t('error'), t('verify_first_error'));
                 }
               }}
               style={{
@@ -708,74 +710,75 @@ export default function ScribeExploreView() {
           backgroundColor: '#ffffff',
           borderRadius: 20,
           borderWidth: 1.5,
-          borderColor: THEME.cardBorder,
-          shadowColor: THEME.shadow, 
-          shadowOffset: { width: 0, height: 6 }, 
-          shadowOpacity: 0.07, 
-          shadowRadius: 16, 
-          elevation: 3, 
-          marginBottom: 10,
+          borderColor: '#e2e8f0',
+          shadowColor: '#0f172a', 
+          shadowOffset: { width: 0, height: 4 }, 
+          shadowOpacity: 0.05, 
+          shadowRadius: 12, 
+          elevation: 2, 
+          marginBottom: 12,
           overflow: 'hidden'
         }}
       >
-        {/* Status accent strip: pink = invited, amber = applied, green = open */}
-        <View style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1,
-          backgroundColor: assignStatus === 'invited' ? '#db2777' : assignStatus === 'pending' ? '#d97706' : THEME.primary,
-        }} />
-
         {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
           onPress={() => toggleAssignmentCard(assign.id)}
           activeOpacity={0.8}
           style={{
             flexDirection: 'row', alignItems: 'center',
-            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+            paddingHorizontal: 16, paddingVertical: 14, gap: 12,
           }}
         >
           {/* Assignment icon */}
           <View style={{
-            width: 38, height: 38, borderRadius: 11,
-            backgroundColor: 'rgba(234,88,12,0.08)',
+            width: 42, height: 42, borderRadius: 13,
+            backgroundColor: '#fff7ed',
             alignItems: 'center', justifyContent: 'center',
             borderWidth: 1,
-            borderColor: 'rgba(234,88,12,0.18)',
+            borderColor: '#ffedd5',
           }}>
-            <Feather name="book-open" size={16}
-              color="#ea580c" />
+            <Feather name="file-text" size={17} color="#ea580c" />
           </View>
 
           {/* Subject Name */}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
-              {assign.subject || 'Assignment'}
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }} numberOfLines={1}>
+              {assign.subject || t('assignments')}
             </Text>
           </View>
 
           {/* Badges container */}
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
             {assignStatus === 'pending' && (
-              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.08)', borderWidth: 1, borderColor: 'rgba(245,158,11,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>APPLIED</Text>
+              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_applied').toUpperCase()}</Text>
               </View>
             )}
             {assignStatus === 'invited' && (
-              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITED</Text>
+              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fdf2f8', borderWidth: 1, borderColor: '#fbcfe8' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777', letterSpacing: 0.4 }}>{t('status_invited').toUpperCase()}</Text>
               </View>
             )}
             {!assignStatus && (
-              <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#16a34a' }}>OPEN</Text>
+              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', letterSpacing: 0.4 }}>{t('status_open').toUpperCase()}</Text>
               </View>
             )}
-          </View>
 
-          {/* Chevron */}
-          <Feather
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={16} color="#64748b"
-          />
+            {/* Circular Chevron Button */}
+            <View style={{
+              width: 28, height: 28, borderRadius: 14,
+              backgroundColor: '#f8fafc',
+              alignItems: 'center', justifyContent: 'center',
+              borderWidth: 1, borderColor: '#f1f5f9',
+              marginLeft: 2
+            }}>
+              <Feather
+                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                size={15} color="#64748b"
+              />
+            </View>
+          </View>
         </TouchableOpacity>
 
         {/* ── Expanded Detail Panel ── */}
@@ -786,7 +789,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="file-text" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                  Title: {assign.assignment_title}
+                  {t('title')}: {assign.assignment_title}
                 </Text>
               </View>
 
@@ -794,7 +797,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                  Level: {assign.academic_level}
+                  {t('academic_level')}: {assign.academic_level}
                 </Text>
               </View>
 
@@ -802,7 +805,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="clock" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                  Deadline: {assign.deadline}
+                  {t('deadline_prefix')}{assign.deadline}
                 </Text>
               </View>
 
@@ -810,7 +813,7 @@ export default function ScribeExploreView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Feather name="user" size={12} color="#64748b" style={{ width: 14 }} />
                 <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
-                  Student: {assign.student_name}
+                  {t('student_prefix')}{assign.student_name}
                 </Text>
               </View>
             </View>
@@ -821,7 +824,7 @@ export default function ScribeExploreView() {
                 if (isVerified) {
                   router.push(`/console/scribe/apply?id=${assign.id}&type=assignment` as any);
                 } else {
-                  Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                  Alert.alert(t('error'), t('verify_first_error'));
                 }
               }}
               style={{
@@ -907,7 +910,7 @@ export default function ScribeExploreView() {
         >
           <Feather name="book-open" size={14} color={activeSegment === 'exams' ? '#ffffff' : '#64748b'} />
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: activeSegment === 'exams' ? '#ffffff' : '#64748b' }}>
-            Available Exams ({filteredExams.length})
+            {t('available_exams_count', { count: filteredExams.length })}
           </Text>
         </TouchableOpacity>
 
@@ -923,7 +926,7 @@ export default function ScribeExploreView() {
         >
           <Feather name="file-text" size={14} color={activeSegment === 'assignments' ? '#ffffff' : '#64748b'} />
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: activeSegment === 'assignments' ? '#ffffff' : '#64748b' }}>
-            Assignments ({filteredAssignments.length})
+            {t('assignments_count', { count: filteredAssignments.length })}
           </Text>
         </TouchableOpacity>
       </Animated.View>
@@ -937,7 +940,7 @@ export default function ScribeExploreView() {
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder={activeSegment === 'exams' ? "Search subject or venue..." : "Search subject or title..."}
+            placeholder={activeSegment === 'exams' ? t('search_exam_placeholder') : t('search_assign_placeholder')}
             placeholderTextColor="#94a3b8"
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
@@ -955,7 +958,7 @@ export default function ScribeExploreView() {
       {/* Main Opportunities List & Scrollable Filters */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 10, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 10, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
         }
@@ -972,7 +975,7 @@ export default function ScribeExploreView() {
               <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
                 <Feather name="sliders" size={14} color={THEME.accentText} />
               </View>
-              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>Filters</Text>
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>{t('filters')}</Text>
               {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
                 <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: THEME.solid, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
                   <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}</Text>
@@ -982,7 +985,7 @@ export default function ScribeExploreView() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
                 <TouchableOpacity onPress={activeSegment === 'exams' ? clearFilters : clearAssignmentFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>Clear all</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>{t('clear_all')}</Text>
                 </TouchableOpacity>
               )}
               <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
@@ -1018,14 +1021,14 @@ export default function ScribeExploreView() {
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: sosOnly ? '#991b1b' : '#0f172a' }}>
-                        Emergency (SOS) Only
+                        {t('sos_emergency_only')}
                       </Text>
                       <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}>
                         <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>SOS</Text>
                       </View>
                     </View>
                     <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500', marginTop: 1 }}>
-                      Show urgent SOS standby emergency requests only
+                      {t('sos_emergency_desc')}
                     </Text>
                   </View>
                 </View>
@@ -1061,15 +1064,15 @@ export default function ScribeExploreView() {
                 </TouchableOpacity>
               </View>
 
-              {renderFilterSection('Language', LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
-              {renderFilterSection('Exam Type', TYPE_OPTIONS, selectedType, setSelectedType)}
-              {renderFilterSection('Time Slot', SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
-              {renderFilterSection('Day', DAY_OPTIONS, selectedDay, setSelectedDay)}
+              {renderFilterSection(t('filter_language'), LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
+              {renderFilterSection(t('filter_exam_type'), TYPE_OPTIONS, selectedType, setSelectedType)}
+              {renderFilterSection(t('filter_time_slot'), SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
+              {renderFilterSection(t('filter_day'), DAY_OPTIONS, selectedDay, setSelectedDay)}
 
               {/* Exam Date Range */}
               <View>
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                  Exam Date Range
+                  {t('exam_date_range')}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity
@@ -1078,7 +1081,7 @@ export default function ScribeExploreView() {
                   >
                     <Feather name="calendar" size={12} color="#94a3b8" />
                     <Text style={{ flex: 1, fontSize: 11, color: dateFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {dateFrom || 'From DD/MM/YYYY'}
+                      {dateFrom || t('from_date_placeholder')}
                     </Text>
                   </TouchableOpacity>
                   <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
@@ -1088,7 +1091,7 @@ export default function ScribeExploreView() {
                   >
                     <Feather name="calendar" size={12} color="#94a3b8" />
                     <Text style={{ flex: 1, fontSize: 11, color: dateTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {dateTo || 'To DD/MM/YYYY'}
+                      {dateTo || t('to_date_placeholder')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1098,12 +1101,12 @@ export default function ScribeExploreView() {
 
           {showFilters && activeSegment === 'assignments' && (
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
-              {renderFilterSection('Academic Level', ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevel, setSelectedAssignmentLevel)}
+              {renderFilterSection(t('filter_academic_level'), ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevel, setSelectedAssignmentLevel)}
 
               {/* Deadline Range */}
               <View>
                 <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                  Deadline Range
+                  {t('deadline_range')}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <TouchableOpacity
@@ -1112,7 +1115,7 @@ export default function ScribeExploreView() {
                   >
                     <Feather name="calendar" size={12} color="#94a3b8" />
                     <Text style={{ flex: 1, fontSize: 11, color: deadlineFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {deadlineFrom || 'From DD/MM/YYYY'}
+                      {deadlineFrom || t('from_date_placeholder')}
                     </Text>
                   </TouchableOpacity>
                   <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
@@ -1122,7 +1125,7 @@ export default function ScribeExploreView() {
                   >
                     <Feather name="calendar" size={12} color="#94a3b8" />
                     <Text style={{ flex: 1, fontSize: 11, color: deadlineTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {deadlineTo || 'To DD/MM/YYYY'}
+                      {deadlineTo || t('to_date_placeholder')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1136,7 +1139,7 @@ export default function ScribeExploreView() {
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: THEME.soft, borderRadius: 16, borderWidth: 1, borderColor: THEME.softBorder, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
             <Feather name="clock" size={13} color={THEME.accentText} style={{ marginRight: 2 }} />
             <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
-              Your Slots:
+              {t('your_slots')}
             </Text>
             {String(scribeProfile.availability_slots).split(',').map((slot: string) => slot.trim()).filter(Boolean).map((slot: string) => (
               <View key={slot} style={{ paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#ffffff', borderWidth: 1, borderColor: THEME.softBorder }}>
@@ -1154,7 +1157,7 @@ export default function ScribeExploreView() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                   <Ionicons name="location" size={15} color="#16a34a" />
                   <Text style={{ fontFamily: 'Roboto', color: '#16a34a', fontWeight: '900', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Opportunities Near You ({scribeProfile?.location})
+                    {t('opportunities_near_you', { location: scribeProfile?.location })}
                   </Text>
                 </View>
                 <DesktopGrid>{nearbyExams.map(renderExamCard)}</DesktopGrid>
@@ -1164,7 +1167,7 @@ export default function ScribeExploreView() {
             {/* Other / General Opportunities Segment */}
             <View>
               <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>
-                {scribeLocation && nearbyExams.length > 0 ? 'All Other Opportunities' : t('available_opportunities')}
+                {scribeLocation && nearbyExams.length > 0 ? t('all_other_opportunities') : t('available_opportunities')}
               </Text>
               
               {filteredExams.length === 0 ? (
@@ -1172,9 +1175,9 @@ export default function ScribeExploreView() {
                   <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
                     <Feather name="search" size={24} color={THEME.accentText} />
                   </View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching exams</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>{t('no_matching_exams')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
-                    Try adjusting your search query or filter selections.
+                    {t('adjust_search_desc')}
                   </Text>
                 </View>
               ) : (
@@ -1185,7 +1188,7 @@ export default function ScribeExploreView() {
         ) : (
           <View>
             <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13, marginBottom: 10 }}>
-              Available Assignments
+              {t('available_assignments')}
             </Text>
             
             {filteredAssignments.length === 0 ? (
@@ -1193,9 +1196,9 @@ export default function ScribeExploreView() {
                 <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="search" size={24} color={THEME.accentText} />
                 </View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>No matching assignments</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>{t('no_matching_assignments')}</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
-                  Try adjusting your search query or filter selections.
+                  {t('adjust_search_desc')}
                 </Text>
               </View>
             ) : (

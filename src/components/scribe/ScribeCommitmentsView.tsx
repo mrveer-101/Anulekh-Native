@@ -80,7 +80,7 @@ export default function ScribeCommitmentsView() {
   const inShell = useInDesktopShell();
   // Wide desktop screens show the calendar beside the list instead of above it.
   const twoColumns = useDesktopColumns() > 1;
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   // True while this tab is visible (TabPane keep-alive) — data refreshes only then.
   const isActive = useTabActive();
   // Blocks and cards rise in one after another (off with Reduce Motion).
@@ -346,20 +346,23 @@ export default function ScribeCommitmentsView() {
     // Withdrawal is locked close to the exam to protect the student.
     if (!withdrawalCheck.allowed) {
       Alert.alert(
-        'Withdrawal Locked',
-        'Withdrawal is locked within 24 hours of the scheduled exam date to protect the student. If you have an unavoidable emergency, please contact support.'
+        t('withdrawal_locked_title'),
+        t('withdrawal_locked_msg')
       );
       return;
     }
 
     // Confirm first; the wording depends on whether the scribe was already matched.
     Alert.alert(
-      isConfirmed ? 'Withdraw Commitment' : 'Withdraw Application',
-      `Are you sure you want to withdraw your ${isConfirmed ? 'commitment' : 'application'} for "${exam?.subject || 'this exam'}"?`,
+      isConfirmed ? t('withdraw_commitment') : t('withdraw_application'),
+      t('withdraw_confirm_msg', {
+        type: isConfirmed ? t('commitment_noun') : t('application_noun'),
+        subject: exam?.subject || t('exams'),
+      }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Withdraw',
+          text: t('withdraw'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -388,10 +391,10 @@ export default function ScribeCommitmentsView() {
                 .update({ status: 'rejected' })
                 .eq('id', app.id);
 
-              Alert.alert('Withdrawn', 'Your withdrawal was processed successfully.');
+              Alert.alert(t('withdrawn_title'), t('withdrawn_msg'));
               fetchApplications();
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to process withdrawal.');
+              Alert.alert(t('error'), err.message || 'Failed to process withdrawal.');
             }
           }
         }
@@ -435,10 +438,10 @@ export default function ScribeCommitmentsView() {
 
   /** Status filter pills shown above the list. */
   const FILTERS: { key: 'All' | 'Pending' | 'Completed' | 'Rejected'; label: string }[] = [
-    { key: 'All', label: 'All' },
-    { key: 'Pending', label: 'Pending' },
-    { key: 'Completed', label: 'Completed' },
-    { key: 'Rejected', label: 'Rejected' },
+    { key: 'All', label: t('filter_all_caps') },
+    { key: 'Pending', label: t('filter_pending_caps') },
+    { key: 'Completed', label: t('filter_completed_caps') },
+    { key: 'Rejected', label: t('filter_rejected_caps') },
   ];
 
   // Apply the active filter to the (already newest-first) applications list.
@@ -500,46 +503,46 @@ export default function ScribeCommitmentsView() {
         key={app.id}
         entering={rise(index + 2)}
         style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: isEmergency ? '#fffdfd' : '#ffffff',
           borderRadius: 20,
-          borderWidth: isEmergency ? 2 : 1.5,
-          borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
-          shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
-          shadowOffset: { width: 0, height: 6 }, 
-          shadowOpacity: isEmergency ? 0.12 : 0.07, 
-          shadowRadius: 16, 
-          elevation: 3, 
-          marginBottom: 10,
+          borderWidth: 1.5,
+          borderColor: isEmergency ? '#fca5a5' : '#e2e8f0',
+          shadowColor: '#0f172a', 
+          shadowOffset: { width: 0, height: 4 }, 
+          shadowOpacity: 0.05, 
+          shadowRadius: 12, 
+          elevation: 2, 
+          marginBottom: 12,
           overflow: 'hidden'
         }}
       >
-        {/* Status accent strip (colour matches the status pill) */}
-        <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: isEmergency ? '#dc2626' : badgeText }} />
-
         {/* ── Collapsed Header Row ── */}
         <TouchableOpacity
           onPress={() => toggleExpanded(app.id)}
           activeOpacity={0.8}
           style={{
             flexDirection: 'row', alignItems: 'center',
-            paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+            paddingHorizontal: 16, paddingVertical: 14, gap: 12,
           }}
         >
           {/* Subject icon */}
           <View style={{
-            width: 38, height: 38, borderRadius: 11,
-            backgroundColor: isEmergency ? '#fee2e2' : THEME.soft,
+            width: 42, height: 42, borderRadius: 13,
+            backgroundColor: isEmergency ? '#fef2f2' : '#eff6ff',
             alignItems: 'center', justifyContent: 'center',
             borderWidth: 1,
-            borderColor: isEmergency ? '#fca5a5' : THEME.softBorder,
+            borderColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.15)',
           }}>
-            <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
-              color={isEmergency ? '#dc2626' : THEME.accentText} />
+            <Feather
+              name={isEmergency ? 'alert-triangle' : 'book-open'}
+              size={17}
+              color={isEmergency ? '#dc2626' : '#2563eb'}
+            />
           </View>
 
           {/* Subject Name */}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }} numberOfLines={1}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }} numberOfLines={1}>
               {exam.subject || 'Exam'}
             </Text>
           </View>
@@ -547,18 +550,26 @@ export default function ScribeCommitmentsView() {
           {/* Status pill */}
           <View style={{ 
             backgroundColor: badgeBg, borderWidth: 1, borderColor: badgeBorder, 
-            paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20, marginRight: 4
+            paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
           }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: badgeText }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: badgeText, letterSpacing: 0.4 }}>
               {statusLabel}
             </Text>
           </View>
 
-          {/* Chevron */}
-          <Feather
-            name={isExpanded ? 'chevron-up' : 'chevron-down'}
-            size={16} color="#64748b"
-          />
+          {/* Circular Chevron Button */}
+          <View style={{
+            width: 28, height: 28, borderRadius: 14,
+            backgroundColor: '#f8fafc',
+            alignItems: 'center', justifyContent: 'center',
+            borderWidth: 1, borderColor: '#f1f5f9',
+            marginLeft: 2
+          }}>
+            <Feather
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              size={15} color="#64748b"
+            />
+          </View>
         </TouchableOpacity>
 
         {/* ── Expanded Detail Panel ── */}
@@ -657,8 +668,8 @@ export default function ScribeCommitmentsView() {
                       <TouchableOpacity
                         onPress={() => {
                           Alert.alert(
-                            'Withdrawal Locked',
-                            'Withdrawal is locked within 24 hours of the scheduled exam date to protect the student. If you have an unavoidable emergency, please contact support.'
+                            t('withdrawal_locked_title'),
+                            t('withdrawal_locked_msg')
                           );
                         }}
                         style={{
@@ -677,7 +688,7 @@ export default function ScribeCommitmentsView() {
                       >
                         <Feather name="lock" size={13} color="#64748b" />
                         <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontWeight: '800', fontSize: 12 }}>
-                          Withdrawal Locked (&lt;24h to Exam)
+                          {t('withdrawal_locked')}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -701,7 +712,7 @@ export default function ScribeCommitmentsView() {
                     >
                       <Feather name="x-circle" size={13} color="#ef4444" />
                       <Text style={{ fontFamily: 'Roboto', color: '#ef4444', fontWeight: '800', fontSize: 12 }}>
-                        {type === 'confirmed' ? 'Withdraw Commitment' : 'Withdraw Application'}
+                        {type === 'confirmed' ? t('withdraw_commitment') : t('withdraw_application')}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -712,27 +723,27 @@ export default function ScribeCommitmentsView() {
             {/* If Completed and Review exists, render Star Feedback */}
             {type === 'completed' && review && (
               <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Student Feedback & Ratings</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{t('student_feedback_ratings')}</Text>
                 
                 <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Punctuality:</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('punctuality')}</Text>
                     <StarDisplay rating={review.rating_punctuality} />
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Communication:</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('communication')}</Text>
                     <StarDisplay rating={review.rating_communication} />
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Writing Speed:</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('writing_speed')}</Text>
                     <StarDisplay rating={review.rating_speed} />
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Politeness & Behavior:</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('behavior')}</Text>
                     <StarDisplay rating={review.rating_behavior} />
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e2e8f0', paddingTop: 4, marginTop: 2 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>Overall Rating:</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#0f172a' }}>{t('overall_rating')}</Text>
                     <StarDisplay rating={review.rating_overall} />
                   </View>
                 </View>
@@ -747,10 +758,10 @@ export default function ScribeCommitmentsView() {
                   if (studentReview) {
                     return (
                       <View style={{ gap: 4 }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Your Rating for Student</Text>
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('your_rating_student')}</Text>
                         <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderStyle: 'solid', borderWidth: 1, borderColor: '#e2e8f0', gap: 6 }}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', fontWeight: '700' }}>Overall Rating:</Text>
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569', fontWeight: '700' }}>{t('overall_rating')}</Text>
                             <StarDisplay rating={studentReview.rating_overall} />
                           </View>
                           {studentReview.remark ? (
@@ -768,7 +779,7 @@ export default function ScribeCommitmentsView() {
                       style={{ width: '100%', backgroundColor: 'rgba(234,88,12,0.08)', borderWidth: 1, borderColor: 'rgba(234,88,12,0.22)', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
                     >
                       <Feather name="star" size={12} color="#ea580c" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#ea580c', fontWeight: '800', fontSize: 12 }}>Rate Candidate Student</Text>
+                      <Text style={{ fontFamily: 'Roboto', color: '#ea580c', fontWeight: '800', fontSize: 12 }}>{t('rate_student')}</Text>
                     </TouchableOpacity>
                   );
                 })()}
@@ -789,7 +800,7 @@ export default function ScribeCommitmentsView() {
       {/* Scrollable content; pull-to-refresh reloads everything */}
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 16, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
@@ -838,7 +849,7 @@ export default function ScribeCommitmentsView() {
             >
               <Feather name="calendar" size={14} color="#059669" />
               <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#059669', letterSpacing: -0.3 }}>
-                {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                {currentMonth.toLocaleDateString(lang === 'Hindi' ? 'hi-IN' : lang === 'Gujarati' ? 'gu-IN' : 'en-US', { month: 'long', year: 'numeric' })}
               </Text>
               <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#059669" />
             </TouchableOpacity>
@@ -856,7 +867,7 @@ export default function ScribeCommitmentsView() {
             <>
               {/* Weekdays Row */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
-                {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+                {[t('weekday_sun'), t('weekday_mon'), t('weekday_tue'), t('weekday_wed'), t('weekday_thu'), t('weekday_fri'), t('weekday_sat')].map((day, idx) => (
                   <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
                     <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
                   </View>
@@ -983,15 +994,15 @@ export default function ScribeCommitmentsView() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Confirmed</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_confirmed')}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Applied</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_applied')}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#f87171' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>SOS</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_sos')}</Text>
                 </View>
               </View>
             </>
@@ -1264,14 +1275,14 @@ export default function ScribeCommitmentsView() {
               </View>
               <View>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: '#0f172a' }}>
-                  {callExam?.student_name ?? 'વિદ્યાર્થી'}
+                  {callExam?.student_name ?? t('candidate_student')}
                 </Text>
                 <View style={{
                   marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)',
                   borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
                   alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
                 }}>
-                  <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
+                  <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>{t('candidate_student').toUpperCase()}</Text>
                 </View>
               </View>
             </View>
@@ -1307,7 +1318,7 @@ export default function ScribeCommitmentsView() {
 
             {/* Exam context */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-              વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના વિદ્યાર્થી
+              {t('subject_label')} <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> {t('exam_student_suffix')}
             </Text>
           </View>
 
@@ -1321,10 +1332,10 @@ export default function ScribeCommitmentsView() {
                 if (supported) {
                   await Linking.openURL(url);
                 } else {
-                  Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+                  Alert.alert(t('error'), t('call_not_supported'));
                 }
               } catch {
-                Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+                Alert.alert(t('error'), t('call_error'));
               }
             }}
             style={{
@@ -1406,7 +1417,7 @@ export default function ScribeCommitmentsView() {
                 onPress={() => setRatingModalVisible(false)}
                 style={{ flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>Cancel</Text>
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={submitStudentRating}
@@ -1416,7 +1427,7 @@ export default function ScribeCommitmentsView() {
                 {submittingRating ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 13 }}>Submit Rating</Text>
+                  <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '800', fontSize: 13 }}>{t('submit_rating')}</Text>
                 )}
               </TouchableOpacity>
             </View>

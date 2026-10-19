@@ -34,8 +34,10 @@ import {
   useWindowDimensions,
   Platform,
   Image,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -43,7 +45,6 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
-
 
 import StudentHomeView from '@/components/student/StudentHomeView';
 import StudentRequestsView from '@/components/student/StudentRequestsView';
@@ -53,6 +54,11 @@ import SharedNotificationsView from '@/components/shared/SharedNotificationsView
 import StudentPlanView from '@/components/student/StudentPlanView';
 import ConsoleStudentPC from '@/components/pc_view/ConsoleStudentPC';
 import { TabPane } from '@/components/ui/TabPane';
+import { ClassicHeader } from '@/components/navigation/ClassicHeader';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /** Every screen the dashboard can show; also the accepted values of the `?tab=` route param. */
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
@@ -88,6 +94,7 @@ const MUTED      = '#64748b';
  * @returns The desktop console, a loading spinner, or the mobile tabbed layout.
  */
 export default function StudentDashboard() {
+  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
 
   // ── ALL STATE (must come before any useEffect) ──────────────────────────
@@ -183,8 +190,6 @@ export default function StudentDashboard() {
   // Load session/profile once on mount.
   useEffect(() => { fetchSession(); }, []);
 
-  // Deep-link support: `/console/student?tab=requests` (etc.) opens that tab.
-  // The value is cast without validation, so an unknown tab shows an empty body.
   useEffect(() => {
     if (params.tab) {
       setActiveTab(params.tab as Tab);
@@ -243,108 +248,22 @@ export default function StudentDashboard() {
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
 
-      {/* Background orbs removed for clean white style */}
-
-      {/* ── HEADER ── */}
-      <SafeAreaView edges={['top']} style={{
-        backgroundColor: '#ffffff',
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
-        zIndex: 10,
-      }}>
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
-          borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-        }}>
-          {/* Logo */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{
-              width: 44, height: 44, borderRadius: 14,
-              backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: ACCENT_BD,
-              alignItems: 'center', justifyContent: 'center',
-              padding: 1,
-              overflow: 'hidden',
-            }}>
-              <Image 
-                source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%', borderRadius: 11 }}
-                resizeMode="cover"
-              />
-            </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
-            <View style={{
-              backgroundColor: ACCENT_BG, borderWidth: 1, borderColor: ACCENT_BD,
-              borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
-            }}>
-              <Text style={{ fontFamily: 'Roboto', color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>STUDENT</Text>
-            </View>
-          </View>
-
-          {/* Right Action Icons: Notifications + Profile */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            {/* Bell: opens the Notifications tab and hides the red dot locally (rows are not marked read here) */}
-            <TouchableOpacity
-              onPress={() => { setActiveTab('notifications'); setUnread(0); }}
-              activeOpacity={0.75}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={`Notifications, ${unreadNotifs} unread`}
-              style={{
-                width: 44, height: 44, borderRadius: 15,
-                backgroundColor: '#2563eb',
-                borderWidth: 1.5, borderColor: '#1d4ed8',
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: '#2563eb', shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
-              }}
-            >
-              <Ionicons 
-                name={activeTab === 'notifications' ? "notifications" : "notifications-outline"} 
-                size={20} 
-                color="#ffffff" 
-              />
-              {unreadNotifs > 0 && (
-                <View style={{
-                  position: 'absolute', top: 5, right: 5,
-                  width: 9, height: 9, borderRadius: 4.5,
-                  backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: '#ffffff',
-                }} />
-              )}
-            </TouchableOpacity>
-
-            {/* Avatar: cached photo or first initial; opens the Account (settings) tab */}
-            <TouchableOpacity
-              onPress={() => setActiveTab('settings')}
-              activeOpacity={0.8}
-              style={{
-                width: 44, height: 44, borderRadius: 22,
-                backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
-                overflow: 'hidden',
-              }}
-            >
-              {profilePhoto ? (
-                <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
-              ) : (
-                <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
-                  {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'U'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
+      {/* ── HEADER (Classic Header active) ── */}
+      <ClassicHeader
+        role="student"
+        unreadCount={unreadNotifs}
+        isNotificationActive={activeTab === 'notifications'}
+        profilePhoto={profilePhoto}
+        fullName={profile?.full_name}
+        onNotificationPress={() => { setActiveTab('notifications'); setUnread(0); }}
+        onProfilePress={() => setActiveTab('settings')}
+      />
 
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        <TabPane active={activeTab === 'home'}><StudentHomeView /></TabPane>
+        <TabPane active={activeTab === 'home'}>
+          <StudentHomeView />
+        </TabPane>
         <TabPane active={activeTab === 'requests'}><StudentRequestsView /></TabPane>
         <TabPane active={activeTab === 'plan'}><StudentPlanView /></TabPane>
         <TabPane active={activeTab === 'profile'}><StudentProfileView /></TabPane>
@@ -352,25 +271,28 @@ export default function StudentDashboard() {
         <TabPane active={activeTab === 'notifications'}><SharedNotificationsView /></TabPane>
       </View>
 
-      {/* ── BOTTOM NAV — top corners rounded ── */}
-      <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: '#ffffff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        shadowColor: '#0f172a', shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
-      }}>
+      {/* ── SMOOTH DOCKED BOTTOM NAVBAR ── */}
+      <SafeAreaView
+        edges={['bottom']}
+        style={{
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#f1f5f9',
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.05,
+          shadowRadius: 14,
+          elevation: 8,
+          zIndex: 100,
+        }}
+      >
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingTop: 12,
-          paddingBottom: 12,
-          paddingHorizontal: 16,
-          gap: 6,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.05)',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          justifyContent: 'space-around',
+          paddingHorizontal: 8,
+          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom > 0 ? 6 : 10, 6),
         }}>
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
@@ -379,10 +301,12 @@ export default function StudentDashboard() {
                                    tab.id === 'requests' ? 'nav_requests' :
                                    tab.id === 'plan' ? 'nav_plan' : 'nav_account';
             const translatedLabel = t(translationKey as any);
+
             return (
               <TouchableOpacity
                 key={tab.id}
                 onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setActiveTab(tab.id);
                   announceForAccessibility(`${translatedLabel} tab selected`);
                 }}
@@ -396,34 +320,42 @@ export default function StudentDashboard() {
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingVertical: 9,
-                  paddingHorizontal: 4,
-                  borderRadius: 18,
-                  backgroundColor: active ? ACCENT_BG : 'transparent',
-                  borderWidth: 1,
-                  borderColor: active ? ACCENT_BD : 'transparent',
+                  paddingVertical: 3,
                 }}
               >
                 <Ionicons
                   name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={21}
-                  color={active ? ACCENT : '#94a3b8'}
+                  size={24}
+                  color={active ? '#1D4ED8' : '#94A3B8'}
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}
                 />
+
                 <Text
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}
                   style={{
                     fontFamily: 'Roboto',
-                    fontSize: 11.5,
-                    fontWeight: active ? '800' : '600',
+                    fontSize: 11,
+                    fontWeight: active ? '800' : '500',
+                    color: active ? '#1D4ED8' : '#64748B',
+                    letterSpacing: -0.1,
                     marginTop: 3,
-                    color: active ? ACCENT : '#64748b',
                   }}
                 >
                   {translatedLabel}
                 </Text>
+
+                {/* Micro indicator dot below label */}
+                <View
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: active ? '#1D4ED8' : 'transparent',
+                    marginTop: 3,
+                  }}
+                />
               </TouchableOpacity>
             );
           })}

@@ -15,12 +15,12 @@
  * deletion calls the backend directly at `POST /api/auth/delete-account`. The welcome flags live only
  * in AsyncStorage; the photo URL is cached there too (`profile_photo_<userId>`).
  */
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Pressable, Switch } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Pressable, Switch, Modal } from 'react-native';
 import { Feather, FontAwesome5, Ionicons } from '@expo/vector-icons';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { router } from 'expo-router';
-import { supabase } from '@/core/supabase';
+import { supabase, API_URL } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage, LanguageType } from '@/core/translation';
 import * as ImagePicker from 'expo-image-picker';
@@ -48,19 +48,31 @@ const NOTIF_TESTS: {
 
 /**
  * Shared TextInput style for the form fields.
- * @param editable false gives the greyed read-only variant (phone, email).
+ * - When in locked view mode: has the default slight grey shade (#f8fafc), text #475569.
+ * - When in edit mode: editable fields transform to a clean white shade (#ffffff) with crisp border and subtle elevation.
+ * - Always-locked fields (like verified phone) remain grey (#f1f5f9).
  */
-const inputStyle = (editable = true) => ({
-  backgroundColor: editable ? '#f8fafc' : '#f1f5f9',
-  borderWidth: 1.5,
-  borderColor: '#e2e8f0',
-  borderRadius: 14,
-  paddingHorizontal: 14,
-  paddingVertical: 11,
-  fontSize: 13.5,
-  color: editable ? '#0f172a' : '#475569',
-  fontWeight: '600' as const,
-});
+const inputStyle = (isFieldEditable = true, inEditMode = false) => {
+  const isCurrentlyEditing = isFieldEditable && inEditMode;
+  return {
+    backgroundColor: isCurrentlyEditing ? '#ffffff' : (isFieldEditable ? '#f8fafc' : '#f1f5f9'),
+    borderWidth: 1.5,
+    borderColor: isCurrentlyEditing ? '#cbd5e1' : '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontSize: 13.5,
+    color: isCurrentlyEditing ? '#0f172a' : '#475569',
+    fontWeight: '600' as const,
+    ...(isCurrentlyEditing ? {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 3,
+      elevation: 1,
+    } : {}),
+  };
+};
 
 /** Card title row: tinted icon badge + uppercase title, with an optional element on the right. */
 function SectionHeader({ theme, icon, title, right }: { theme: PortalTheme; icon: FeatherName; title: string; right?: React.ReactNode }) {
@@ -126,6 +138,7 @@ function Chip({ theme, label, selected, onPress }: { theme: PortalTheme; label: 
 export default function SharedSettingsView() {
   // Inside the desktop console: no own page background, wider layout (see ui/DesktopShell).
   const inShell = useInDesktopShell();
+  const scrollViewRef = useRef<ScrollView>(null);
   // Translation: current language, language switcher and the t() string lookup.
   const { lang, changeLanguage, t } = useLanguage();
   // Session user and the always-visible header / basic fields.
@@ -137,6 +150,9 @@ export default function SharedSettingsView() {
 
   // Expanded Detail fields
   const [isExpanded, setIsExpanded] = useState(false);
+  // Edit mode toggle: when false (view mode), details are locked with slight grey shade.
+  // When true (edit mode), editable fields turn to white shade (#ffffff) with active styling.
+  const [isEditing, setIsEditing] = useState(false);
   const [dob, setDob] = useState('');
   // gender is local only: it is neither loaded from nor saved to the profile.
   const [gender, setGender] = useState('male');
@@ -161,6 +177,41 @@ export default function SharedSettingsView() {
   const [notifStatusText, setNotifStatusText] = useState<string | null>(null);
   // Haptic feedback setting (core/haptics), shown as a switch in the Notifications card.
   const [hapticsOn, setHapticsOn] = useState(true);
+
+  // DUMMY TOGGLE: Visual mockup toggle representing master push notification switch.
+  // By default ON (true). Toggling this updates the UI switch state only and does NOT
+  // turn off backend notifications, socket events, or native push listeners.
+  const [allowNotifications, setAllowNotifications] = useState(true);
+
+  // Sub-tab selection inside the Notification Settings card: 'settings' (Preferences) vs 'test' (Test Alerts)
+  const [notifSubTab, setNotifSubTab] = useState<'settings' | 'test'>('settings');
+
+  // ── 7-Day Account Deletion Hold & 2-Step Verification States (KISS Framework) ──
+  interface DeletionHoldInfo {
+    scheduledAt: string;
+    deleteAt: string;
+    daysLeft: number;
+    hoursLeft: number;
+  }
+  const [deletionHold, setDeletionHold] = useState<DeletionHoldInfo | null>(null);
+
+  // 2-Step verification modal states
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+  const [verifyPassword, setVerifyPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [verifyError, setVerifyError] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // ── Change / Forgot Password Modal States ──
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPass, setForgotNewPass] = useState('');
+  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // Visual theme follows the account's role; cards rise in one after another (off with Reduce Motion).
   const theme = role === 'scribe' ? SCRIBE_THEME : STUDENT_THEME;
@@ -217,6 +268,9 @@ export default function SharedSettingsView() {
       }
       setUser(session.user);
       setEmail(session.user.email || '');
+
+      // Check any active 7-day deletion hold for this account
+      checkDeletionHold(session.user.id);
 
       // Cached photo first (instant), then the saved avatar_url from the profile below.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
@@ -350,6 +404,25 @@ export default function SharedSettingsView() {
         .eq('id', user.id);
 
       if (error) throw error;
+
+      // Keep local session email in sync if updated
+      if (email.trim() && user?.email !== email.trim()) {
+        try {
+          const val = await AsyncStorage.getItem('local_db_session');
+          if (val) {
+            const parsed = JSON.parse(val);
+            if (parsed?.user) {
+              parsed.user.email = email.trim();
+              await AsyncStorage.setItem('local_db_session', JSON.stringify(parsed));
+              setUser(parsed.user);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Lock back into view mode on successful save
+      setIsEditing(false);
+
       Alert.alert(t('success'), t('save_success_desc'));
     } catch (error: any) {
       Alert.alert(t('error'), error.message || 'Error updating profile.');
@@ -378,41 +451,235 @@ export default function SharedSettingsView() {
     ]);
   };
 
+  // =========================================================================
+  // ── ACCOUNT DELETION HOLD (7 DAYS) & 2-STEP PASSWORD VERIFICATION (KISS) ──
+  // =========================================================================
+
   /**
-   * Confirms, then asks the backend to delete the account (`POST /api/auth/delete-account` with
-   * `{ user_id }`), clears all AsyncStorage, signs out and returns to /landing.
+   * Loads and calculates any pending 7-day account deletion hold from AsyncStorage.
+   * If the 7 days have already expired, triggers permanent account deletion.
    */
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account Permanently',
-      'Are you sure you want to permanently delete your Anulekh account? All your profile data, exam requests, and chat history will be permanently wiped. This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              if (user?.id) {
-                // The shim has no apiHost field, so this resolves to the Render backend URL.
-                // The response is not checked: local data is cleared either way.
-                await fetch(`${supabase.auth ? (supabase as any).apiHost || 'https://anulekh-axum.onrender.com' : 'https://anulekh-axum.onrender.com'}/api/auth/delete-account`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ user_id: user.id })
-                });
-              }
-              await AsyncStorage.clear();
-              await supabase.auth.signOut();
-              Alert.alert('Account Deleted', 'Your account has been deleted successfully.');
-              router.replace('/landing');
-            } catch (e: any) {
-              Alert.alert('Error', e?.message || 'Failed to delete account. Please try again.');
-            }
-          }
-        }
-      ]
-    );
+  const checkDeletionHold = async (userId: string) => {
+    try {
+      const raw = await AsyncStorage.getItem(`account_deletion_hold_${userId}`);
+      if (!raw) {
+        setDeletionHold(null);
+        return;
+      }
+      const data = JSON.parse(raw);
+      const now = Date.now();
+      const deleteTime = new Date(data.deleteAt).getTime();
+      const diffMs = deleteTime - now;
+
+      // If the 7-day grace period has elapsed: execute permanent purge
+      if (diffMs <= 0) {
+        await fetch(`${API_URL}/api/auth/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId })
+        });
+        await AsyncStorage.removeItem(`account_deletion_hold_${userId}`);
+        await AsyncStorage.clear();
+        await supabase.auth.signOut();
+        router.replace('/landing');
+        return;
+      }
+
+      // Calculate days and hours remaining
+      const daysLeft = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+      const hoursLeft = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+      setDeletionHold({
+        scheduledAt: data.scheduledAt,
+        deleteAt: data.deleteAt,
+        daysLeft: Math.max(0, daysLeft),
+        hoursLeft: Math.max(0, hoursLeft),
+      });
+    } catch (err) {
+      console.warn('Error checking account deletion hold:', err);
+    }
+  };
+
+  /**
+   * Opens the 2-step account deletion verification modal starting at Step 1.
+   */
+  const handleOpenDeleteModal = () => {
+    setDeleteStep(1);
+    setVerifyPassword('');
+    setVerifyError('');
+    setDeleteModalVisible(true);
+  };
+
+  /**
+   * Verifies user password against the auth service via /api/auth/signin.
+   * Returns true if credentials are valid, false otherwise.
+   */
+  const verifyUserPassword = async (passwordToVerify: string): Promise<boolean> => {
+    try {
+      const loginIdentifier = user?.email || user?.phone || email || phone;
+      const res = await fetch(`${API_URL}/api/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: loginIdentifier,
+          email: user?.email || email,
+          phone: user?.phone || phone,
+          password: passwordToVerify,
+        }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json().catch(() => ({}));
+      return !!data.user;
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * Step 2 confirmation handler: verifies password, activates 7-day deletion hold,
+   * stores timestamps in AsyncStorage, and updates UI status.
+   */
+  const handleConfirmScheduleDelete = async () => {
+    if (!verifyPassword.trim()) {
+      setVerifyError(t('enter_password'));
+      return;
+    }
+    setIsVerifying(true);
+    setVerifyError('');
+
+    try {
+      const isValid = await verifyUserPassword(verifyPassword.trim());
+      if (!isValid) {
+        setVerifyError(t('incorrect_password'));
+        setIsVerifying(false);
+        return;
+      }
+
+      // Valid password! Schedule deletion 7 days into the future
+      const now = new Date();
+      const deleteDate = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const holdPayload = {
+        scheduledAt: now.toISOString(),
+        deleteAt: deleteDate.toISOString()
+      };
+
+      if (user?.id) {
+        await AsyncStorage.setItem(`account_deletion_hold_${user.id}`, JSON.stringify(holdPayload));
+      }
+
+      setDeletionHold({
+        scheduledAt: holdPayload.scheduledAt,
+        deleteAt: holdPayload.deleteAt,
+        daysLeft: 7,
+        hoursLeft: 0
+      });
+
+      setDeleteModalVisible(false);
+      setVerifyPassword('');
+      setDeleteStep(1);
+
+      Alert.alert(
+        t('status_hold_deletion'),
+        t('hold_warning_text'),
+        [{ text: 'OK' }]
+      );
+    } catch (err: any) {
+      setVerifyError(err?.message || 'Verification failed. Please try again.');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  /**
+   * Recovery Handler: Cancels the pending deletion hold immediately,
+   * restores the account to full Active status, and clears the timer.
+   */
+  const handleCancelDeletion = async () => {
+    try {
+      if (user?.id) {
+        await AsyncStorage.removeItem(`account_deletion_hold_${user.id}`);
+      }
+      setDeletionHold(null);
+      Alert.alert(t('success'), t('account_recovered_success'));
+    } catch (err) {
+      Alert.alert(t('error'), 'Could not recover account. Please try again.');
+    }
+  };
+
+  /**
+   * Sends a 6-digit OTP to the user's email for password change/recovery.
+   */
+  const handleSendPasswordOtp = async () => {
+    const targetEmail = (email || user?.email || '').trim();
+    if (!targetEmail) {
+      setForgotError('No email registered with this account.');
+      return;
+    }
+    if (targetEmail.toLowerCase().endsWith('@anulekh.app')) {
+      setForgotError('Password reset via OTP is only available for accounts registered with a real email address. For phone accounts, please contact support.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const res = await fetch(`${API_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: targetEmail }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to send OTP.');
+      setForgotStep(2);
+      Alert.alert(t('success'), `Verification code sent to ${targetEmail}`);
+    } catch (err: any) {
+      setForgotError(err?.message || 'Failed to send verification code.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  /**
+   * Resets password using the received OTP via /api/auth/reset-password.
+   */
+  const handleResetPasswordWithOtp = async () => {
+    if (!forgotOtp.trim()) {
+      setForgotError(t('otp_code') + ' is required.');
+      return;
+    }
+    if (forgotNewPass.length < 6) {
+      setForgotError(t('new_password') + ' must be at least 6 characters.');
+      return;
+    }
+    if (forgotNewPass !== forgotConfirmPass) {
+      setForgotError('Passwords do not match.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const targetEmail = (email || user?.email || '').trim();
+      const res = await fetch(`${API_URL}/api/auth/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: targetEmail,
+          otp: forgotOtp.trim(),
+          new_password: forgotNewPass,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to update password.');
+
+      Alert.alert(t('success'), t('password_updated_success'));
+      setPasswordModalVisible(false);
+      setForgotStep(1);
+      setForgotOtp('');
+      setForgotNewPass('');
+      setForgotConfirmPass('');
+    } catch (err: any) {
+      setForgotError(err?.message || 'Failed to update password. Please try again.');
+    } finally {
+      setForgotLoading(false);
+    }
   };
 
   // Spinner until the profile has loaded.
@@ -434,7 +701,7 @@ export default function SharedSettingsView() {
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: theme.orb }} />}
 
     {/* Scrollable column of cards; each card rises in with rise(index) */}
-    <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <ScrollView ref={scrollViewRef} style={{ flex: 1, paddingHorizontal: inShell ? 0 : 20 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
       {/* Profile Header Card (soft gradient banner) */}
       <Animated.View entering={rise(0)} style={[{
@@ -519,59 +786,110 @@ export default function SharedSettingsView() {
         >
           <Feather name="camera" size={16} color={theme.accentText} style={{ marginBottom: 2 }} />
           <Text style={{ fontSize: 9, fontWeight: '800', color: theme.accentText, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Upload
+            {t('upload')}
           </Text>
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Editable Account Information Card */}
+      {/* Editable Account Information Card (restored at top under profile photo & name) */}
       <Animated.View entering={rise(1)} style={portalCardStyle(theme)}>
-        {/* Title row; the Details pill toggles the extra fields below */}
+        {/* Title row; Edit button + Details/Collapse pill */}
         <SectionHeader
           theme={theme}
           icon="user"
-          title="Basic Information"
+          title={t('basic_information')}
           right={
-            <TouchableOpacity
-              onPress={() => setIsExpanded(!isExpanded)}
-              accessibilityRole="button"
-              accessibilityLabel={isExpanded ? 'Collapse details' : 'Show all details'}
-              style={{
-                flexDirection: 'row', alignItems: 'center', gap: 4,
-                paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
-                backgroundColor: theme.soft, borderWidth: 1, borderColor: theme.softBorder,
-              }}
-            >
-              <Text style={{ fontSize: 11.5, fontWeight: '800', color: theme.accentText }}>
-                {isExpanded ? 'Collapse' : 'Details'}
-              </Text>
-              <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={theme.accentText} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {/* Edit Mode Toggle Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  const next = !isEditing;
+                  setIsEditing(next);
+                  if (next) setIsExpanded(true);
+                  haptic('tap');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={isEditing ? t('editing_btn') : t('edit_btn')}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+                  backgroundColor: isEditing ? theme.solid : theme.soft,
+                  borderWidth: 1, borderColor: isEditing ? theme.solid : theme.softBorder,
+                }}
+              >
+                <Feather name={isEditing ? 'check' : 'edit-2'} size={12} color={isEditing ? '#ffffff' : theme.accentText} />
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: isEditing ? '#ffffff' : theme.accentText }}>
+                  {isEditing ? t('editing_btn') : t('edit_btn')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Details / Collapse pill */}
+              <TouchableOpacity
+                onPress={() => setIsExpanded(!isExpanded)}
+                accessibilityRole="button"
+                accessibilityLabel={isExpanded ? t('collapse') : t('details')}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 4,
+                  paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+                  backgroundColor: theme.soft, borderWidth: 1, borderColor: theme.softBorder,
+                }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: theme.accentText }}>
+                  {isExpanded ? t('collapse') : t('details')}
+                </Text>
+                <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={13} color={theme.accentText} />
+              </TouchableOpacity>
+            </View>
           }
         />
 
-        {/* Form fields: name is editable, phone is read-only */}
+        {/* Edit mode active hint banner */}
+        {isEditing && (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6,
+            backgroundColor: theme.soft, paddingHorizontal: 12, paddingVertical: 7,
+            borderRadius: 12, borderWidth: 1, borderColor: theme.softBorder,
+            marginBottom: 10,
+          }}>
+            <Feather name="edit-3" size={13} color={theme.accentText} />
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: theme.accentText, flex: 1 }}>
+              {t('edit_mode_active')}
+            </Text>
+          </View>
+        )}
+
+        {/* Form fields: Normal locked view has slight grey shade; edit mode gives pure white shade */}
         <View style={{ gap: 14 }}>
           {/* Full Name */}
           <View>
-            <FieldLabel theme={theme} icon="user" label="Full Name" />
+            <FieldLabel theme={theme} icon="user" label={t('full_name')} />
             <TextInput
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Your Name"
+              editable={isEditing}
+              placeholder={t('your_name')}
               placeholderTextColor="#94a3b8"
-              style={inputStyle()}
+              style={inputStyle(true, isEditing)}
             />
           </View>
 
-          {/* Phone Number */}
+          {/* Mobile / Phone Number - STRICTLY NON-EDITABLE */}
           <View>
-            <FieldLabel theme={theme} icon="phone" label="Mobile Number" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+              <FieldLabel theme={theme} icon="phone" label={t('mobile_number')} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f1f5f9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                <Feather name="lock" size={9} color="#64748b" />
+                <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#64748b' }}>Verified</Text>
+              </View>
+            </View>
             <TextInput
               value={phone}
               editable={false}
-              style={inputStyle(false)}
+              style={[inputStyle(false, false), { backgroundColor: '#f1f5f9', color: '#64748b' }]}
             />
+            <Text style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3 }}>
+              {t('phone_non_editable')}
+            </Text>
           </View>
 
           {/* Expanded Fields */}
@@ -580,94 +898,105 @@ export default function SharedSettingsView() {
               entering={reduceMotion ? undefined : FadeInDown.duration(260)}
               style={{ gap: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#eef2f7', marginTop: 4 }}
             >
-
-              {/* Email Address */}
+              {/* Email Address - Primary Read-Only */}
               <View>
-                <FieldLabel theme={theme} icon="mail" label="Email Address" />
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <FieldLabel theme={theme} icon="mail" label={t('email_address_readonly')} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#f1f5f9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                    <Feather name="lock" size={9} color="#64748b" />
+                    <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#64748b' }}>Primary</Text>
+                  </View>
+                </View>
                 <TextInput
-                  value={email}
+                  value={email.endsWith('@anulekh.app') ? `${phone || user?.phone || 'Mobile'} (Phone Account)` : email}
                   editable={false}
-                  style={inputStyle(false)}
+                  style={[inputStyle(false, false), { backgroundColor: '#f1f5f9', color: '#64748b' }]}
                 />
               </View>
 
               {/* Date of Birth */}
               <View>
-                <FieldLabel theme={theme} icon="calendar" label="Date of Birth" />
+                <FieldLabel theme={theme} icon="calendar" label={t('dob')} />
                 <TextInput
                   value={dob}
                   onChangeText={setDob}
+                  editable={isEditing}
                   placeholder="YYYY-MM-DD"
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
               {/* Gender */}
               <View>
-                <FieldLabel theme={theme} ionicon="transgender-outline" label="Gender" />
+                <FieldLabel theme={theme} ionicon="transgender-outline" label={t('gender')} />
                 <TextInput
                   value={gender}
                   onChangeText={setGender}
-                  placeholder="Gender"
+                  editable={isEditing}
+                  placeholder={t('gender')}
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
               {/* City / Location */}
               <View>
-                <FieldLabel theme={theme} icon="map-pin" label="City / State" />
+                <FieldLabel theme={theme} icon="map-pin" label={t('city_state')} />
                 <TextInput
                   value={location}
                   onChangeText={setLocation}
-                  placeholder="City, State"
+                  editable={isEditing}
+                  placeholder={t('city_state')}
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
               {/* Highest Qualification Level */}
               <View>
-                <FieldLabel theme={theme} icon="book-open" label="Highest Qualification Level" />
+                <FieldLabel theme={theme} icon="book-open" label={t('highest_qualification')} />
                 <TextInput
                   value={educationLevel}
                   onChangeText={setEducationLevel}
-                  placeholder="e.g. Undergraduate"
+                  editable={isEditing}
+                  placeholder={t('highest_qualification')}
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
               {/* Current Status / Occupation */}
               <View>
-                <FieldLabel theme={theme} icon="briefcase" label="Current Status / Occupation" />
+                <FieldLabel theme={theme} icon="briefcase" label={t('current_status_occupation')} />
                 <TextInput
                   value={occupation}
                   onChangeText={setOccupation}
-                  placeholder="e.g. Working Professional"
+                  editable={isEditing}
+                  placeholder={t('current_status_occupation')}
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
               {/* Government ID / Aadhar Number */}
               <View>
-                <FieldLabel theme={theme} icon="shield" label="Aadhar / Government ID Number" />
+                <FieldLabel theme={theme} icon="shield" label={t('aadhar_gov_id')} />
                 <TextInput
                   value={aadharNumber}
                   onChangeText={setAadharNumber}
-                  placeholder="Government ID / Aadhar Number"
+                  editable={isEditing}
+                  placeholder={t('aadhar_gov_id')}
                   placeholderTextColor="#94a3b8"
-                  style={inputStyle()}
+                  style={inputStyle(true, isEditing)}
                 />
               </View>
 
-              {/* Verification Proof Documents (Read Only Row style) */}
+              {/* Verification Proof Documents Preview */}
               <View style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 14, gap: 10 }}>
-                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Verification Documents</Text>
-
-                {/* Shows the stored file names only; "View" is a simulated preview */}
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+                  {t('verification_documents')}
+                </Text>
                 {[fileLabel(aadharImageProof || 'government_id_proof.jpg'), fileLabel(certificationProof || 'educational_certificate.pdf')].map((fileName, i) => (
                   <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.soft, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.softBorder }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
@@ -684,72 +1013,58 @@ export default function SharedSettingsView() {
                       accessibilityLabel={`View ${fileName}`}
                       style={{ backgroundColor: theme.solid, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 10 }}
                     >
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#ffffff' }}>View</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#ffffff' }}>{t('view')}</Text>
                     </TouchableOpacity>
                   </View>
                 ))}
               </View>
 
-              {/* Scribe Specific Profile Details */}
+              {/* Scribe Specific Configuration */}
               {role === 'scribe' && (
                 <View style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 14, gap: 14 }}>
-                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Scribe Configuration</Text>
-
-                  {/* First Time Scribe Switcher Option */}
+                  <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {t('scribe_config')}
+                  </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' }}>
-                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#334155' }}>First Time Scribe?</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#334155' }}>{t('first_time_scribe')}</Text>
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <Chip theme={theme} label="Yes" selected={firstTime} onPress={() => setFirstTime(true)} />
-                      <Chip theme={theme} label="No" selected={!firstTime} onPress={() => setFirstTime(false)} />
+                      <Chip theme={theme} label={t('yes')} selected={firstTime} onPress={() => setFirstTime(true)} />
+                      <Chip theme={theme} label={t('no')} selected={!firstTime} onPress={() => setFirstTime(false)} />
                     </View>
                   </View>
-
-                  {/* Languages Selector */}
                   <View>
-                    <FieldLabel theme={theme} icon="globe" label="Preferred Scribe Languages" />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                      {/* Tapping a chip toggles that language in selectedLanguages */}
-                      {['English', 'Hindi', 'Gujarati'].map(langOption => {
-                        const isSelected = selectedLanguages.includes(langOption);
+                    <FieldLabel theme={theme} icon="globe" label={t('preferred_scribe_languages')} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                      {['English', 'Hindi', 'Gujarati'].map(langOpt => {
+                        const isSel = selectedLanguages.includes(langOpt);
                         return (
                           <Chip
-                            key={langOption}
+                            key={langOpt}
                             theme={theme}
-                            label={langOption}
-                            selected={isSelected}
-                            onPress={() => {
-                              if (isSelected) {
-                                setSelectedLanguages(selectedLanguages.filter(l => l !== langOption));
-                              } else {
-                                setSelectedLanguages([...selectedLanguages, langOption]);
-                              }
-                            }}
+                            label={langOpt}
+                            selected={isSel}
+                            onPress={() => setSelectedLanguages(isSel ? selectedLanguages.filter(l => l !== langOpt) : [...selectedLanguages, langOpt])}
                           />
                         );
                       })}
                     </View>
                   </View>
-
-                  {/* Availability Slots */}
                   <View style={{ marginTop: 2 }}>
-                    <FieldLabel theme={theme} icon="clock" label="Availability Slots" />
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                      {/* Tapping a chip toggles that slot in availabilitySlots */}
-                      {['Morning', 'Afternoon', 'Evening'].map(slotOption => {
-                        const isSelected = availabilitySlots.includes(slotOption);
+                    <FieldLabel theme={theme} icon="clock" label={t('availability_slots')} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+                      {[
+                        { key: 'Morning', label: t('slot_morning') },
+                        { key: 'Afternoon', label: t('slot_afternoon') },
+                        { key: 'Evening', label: t('slot_evening') }
+                      ].map(slotOpt => {
+                        const isSel = availabilitySlots.includes(slotOpt.key);
                         return (
                           <Chip
-                            key={slotOption}
+                            key={slotOpt.key}
                             theme={theme}
-                            label={slotOption}
-                            selected={isSelected}
-                            onPress={() => {
-                              if (isSelected) {
-                                setAvailabilitySlots(availabilitySlots.filter(s => s !== slotOption));
-                              } else {
-                                setAvailabilitySlots([...availabilitySlots, slotOption]);
-                              }
-                            }}
+                            label={slotOpt.label}
+                            selected={isSel}
+                            onPress={() => setAvailabilitySlots(isSel ? availabilitySlots.filter(s => s !== slotOpt.key) : [...availabilitySlots, slotOpt.key])}
                           />
                         );
                       })}
@@ -757,10 +1072,8 @@ export default function SharedSettingsView() {
                   </View>
                 </View>
               )}
-
             </Animated.View>
           )}
-
         </View>
       </Animated.View>
 
@@ -814,163 +1127,866 @@ export default function SharedSettingsView() {
 
       </Animated.View>
 
-      {/* Notification settings card: haptic feedback switch */}
-      <Animated.View entering={rise(3)} style={portalCardStyle(theme)}>
-        <SectionHeader theme={theme} icon="bell" title="Notifications" />
-
-        {/* Haptic feedback on/off (saved on the device, see core/haptics) */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
-          <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
-            <Feather name="smartphone" size={17} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-          </View>
-          <Text style={{ flex: 1, fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>Haptic feedback</Text>
-          <Switch
-            value={hapticsOn}
-            onValueChange={toggleHaptics}
-            trackColor={{ false: '#cbd5e1', true: theme.primary }}
-            thumbColor="#ffffff"
-            {...({ activeThumbColor: '#ffffff' } as object)} // web-only prop: keep the knob white when on
-            accessibilityLabel="Haptic feedback"
-          />
-        </View>
-      </Animated.View>
-
-      {/* Test alerts card: three round icon buttons in one row, a one-word label under each.
-          Each plays its own haptic, then sends a demo notification. */}
+      {/* Notification settings card: sub-tabs for Preferences (with master switch & haptics) and Test Alerts */}
       <Animated.View entering={rise(3)} style={portalCardStyle(theme)}>
         <SectionHeader
           theme={theme}
-          icon="send"
-          title="Test Alerts"
+          icon="bell"
+          title={t('notifications_settings')}
           right={
             <View style={{ backgroundColor: theme.soft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: theme.softBorder }}>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: theme.accentText }}>TEST</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: theme.accentText }}>
+                {notifSubTab === 'test' ? 'TEST ALERTS' : 'PUSH'}
+              </Text>
             </View>
           }
         />
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-          {NOTIF_TESTS.map((n) => (
-            <Pressable
-              key={n.type}
-              onPress={() => handleSendTestNotification(n.type)}
-              disabled={notifTriggering}
-              accessibilityRole="button"
-              accessibilityLabel={n.a11yLabel}
-              accessibilityHint={n.a11yHint}
-              style={({ pressed }) => ({
-                alignItems: 'center',
-                gap: 8,
-                minWidth: 72,
-                opacity: notifTriggering ? 0.6 : 1,
-                transform: [{ scale: pressed ? 0.92 : 1 }],
-              })}
-            >
-              <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: n.bg, borderWidth: 1.5, borderColor: n.border, alignItems: 'center', justifyContent: 'center' }}>
-                <Feather name={n.icon} size={22} color={n.color} importantForAccessibility="no" accessibilityElementsHidden={true} />
-              </View>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>{n.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* Status line for the last test notification (auto-clears after 5 s) */}
-        {notifStatusText && (
-          <View
-            accessible={true}
-            accessibilityRole="alert"
+        {/* Sub-tab navigation: switch between Settings/Preferences and Test Alerts */}
+        <View style={{
+          flexDirection: 'row',
+          backgroundColor: '#f1f5f9',
+          padding: 3,
+          borderRadius: 12,
+          marginBottom: 14,
+        }}>
+          <TouchableOpacity
+            onPress={() => setNotifSubTab('settings')}
             style={{
-              marginTop: 12, padding: 11, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8,
-              backgroundColor: notifIsError ? '#fef2f2' : theme.soft,
-              borderWidth: 1, borderColor: notifIsError ? '#fecaca' : theme.softBorder,
+              flex: 1,
+              paddingVertical: 7,
+              borderRadius: 9,
+              alignItems: 'center',
+              backgroundColor: notifSubTab === 'settings' ? '#ffffff' : 'transparent',
+              shadowColor: notifSubTab === 'settings' ? '#000' : 'transparent',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: notifSubTab === 'settings' ? 0.08 : 0,
+              shadowRadius: 2,
+              elevation: notifSubTab === 'settings' ? 1 : 0,
             }}
           >
-            <Feather
-              name={notifIsError ? 'alert-circle' : notifTriggering ? 'loader' : 'check-circle'}
-              size={15}
-              color={notifIsError ? '#dc2626' : theme.accentText}
-              importantForAccessibility="no"
-              accessibilityElementsHidden={true}
-            />
-            <Text numberOfLines={1} style={{ fontSize: 12, color: '#334155', fontWeight: '600', flex: 1 }}>{notifStatusText}</Text>
+            <Text style={{
+              fontSize: 12,
+              fontWeight: '800',
+              color: notifSubTab === 'settings' ? theme.solid : '#64748b',
+            }}>
+              {t('preferences')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setNotifSubTab('test')}
+            style={{
+              flex: 1,
+              paddingVertical: 7,
+              borderRadius: 9,
+              alignItems: 'center',
+              backgroundColor: notifSubTab === 'test' ? '#ffffff' : 'transparent',
+              shadowColor: notifSubTab === 'test' ? '#000' : 'transparent',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: notifSubTab === 'test' ? 0.08 : 0,
+              shadowRadius: 2,
+              elevation: notifSubTab === 'test' ? 1 : 0,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '800',
+                color: notifSubTab === 'test' ? theme.solid : '#64748b',
+              }}>
+                {t('test_alerts')}
+              </Text>
+              <View style={{
+                backgroundColor: notifSubTab === 'test' ? theme.soft : '#e2e8f0',
+                paddingHorizontal: 6,
+                paddingVertical: 1.5,
+                borderRadius: 6,
+              }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: notifSubTab === 'test' ? theme.accentText : '#64748b' }}>
+                  3
+                </Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {notifSubTab === 'settings' ? (
+          <View>
+            {/* DUMMY TOGGLE: Master Push Notifications on/off toggle.
+                - Default state: ON (true).
+                - Dummy behavior: Updates local UI state so the user sees immediate visual feedback.
+                - It does NOT turn off real push notifications or disable backend event dispatching,
+                  ensuring background delivery and real-time updates are never accidentally broken. */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 12 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                  <Feather name="bell" size={17} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>{t('app_notifications')}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{t('app_notifications_desc')}</Text>
+                </View>
+              </View>
+              <Switch
+                value={allowNotifications}
+                onValueChange={setAllowNotifications}
+                trackColor={{ false: '#cbd5e1', true: theme.primary }}
+                thumbColor="#ffffff"
+                {...({ activeThumbColor: '#ffffff' } as object)}
+                accessibilityLabel={t('app_notifications')}
+              />
+            </View>
+
+            <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 6 }} />
+
+            {/* Haptic feedback on/off (saved on the device, see core/haptics) */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 12 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+                  <Feather name="smartphone" size={17} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>{t('haptic_feedback')}</Text>
+                </View>
+              </View>
+              <Switch
+                value={hapticsOn}
+                onValueChange={toggleHaptics}
+                trackColor={{ false: '#cbd5e1', true: theme.primary }}
+                thumbColor="#ffffff"
+                {...({ activeThumbColor: '#ffffff' } as object)}
+                accessibilityLabel={t('haptic_feedback')}
+              />
+            </View>
+          </View>
+        ) : (
+          <View style={{ paddingTop: 4 }}>
+            {/* Test alerts sub-tab: three round test buttons (Match, SOS, Reminder) shifted cleanly here */}
+            <Text style={{ fontSize: 11.5, color: '#64748b', marginBottom: 14 }}>
+              {lang === 'Hindi'
+                ? 'अपने डिवाइस पर सूचनाएं कैसे दिखाई देती हैं, यह जांचने के लिए नीचे दिए गए अलर्ट बटन दबाएं:'
+                : lang === 'Gujarati'
+                ? 'તમારા ઉપકરણ પર સૂચનાઓ કેવી રીતે દેખાય છે તે ચકાસવા માટે નીચેના ચેતવણી બટનો દબાવો:'
+                : 'Tap any alert button below to test how live notifications appear on your device:'}
+            </Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+              {NOTIF_TESTS.map((n) => (
+                <Pressable
+                  key={n.type}
+                  onPress={() => handleSendTestNotification(n.type)}
+                  disabled={notifTriggering}
+                  accessibilityRole="button"
+                  accessibilityLabel={n.a11yLabel}
+                  accessibilityHint={n.a11yHint}
+                  style={({ pressed }) => ({
+                    alignItems: 'center',
+                    gap: 8,
+                    minWidth: 72,
+                    opacity: notifTriggering ? 0.6 : 1,
+                    transform: [{ scale: pressed ? 0.92 : 1 }],
+                  })}
+                >
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: n.bg, borderWidth: 1.5, borderColor: n.border, alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name={n.icon} size={22} color={n.color} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>{n.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Status line for the last test notification (auto-clears after 5 s) */}
+            {notifStatusText && (
+              <View
+                accessible={true}
+                accessibilityRole="alert"
+                style={{
+                  marginTop: 14, padding: 11, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8,
+                  backgroundColor: notifIsError ? '#fef2f2' : theme.soft,
+                  borderWidth: 1, borderColor: notifIsError ? '#fecaca' : theme.softBorder,
+                }}
+              >
+                <Feather
+                  name={notifIsError ? 'alert-circle' : notifTriggering ? 'loader' : 'check-circle'}
+                  size={15}
+                  color={notifIsError ? '#dc2626' : theme.accentText}
+                  importantForAccessibility="no"
+                  accessibilityElementsHidden={true}
+                />
+                <Text numberOfLines={1} style={{ fontSize: 12, color: '#334155', fontWeight: '600', flex: 1 }}>{notifStatusText}</Text>
+              </View>
+            )}
           </View>
         )}
       </Animated.View>
 
-      {/* Save, Sign Out and Delete Account share one entry animation */}
-      <Animated.View entering={rise(4)}>
-      {/* Primary Action Button (Save changes) */}
-      <TouchableOpacity
-        onPress={handleSaveSettings}
-        disabled={updating}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel={updating ? "Saving settings, please wait" : "Save Settings"}
-        accessibilityState={{ busy: updating, disabled: updating }}
-        activeOpacity={0.85}
-        style={[{ backgroundColor: theme.solid, paddingVertical: 15, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, shadowColor: theme.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5, marginBottom: 12 }, gradient(theme.buttonGradient)]}
-      >
-        {updating ? (
-          <ActivityIndicator size="small" color="#ffffff" />
+      {/* ── ACCOUNT SETTINGS BLOCK (KISS Framework: Clear, modular account actions) ── */}
+      <Animated.View entering={rise(4)} style={[portalCardStyle(theme), { marginBottom: 20 }]}>
+        <SectionHeader theme={theme} icon="shield" title={t('account_settings')} />
+
+        {/* Account Status Badge Row */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, marginBottom: 14 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>{t('account_status')}</Text>
+          {deletionHold ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: '#fde68a' }}>
+              <Feather name="alert-triangle" size={12} color="#b45309" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#b45309' }}>{t('status_hold_deletion')}</Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1, borderColor: '#a7f3d0' }}>
+              <Feather name="check-circle" size={12} color="#059669" />
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>{t('status_active')}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── 1. EDIT ACCOUNT DETAILS BUTTON (Activates edit mode & smoothly scrolls to top details card) ── */}
+        <TouchableOpacity
+          onPress={() => {
+            setIsEditing(true);
+            setIsExpanded(true);
+            haptic('tap');
+            scrollViewRef.current?.scrollTo({ y: inShell ? 80 : 100, animated: true });
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={t('edit_account_details')}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: isEditing ? theme.soft : '#f8fafc',
+            borderWidth: 1.5,
+            borderColor: isEditing ? theme.solid : '#e2e8f0',
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 14,
+            marginBottom: 12,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: isEditing ? theme.solid : theme.soft, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="user-check" size={16} color={isEditing ? '#ffffff' : theme.accentText} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                  {t('edit_account_details')}
+                </Text>
+                {isEditing && (
+                  <View style={{ backgroundColor: theme.solid, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: '#ffffff' }}>EDITING</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ fontSize: 10.5, color: '#64748b', marginTop: 1 }} numberOfLines={1}>
+                {lang === 'Hindi'
+                  ? 'नाम, ईमेल, शैक्षणिक विवरण और अन्य जानकारी अपडेट करें'
+                  : lang === 'Gujarati'
+                  ? 'નામ, ઈમેલ, શૈક્ષણિક વિગતો અને અન્ય માહિતી અપડેટ કરો'
+                  : 'Update name, email, education & qualifications'}
+              </Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={16} color={isEditing ? theme.accentText : '#94a3b8'} />
+        </TouchableOpacity>
+
+        {/* ── 2. CHANGE / FORGOT PASSWORD BUTTON ── */}
+        <TouchableOpacity
+          onPress={() => {
+            setPasswordModalVisible(true);
+            setForgotStep(1);
+            setForgotError('');
+          }}
+          activeOpacity={0.8}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            backgroundColor: '#f8fafc',
+            borderWidth: 1.5,
+            borderColor: '#e2e8f0',
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 14,
+            marginBottom: 12,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="key" size={15} color={theme.accentText} />
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+              {t('change_forgot_password')}
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color="#94a3b8" />
+        </TouchableOpacity>
+
+        {/* ── 3. DELETE ACCOUNT PERMANENTLY (IN AMBER) ── */}
+        {deletionHold ? (
+          <View style={{ backgroundColor: '#fffbeb', borderWidth: 1.5, borderColor: '#fde68a', borderRadius: 16, padding: 14 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="clock" size={18} color="#d97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400e', marginBottom: 3 }}>
+                  {deletionHold.daysLeft > 0 
+                    ? `${deletionHold.daysLeft} ${t('days_left')}`
+                    : `${deletionHold.hoursLeft} ${t('hours_left')}`}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#78350f', lineHeight: 16, marginBottom: 10 }}>
+                  {t('hold_warning_text')}
+                </Text>
+
+                <TouchableOpacity
+                  onPress={handleCancelDeletion}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#d97706',
+                    paddingVertical: 10,
+                    paddingHorizontal: 14,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                >
+                  <Feather name="rotate-ccw" size={14} color="#ffffff" />
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12.5 }}>
+                    {t('cancel_and_recover')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
         ) : (
-          <>
-            <Feather name="check" size={16} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-            <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14.5 }}>{t('save_settings')}</Text>
-          </>
+          /* Normal Active Status: Amber Delete Account Button */
+          <TouchableOpacity
+            onPress={handleOpenDeleteModal}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={t('delete_account_permanently')}
+            style={{
+              width: '100%',
+              backgroundColor: '#fffbeb',
+              borderWidth: 1.5,
+              borderColor: '#fde68a',
+              paddingVertical: 12,
+              borderRadius: 14,
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'row',
+            }}
+            activeOpacity={0.8}
+          >
+            <Feather name="trash-2" size={15} color="#b45309" style={{ marginRight: 8 }} />
+            <Text style={{ color: '#b45309', fontWeight: '800', fontSize: 13 }}>
+              {t('delete_account_permanently')}
+            </Text>
+          </TouchableOpacity>
         )}
-      </TouchableOpacity>
+      </Animated.View>
 
-      {/* Secondary Action Button (Log Out) */}
-      <TouchableOpacity
-        onPress={handleSignOut}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel="Sign Out of Anulekh account"
-        style={{
-          width: '100%',
-          backgroundColor: '#fef2f2',
-          borderWidth: 1.5,
-          borderColor: '#fecaca',
-          paddingVertical: 14,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          marginBottom: 10
-        }}
-        activeOpacity={0.85}
-      >
-        <Feather name="log-out" size={16} color="#b91c1c" style={{ marginRight: 8 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-        <Text style={{ color: '#b91c1c', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('sign_out')}</Text>
-      </TouchableOpacity>
+      {/* ── OUTSIDE OF ACCOUNT SETTINGS BLOCK: SAVE CHANGES (AT BOTTOM) & LOGOUT (IN ROSE) ── */}
+      <Animated.View entering={rise(5)} style={{ gap: 10, marginBottom: 36 }}>
+        {/* Primary Save Changes Button (at bottom most) */}
+        <TouchableOpacity
+          onPress={handleSaveSettings}
+          disabled={updating}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={updating ? "Saving settings, please wait" : t('save_settings')}
+          accessibilityState={{ busy: updating, disabled: updating }}
+          activeOpacity={0.85}
+          style={[{ backgroundColor: theme.solid, paddingVertical: 15, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8, shadowColor: theme.shadow, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 14, elevation: 5 }, gradient(theme.buttonGradient)]}
+        >
+          {updating ? (
+            <ActivityIndicator size="small" color="#ffffff" />
+          ) : (
+            <>
+              <Feather name="check" size={16} color="#ffffff" />
+              <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14.5 }}>{t('save_settings')}</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-      {/* Delete Account (Apple App Store Guideline 5.1.1 compliant) */}
-      <TouchableOpacity
-        onPress={handleDeleteAccount}
-        accessible={true}
-        accessibilityRole="button"
-        accessibilityLabel="Permanently Delete Account"
-        style={{
-          width: '100%',
-          backgroundColor: 'transparent',
-          borderWidth: 1,
-          borderColor: '#fca5a5',
-          borderStyle: 'dashed',
-          paddingVertical: 13,
-          borderRadius: 16,
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'row',
-          marginBottom: 20
-        }}
-        activeOpacity={0.7}
-      >
-        <Feather name="trash-2" size={15} color="#dc2626" style={{ marginRight: 8 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-        <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Delete Account Permanently</Text>
-      </TouchableOpacity>
+        {/* Log Out Button (Outside of block, in ROSE color, below Save button) */}
+        <TouchableOpacity
+          onPress={handleSignOut}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={t('log_out')}
+          style={{
+            width: '100%',
+            backgroundColor: '#fff1f2',
+            borderWidth: 1.5,
+            borderColor: '#fecdd3',
+            paddingVertical: 14,
+            borderRadius: 16,
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'row',
+          }}
+          activeOpacity={0.85}
+        >
+          <Feather name="log-out" size={16} color="#e11d48" style={{ marginRight: 8 }} />
+          <Text style={{ color: '#e11d48', fontWeight: '800', fontSize: 14 }}>{t('log_out')}</Text>
+        </TouchableOpacity>
       </Animated.View>
 
     </ScrollView>
+
+    {/* ── 2-STEP ACCOUNT DELETION VERIFICATION MODAL ── */}
+    <Modal
+      visible={deleteModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        if (!isVerifying) setDeleteModalVisible(false);
+      }}
+    >
+      <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+      }}>
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
+          width: '100%',
+          maxWidth: 420,
+          padding: 22,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.25,
+          shadowRadius: 20,
+          elevation: 10,
+        }}>
+          {deleteStep === 1 ? (
+            /* ── STEP 1: IMPACT EXPLANATION & 7-DAY HOLD NOTICE ── */
+            <View>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Feather name="alert-triangle" size={24} color="#dc2626" />
+              </View>
+
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', marginBottom: 8 }}>
+                {t('delete_modal_title')}
+              </Text>
+
+              <Text style={{ fontSize: 12.5, color: '#475569', lineHeight: 18, marginBottom: 20 }}>
+                {t('delete_step1_desc')}
+              </Text>
+
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => setDeleteStep(2)}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#dc2626',
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13.5 }}>
+                    {t('delete_step1_btn')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setDeleteModalVisible(false)}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#475569', fontWeight: '700', fontSize: 13 }}>
+                    {t('cancel_action')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* ── STEP 2: PASSWORD VERIFICATION ── */
+            <View>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#fef2f2', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Feather name="lock" size={22} color="#dc2626" />
+              </View>
+
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', marginBottom: 6 }}>
+                {t('delete_step2_title')}
+              </Text>
+
+              <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 17, marginBottom: 16 }}>
+                {t('delete_step2_desc')}
+              </Text>
+
+              {/* Secure Password Input */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#f8fafc',
+                borderWidth: 1.5,
+                borderColor: verifyError ? '#f87171' : '#e2e8f0',
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                marginBottom: 8,
+              }}>
+                <Feather name="key" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
+                <TextInput
+                  value={verifyPassword}
+                  onChangeText={(text) => {
+                    setVerifyPassword(text);
+                    if (verifyError) setVerifyError('');
+                  }}
+                  placeholder={t('enter_password')}
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  style={{ flex: 1, fontSize: 13, color: '#0f172a' }}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ padding: 4 }}
+                >
+                  <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {verifyError ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                  <Feather name="alert-circle" size={13} color="#dc2626" />
+                  <Text style={{ fontSize: 11.5, color: '#dc2626', fontWeight: '600' }}>
+                    {verifyError}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ height: 10 }} />
+              )}
+
+              <View style={{ gap: 10, marginTop: 4 }}>
+                <TouchableOpacity
+                  onPress={handleConfirmScheduleDelete}
+                  disabled={isVerifying}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#dc2626',
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    opacity: isVerifying ? 0.7 : 1,
+                  }}
+                >
+                  {isVerifying ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Feather name="trash-2" size={15} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13.5 }}>
+                        {t('confirm_and_schedule_delete')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!isVerifying) {
+                      setDeleteModalVisible(false);
+                      setDeleteStep(1);
+                      setVerifyPassword('');
+                      setVerifyError('');
+                    }
+                  }}
+                  disabled={isVerifying}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#475569', fontWeight: '700', fontSize: 13 }}>
+                    {t('cancel_action')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+
+    {/* ── CHANGE / FORGOT PASSWORD MODAL ── */}
+    <Modal
+      visible={passwordModalVisible}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => {
+        if (!forgotLoading) setPasswordModalVisible(false);
+      }}
+    >
+      <View style={{
+        flex: 1,
+        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+      }}>
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 24,
+          width: '100%',
+          maxWidth: 420,
+          padding: 22,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 10 },
+          shadowOpacity: 0.25,
+          shadowRadius: 20,
+          elevation: 10,
+        }}>
+          {forgotStep === 1 ? (
+            /* ── STEP 1: SEND VERIFICATION CODE ── */
+            <View>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Feather name="key" size={22} color={theme.accentText} />
+              </View>
+
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', marginBottom: 6 }}>
+                {t('change_forgot_password')}
+              </Text>
+
+              <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 17, marginBottom: 16 }}>
+                {lang === 'Hindi'
+                  ? `हम आपके पंजीकृत ईमेल (${email || user?.email || ''}) पर 6-अंकीय सत्यापन कोड भेजेंगे:`
+                  : lang === 'Gujarati'
+                  ? `અમે તમારા રજિસ્ટર્ડ ઈમેલ (${email || user?.email || ''}) પર 6-અંકનો ચકાસણી કોડ મોકલીશું:`
+                  : `We will send a 6-digit verification code to your registered email (${email || user?.email || ''}):`}
+              </Text>
+
+              {forgotError ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                  <Feather name="alert-circle" size={13} color="#dc2626" />
+                  <Text style={{ fontSize: 11.5, color: '#dc2626', fontWeight: '600' }}>
+                    {forgotError}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={{ gap: 10 }}>
+                <TouchableOpacity
+                  onPress={handleSendPasswordOtp}
+                  disabled={forgotLoading}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: theme.solid,
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    opacity: forgotLoading ? 0.7 : 1,
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Feather name="send" size={15} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13.5 }}>
+                        {t('send_otp')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!forgotLoading) {
+                      setPasswordModalVisible(false);
+                      setForgotError('');
+                    }
+                  }}
+                  disabled={forgotLoading}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#475569', fontWeight: '700', fontSize: 13 }}>
+                    {t('cancel_action')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* ── STEP 2: ENTER OTP & NEW PASSWORD ── */
+            <View>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.soft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                <Feather name="lock" size={22} color={theme.accentText} />
+              </View>
+
+              <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', marginBottom: 6 }}>
+                {t('update_password')}
+              </Text>
+
+              <Text style={{ fontSize: 12, color: '#64748b', lineHeight: 17, marginBottom: 16 }}>
+                {lang === 'Hindi'
+                  ? 'कृपया ईमेल पर भेजा गया 6-अंकीय कोड और नया पासवर्ड दर्ज करें:'
+                  : lang === 'Gujarati'
+                  ? 'કૃપા કરીને ઈમેલ પર મોકલેલો 6-અંકનો કોડ અને નવો પાસવર્ડ દાખલ કરો:'
+                  : 'Enter the 6-digit code sent to your email and your new password:'}
+              </Text>
+
+              {/* OTP Input */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                  {t('otp_code')}
+                </Text>
+                <TextInput
+                  value={forgotOtp}
+                  onChangeText={setForgotOtp}
+                  placeholder="6-digit OTP"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  style={inputStyle()}
+                />
+              </View>
+
+              {/* New Password Input */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                  {t('new_password')}
+                </Text>
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#f8fafc',
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  borderRadius: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                }}>
+                  <TextInput
+                    value={forgotNewPass}
+                    onChangeText={setForgotNewPass}
+                    placeholder="Min 6 characters"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showNewPassword}
+                    autoCapitalize="none"
+                    style={{ flex: 1, fontSize: 13, color: '#0f172a' }}
+                  />
+                  <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                    <Feather name={showNewPassword ? 'eye-off' : 'eye'} size={16} color="#64748b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 4 }}>
+                  {t('confirm_new_password')}
+                </Text>
+                <TextInput
+                  value={forgotConfirmPass}
+                  onChangeText={setForgotConfirmPass}
+                  placeholder="Re-enter new password"
+                  placeholderTextColor="#94a3b8"
+                  secureTextEntry={!showNewPassword}
+                  autoCapitalize="none"
+                  style={inputStyle()}
+                />
+              </View>
+
+              {forgotError ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+                  <Feather name="alert-circle" size={13} color="#dc2626" />
+                  <Text style={{ fontSize: 11.5, color: '#dc2626', fontWeight: '600' }}>
+                    {forgotError}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={{ gap: 10, marginTop: 4 }}>
+                <TouchableOpacity
+                  onPress={handleResetPasswordWithOtp}
+                  disabled={forgotLoading}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: theme.solid,
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 8,
+                    opacity: forgotLoading ? 0.7 : 1,
+                  }}
+                >
+                  {forgotLoading ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <>
+                      <Feather name="check" size={15} color="#ffffff" />
+                      <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13.5 }}>
+                        {t('update_password')}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!forgotLoading) {
+                      setPasswordModalVisible(false);
+                      setForgotStep(1);
+                      setForgotError('');
+                    }
+                  }}
+                  disabled={forgotLoading}
+                  activeOpacity={0.85}
+                  style={{
+                    backgroundColor: '#f1f5f9',
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#475569', fontWeight: '700', fontSize: 13 }}>
+                    {t('cancel_action')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
     </View>
   );
 }

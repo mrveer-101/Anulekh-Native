@@ -187,7 +187,19 @@ export function DesktopPageFrame({ width, children }: { width?: DesktopFrameWidt
           <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: '#ffffff', overflow: 'hidden', borderWidth: 1, borderColor: '#e2e8f0' }}>
             <Image source={require('../../../assets/images/custom/Pen_Logo.jpg')} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 19, fontWeight: '900', color: '#0f172a', letterSpacing: -0.4 }}>Anulekh</Text>
+          <Text style={{
+            fontFamily: Platform.select({
+              ios: 'System',
+              android: 'sans-serif-medium',
+              default: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+            }),
+            fontSize: 20,
+            fontWeight: '800',
+            color: '#0f172a',
+            letterSpacing: -0.6,
+          }}>
+            Anulekh<Text style={{ color: '#2563eb', fontWeight: '900' }}>.</Text>
+          </Text>
         </Pressable>
       </View>
 

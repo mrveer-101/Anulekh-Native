@@ -34,6 +34,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { FormSection, RequestHeader, RequestPage, SubmitButton } from '@/components/student/RequestKit';
 import { storageService } from '@/services/storageService';
+import { useLanguage } from '@/core/translation';
 
 /**
  * A reference file attached to the request while the form is open.
@@ -68,6 +69,7 @@ const ATTACHMENT_TYPES = [
  * Reads the optional `id` search param to switch into edit mode.
  */
 export default function AssignmentRequestForm() {
+  const { t } = useLanguage();
 
   // `?id=` present => editing an existing assignment_requests row.
   const params = useLocalSearchParams<{ id?: string }>();
@@ -353,29 +355,29 @@ export default function AssignmentRequestForm() {
   return (
     <RequestPage>
       <RequestHeader
-        title={isEditing ? 'Edit Assignment' : 'Assignment Request'}
-        subtitle={isEditing ? undefined : 'Get a writer for your assignment'}
+        title={isEditing ? t('edit_assignment_request') : t('new_assignment_request')}
+        subtitle={isEditing ? undefined : t('assignment_subtitle')}
         onBack={() => { if (router.canGoBack()) router.back(); else router.replace('/console/student' as any); }}
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 18, paddingBottom: 90, gap: 14 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Assignment details ── */}
-        <FormSection icon="file-text" title="Assignment Details">
+        <FormSection icon="file-text" title={t('academic_details')}>
         <View style={{ gap: 18 }}>
 
           <View style={s.field}>
-            <Text style={s.label}>Subject</Text>
+            <Text style={s.label}>{t('subject')}</Text>
             <TextInput value={subject} onChangeText={setSubject} placeholder="e.g. Applied Physics, Chemistry-II" placeholderTextColor="#94a3b8" style={s.input} />
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Assignment Title</Text>
+            <Text style={s.label}>{t('assignment_title_label')}</Text>
             <TextInput value={title} onChangeText={setTitle} placeholder="e.g. Lab Report 2, Term Paper 1" placeholderTextColor="#94a3b8" style={s.input} />
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Academic Level</Text>
+            <Text style={s.label}>{t('academic_level')}</Text>
             <View style={{ flexDirection: 'row', gap: 10 }}>
               {ACADEMIC_LEVELS.map(level => {
                 const active = academicLevel === level;
@@ -391,7 +393,7 @@ export default function AssignmentRequestForm() {
 
           <View style={s.field}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={s.label}>Page Count Estimate</Text>
+              <Text style={s.label}>{t('page_count_estimate')}</Text>
               <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#2563eb' }}>
                 {pageCount || '1'} {parseInt(pageCount || '1') === 1 ? 'Page' : 'Pages'}
               </Text>
@@ -435,17 +437,17 @@ export default function AssignmentRequestForm() {
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Deadline</Text>
+            <Text style={s.label}>{t('submission_deadline')}</Text>
             <TouchableOpacity onPress={() => setShowDatePicker(true)} activeOpacity={0.8} style={s.deadlineBtn}>
               <Text style={[s.deadlineBtnText, !deadline && { color: '#94a3b8', fontWeight: '400' }]}>
-                {deadline || 'Select Deadline Date & Time'}
+                {deadline || t('select_date')}
               </Text>
               <Feather name="calendar" size={16} color="#2563eb" />
             </TouchableOpacity>
           </View>
 
           <View style={s.field}>
-            <Text style={s.label}>Description & Instructions</Text>
+            <Text style={s.label}>{t('instructions_optional')}</Text>
             <TextInput value={description} onChangeText={setDescription}
               placeholder="Write specifications, requirements, guidelines or instructions..."
               placeholderTextColor="#94a3b8" multiline numberOfLines={4}
@@ -457,7 +459,7 @@ export default function AssignmentRequestForm() {
         {/* ── Reference attachments (optional) ── */}
         <FormSection
           icon="paperclip"
-          title="Attachments"
+          title={t('reference_material')}
           right={attachments.length > 0 ? (
             <View style={{ backgroundColor: '#eff6ff', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1, borderColor: '#bfdbfe' }}>
               <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>{attachments.length} file{attachments.length !== 1 ? 's' : ''}</Text>
@@ -512,7 +514,7 @@ export default function AssignmentRequestForm() {
 
         {/* ── Save (blocked while files are still being read) ── */}
         <SubmitButton
-          label={isEditing ? 'Update Request' : 'Post Assignment Request'}
+          label={isEditing ? t('save_changes') : t('post_assignment_request')}
           onPress={handleSave}
           loading={loading}
           disabled={uploadingFiles}

@@ -232,7 +232,7 @@ export default function ScribePlanView() {
     <View style={{ flex: 1, backgroundColor: '#f9fafb' }}>
       <ScrollView 
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
         }
@@ -240,75 +240,88 @@ export default function ScribePlanView() {
         {/* ── CALENDAR BLOCK ── */}
         <View style={{
           backgroundColor: '#ffffff',
-          padding: 18,
-          borderRadius: 24,
-          borderWidth: 1.5,
-          borderColor: '#e2e8f0',
-          shadowColor: '#059669',
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 4,
-          marginBottom: 16
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: '#f1f5f9',
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+          elevation: 2,
+          marginBottom: 12
         }}>
-          {/* Header: Month Selector with Interactive Expand/Collapse Header */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
+          {/* Header: Month Selector with Interactive Expand/Collapse Button (No Arrow) */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 10 }}>
+            {/* Previous month */}
             <TouchableOpacity 
               onPress={() => changeMonth(-1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
+              activeOpacity={0.7}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#f0f6ff',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Feather name="chevron-left" size={18} color="#059669" />
+              <Feather name="chevron-left" size={16} color="#2563eb" />
             </TouchableOpacity>
             
+            {/* Month title button (No arrow, click to open/toggle calendar) */}
             <TouchableOpacity 
               onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
               activeOpacity={0.7}
               style={{
-                flexDirection: 'row',
+                paddingHorizontal: 14,
+                paddingVertical: 5,
+                backgroundColor: '#f0f6ff',
+                borderRadius: 16,
                 alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: 'rgba(5,150,105,0.06)',
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(5,150,105,0.18)'
+                justifyContent: 'center',
               }}
             >
-              <Feather name="calendar" size={14} color="#059669" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#059669', letterSpacing: -0.3 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#1d4ed8' }}>
                 {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </Text>
-              <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#059669" />
             </TouchableOpacity>
 
+            {/* Next month */}
             <TouchableOpacity 
               onPress={() => changeMonth(1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
+              activeOpacity={0.7}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#f0f6ff',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Feather name="chevron-right" size={18} color="#059669" />
+              <Feather name="chevron-right" size={16} color="#2563eb" />
             </TouchableOpacity>
           </View>
 
           {!isCalendarCollapsed && (
             <>
-              {/* Weekdays Row with All Orange Accents */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+              {/* Weekdays Row */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                 {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
-                  <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+                  <View key={idx} style={{ width: '14.28%', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b', letterSpacing: 0.2 }}>{day}</Text>
                   </View>
                 ))}
               </View>
 
               {/* Days Grid */}
-              {/* Days Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 5, marginHorizontal: -2 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 2 }}>
                 {getDaysInMonth(currentMonth).map((day, idx) => {
                   if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 44, padding: 2.5 }} />;
+                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 32 }} />;
                   }
-                  // Cell styling priority: selected (green) > has a plan (orange/emerald) > today (green outline) > default card.
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
                   const hasPlan = hasPlanOnDate(day);
@@ -316,37 +329,24 @@ export default function ScribePlanView() {
                   const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                   const isToday = dateString === todayString;
 
-                  let cellBg = '#f8fafc';
-                  let cellTextColor = '#334155';
-                  let cellBorderColor = '#e2e8f0';
-                  let cellBorderWidth = 1;
-                  let dotColor = '#94a3b8';
-                  let cellShadow: any = {};
+                  const isSolidActive = isSelected || (!selectedDate && isToday);
 
-                  if (isSelected) {
-                    cellBg = '#059669';
-                    cellTextColor = '#ffffff';
-                    cellBorderColor = '#047857';
-                    cellBorderWidth = 1.5;
-                    dotColor = '#ffffff';
-                    cellShadow = {
-                      shadowColor: '#059669',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3,
-                      elevation: 3,
-                    };
+                  let circleBg = 'transparent';
+                  let numColor = '#1e293b';
+                  let dotColor = '#94a3b8';
+                  let showDot = false;
+
+                  if (isSolidActive) {
+                    circleBg = '#2563eb';
+                    numColor = '#ffffff';
                   } else if (hasPlan) {
-                    cellBg = '#fff7ed';
-                    cellTextColor = '#c2410c';
-                    cellBorderColor = '#fed7aa';
-                    cellBorderWidth = 1.5;
-                    dotColor = '#ea580c';
+                    circleBg = '#fef3c7';
+                    numColor = '#d97706';
+                    dotColor = '#d97706';
+                    showDot = true;
                   } else if (isToday) {
-                    cellBg = '#ecfdf5';
-                    cellTextColor = '#059669';
-                    cellBorderColor = '#059669';
-                    cellBorderWidth = 1.5;
+                    circleBg = '#eff6ff';
+                    numColor = '#2563eb';
                   }
 
                   return (
@@ -362,38 +362,36 @@ export default function ScribePlanView() {
                       activeOpacity={0.7}
                       style={{
                         width: '14.28%',
-                        height: 44,
-                        padding: 2.5,
+                        height: 32,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
                       <View style={{
-                        flex: 1,
-                        borderRadius: 10,
-                        backgroundColor: cellBg,
-                        borderWidth: cellBorderWidth,
-                        borderColor: cellBorderColor,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: circleBg,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        ...cellShadow
                       }}>
                         <Text style={{
                           fontFamily: 'Roboto',
                           fontSize: 12,
-                          fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
-                          color: cellTextColor
+                          fontWeight: isSolidActive || hasPlan ? '700' : '500',
+                          color: numColor,
                         }}>
                           {day.getDate()}
                         </Text>
-                        {hasPlan ? (
+                        {showDot && !isSolidActive && (
                           <View style={{
-                            width: 4,
-                            height: 4,
-                            borderRadius: 2,
+                            width: 3,
+                            height: 3,
+                            borderRadius: 1.5,
                             backgroundColor: dotColor,
-                            marginTop: 2
+                            position: 'absolute',
+                            bottom: 2,
                           }} />
-                        ) : (
-                          <View style={{ width: 4, height: 4, marginTop: 2, opacity: 0 }} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -402,28 +400,28 @@ export default function ScribePlanView() {
               </View>
 
               {/* Status Legend */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Scheduled Plan</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#86efac' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '600', color: '#64748b' }}>Confirmed</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#059669' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Today</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#fed7aa' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '600', color: '#64748b' }}>Scheduled</Text>
                 </View>
               </View>
 
               {/* Selected Date Filter Badge / Reset */}
               {selectedDate && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Feather name="calendar" size={13} color="#059669" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Feather name="calendar" size={12} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>
                       Filtered by date: {selectedDate}
                     </Text>
                   </View>
-                  <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b' }}>Clear Date</Text>
+                  <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#eff6ff', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#2563eb' }}>Clear Date</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -435,16 +433,16 @@ export default function ScribePlanView() {
         <View style={{
           flexDirection: 'row',
           backgroundColor: '#f1f5f9',
-          padding: 5,
-          borderRadius: 18,
+          padding: 4,
+          borderRadius: 16,
           borderWidth: 1.5,
           borderColor: '#cbd5e1',
           shadowColor: '#475569',
-          shadowOffset: { width: 0, height: 4 },
+          shadowOffset: { width: 0, height: 2 },
           shadowOpacity: 0.08,
-          shadowRadius: 10,
-          elevation: 3,
-          marginBottom: 16,
+          shadowRadius: 8,
+          elevation: 2,
+          marginBottom: 12,
           gap: 4
         }}>
           {(['all', 'upcoming', 'completed'] as const).map((filter) => {
@@ -456,16 +454,16 @@ export default function ScribePlanView() {
                 onPress={() => setActiveFilter(filter)}
                 style={{
                   flex: 1,
-                  paddingVertical: 9,
-                  borderRadius: 14,
+                  paddingVertical: 7,
+                  borderRadius: 12,
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: isActive ? '#059669' : 'transparent',
                   shadowColor: isActive ? '#059669' : 'transparent',
-                  shadowOffset: { width: 0, height: 4 },
+                  shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: isActive ? 0.35 : 0,
-                  shadowRadius: 10,
-                  elevation: isActive ? 4 : 0
+                  shadowRadius: 6,
+                  elevation: isActive ? 3 : 0
                 }}
               >
                 <Text style={{
@@ -500,7 +498,7 @@ export default function ScribePlanView() {
               {/* Card title: subject, level and "matched" status pill */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || 'પરીક્ષા'}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#0f172a' }}>{exam.subject || t('exams')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('exam_level')}: {exam.exam_type}</Text>
                 </View>
                 <View style={{ paddingVertical: 4, paddingHorizontal: 10, borderRadius: 20, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.2)' }}>
@@ -757,14 +755,14 @@ export default function ScribePlanView() {
               </View>
               <View>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: '#0f172a' }}>
-                  {callExam?.student_name ?? 'વિદ્યાર્થી'}
+                  {callExam?.student_name ?? t('candidate_student')}
                 </Text>
                 <View style={{
                   marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)',
                   borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
                   alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
                 }}>
-                  <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
+                  <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>{t('candidate_student').toUpperCase()}</Text>
                 </View>
               </View>
             </View>
@@ -801,7 +799,7 @@ export default function ScribePlanView() {
 
             {/* Exam context */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-              વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના વિદ્યાર્થી
+              {t('subject_label')} <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> {t('exam_student_suffix')}
             </Text>
           </View>
 
@@ -814,10 +812,10 @@ export default function ScribePlanView() {
                 if (supported) {
                   await Linking.openURL(url);
                 } else {
-                  Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+                  Alert.alert(t('error'), t('call_not_supported'));
                 }
               } catch {
-                Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+                Alert.alert(t('error'), t('call_error'));
               }
             }}
             style={{

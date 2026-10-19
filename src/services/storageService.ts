@@ -122,14 +122,21 @@ export const storageService = {
         return fail(link.error || 'Upload is not available right now. Please try again.', contentType, sizeBytes);
       }
 
+      // If the upload link points to localhost (e.g. backend running in local-disk mode on Render without R2),
+      // rewrite http://localhost:<port> to API_URL so the client's direct PUT routes to the server!
+      let uploadUrl = link.upload_url;
+      if (API_URL && (uploadUrl.startsWith('http://localhost:') || uploadUrl.startsWith('http://127.0.0.1:'))) {
+        uploadUrl = uploadUrl.replace(/^http:\/\/(localhost|127\.0\.0\.1):\d+/, API_URL.replace(/\/+$/, ''));
+      }
+
       // 2. Send the bytes straight to storage, with the exact Content-Type the link was signed for.
       onProgress?.(0);
       let status = 0;
       if (blob) {
-        status = await putBlobWithProgress(link.upload_url, blob, link.content_type, onProgress);
+        status = await putBlobWithProgress(uploadUrl, blob, link.content_type, onProgress);
       } else {
         const task = FileSystem.createUploadTask(
-          link.upload_url,
+          uploadUrl,
           uri,
           { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: { 'Content-Type': link.content_type } },
           (p) => { if (p.totalBytesExpectedToSend > 0) onProgress?.(p.totalBytesSent / p.totalBytesExpectedToSend); },

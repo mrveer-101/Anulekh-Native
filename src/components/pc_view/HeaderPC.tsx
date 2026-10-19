@@ -89,8 +89,14 @@ export default function HeaderPC({ activeTab = 'home', onNavigateSection }: Head
         </View>
 
         <View>
-          <Text style={{ fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 }}>
-            Anulekh
+          <Text style={{
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+            fontSize: 22,
+            fontWeight: '800',
+            color: '#0f172a',
+            letterSpacing: -0.6,
+          }}>
+            Anulekh<Text style={{ color: '#2563eb', fontWeight: '900' }}>.</Text>
           </Text>
           <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb', letterSpacing: 0.5 }}>
             अनुलेख • A Scribe for every Voice

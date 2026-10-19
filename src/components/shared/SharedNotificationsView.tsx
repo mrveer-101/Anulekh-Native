@@ -160,7 +160,7 @@ export default function SharedNotificationsView() {
   return (
     <ScrollView 
       style={{ flex: 1, backgroundColor: '#f9fafb' }} 
-      contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 12, paddingBottom: 40 }}
+      contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 12, paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[themeColor]} />

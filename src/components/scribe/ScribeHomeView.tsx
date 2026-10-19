@@ -533,7 +533,7 @@ export default function ScribeHomeView() {
       <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
-      <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       {/* Welcome & Profile Header Section */}
       <Animated.View entering={rise(0)}>
       <View style={{
@@ -691,36 +691,33 @@ export default function ScribeHomeView() {
                   backgroundColor: '#ffffff', 
                   borderRadius: 20, 
                   borderWidth: 1.5, 
-                  borderColor: '#fca5a5', 
-                  shadowColor: '#ef4444', 
+                  borderColor: '#fbcfe8', 
+                  shadowColor: '#0f172a', 
                   shadowOffset: { width: 0, height: 4 }, 
-                  shadowOpacity: 0.08, 
+                  shadowOpacity: 0.05, 
                   shadowRadius: 12, 
-                  elevation: 3, 
-                  marginBottom: 10,
+                  elevation: 2, 
+                  marginBottom: 12,
                   overflow: 'hidden'
                 }}
               >
-                {/* Status accent strip */}
-                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: '#db2777' }} />
-
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleInviteCard(invite.id)}
                   activeOpacity={0.8}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
-                    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+                    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
                   }}
                 >
                   <View style={{
-                    width: 38, height: 38, borderRadius: 11,
+                    width: 42, height: 42, borderRadius: 13,
                     backgroundColor: 'rgba(219,39,119,0.08)',
                     alignItems: 'center', justifyContent: 'center',
                     borderWidth: 1,
                     borderColor: 'rgba(219,39,119,0.18)',
                   }}>
-                    <Feather name="mail" size={16} color="#db2777" />
+                    <Feather name="mail" size={17} color="#db2777" />
                   </View>
 
                   <View style={{ flex: 1 }}>
@@ -729,19 +726,22 @@ export default function ScribeHomeView() {
                     </Text>
                   </View>
 
-                  <View style={{ paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.18)', marginRight: 4 }}>
+                  <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.18)', marginRight: 4 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Feather name={isAssign ? 'edit-3' : 'calendar'} size={9} color="#db2777" />
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777' }}>
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: '#db2777' }}>
                         {isAssign ? 'Assignment' : 'Scribe'}
                       </Text>
                     </View>
                   </View>
 
-                  <Feather
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={16} color={MUTED}
-                  />
+                  {/* Chevron Button */}
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f1f5f9' }}>
+                    <Feather
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={14} color="#64748b"
+                    />
+                  </View>
                 </TouchableOpacity>
 
                 {/* ── Expanded Detail Panel ── */}
@@ -750,21 +750,21 @@ export default function ScribeHomeView() {
                   <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 12 }}>
                     <View style={{ gap: 6 }}>
                       <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
-                        Student: <Text style={{ fontWeight: '700', color: TEXT }}>{details.student_name || 'Student'}</Text>
+                        {t('student_prefix')}<Text style={{ fontWeight: '700', color: TEXT }}>{details.student_name || t('candidate_student')}</Text>
                       </Text>
                       <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }}>
-                        {isAssign ? 'Deadline: ' : 'Exam Date: '}
+                        {isAssign ? t('deadline_prefix') : (t('date_time') + ': ')}
                         <Text style={{ fontWeight: '700', color: TEXT }}>
                           {isAssign ? details.deadline : details.exam_date}
                         </Text>
                       </Text>
                       {isAssign ? (
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }} numberOfLines={1}>
-                          Title: <Text style={{ fontWeight: '700', color: TEXT }}>{details.assignment_title}</Text>
+                          {t('title') + ': '}<Text style={{ fontWeight: '700', color: TEXT }}>{details.assignment_title}</Text>
                         </Text>
                       ) : (
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#475569' }} numberOfLines={1}>
-                          Venue: <Text style={{ fontWeight: '700', color: TEXT }}>{details.exam_venue}</Text>
+                          {t('exam_venue') + ': '}<Text style={{ fontWeight: '700', color: TEXT }}>{details.exam_venue}</Text>
                         </Text>
                       )}
                     </View>
@@ -787,7 +787,7 @@ export default function ScribeHomeView() {
                       }}
                     >
                       <Feather name="file-text" size={12} color="#2563eb" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>View Details</Text>
+                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('view_details')}</Text>
                     </TouchableOpacity>
 
                     {/* Actions */}
@@ -796,13 +796,13 @@ export default function ScribeHomeView() {
                         onPress={() => handleAcceptInvitation(invite)}
                         style={{ flex: 1, backgroundColor: '#059669', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
                       >
-                        <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 12, fontWeight: '800' }}>Accept</Text>
+                        <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 12, fontWeight: '800' }}>{t('accept')}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleRejectInvitation(invite)}
                         style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#fca5a5', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
                       >
-                        <Text style={{ fontFamily: 'Roboto', color: '#ef4444', fontSize: 12, fontWeight: '800' }}>Decline</Text>
+                        <Text style={{ fontFamily: 'Roboto', color: '#ef4444', fontSize: 12, fontWeight: '800' }}>{t('decline')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -835,7 +835,7 @@ export default function ScribeHomeView() {
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <FontAwesome5 name="award" size={12} color="#2563eb" />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Contributions</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('commitments')}</Text>
           </View>
           <Animated.View key={`stat-${scribeCommitments.length}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#2563eb' }}>{scribeCommitments.length}</Text>
@@ -848,7 +848,7 @@ export default function ScribeHomeView() {
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <FontAwesome5 name="file-alt" size={12} color={ACCENT.contrast} />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Applications</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('applications')}</Text>
           </View>
           <Animated.View key={`stat-${pendingApplicationsCount}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.contrast }}>{pendingApplicationsCount}</Text>
@@ -861,7 +861,7 @@ export default function ScribeHomeView() {
         <View style={{ flex: 1, alignItems: 'center' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <Ionicons name="search" size={13} color={ACCENT.bright} />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>Available</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('available')}</Text>
           </View>
           <Animated.View key={`stat-${availableExams.length}`} entering={enter(FadeIn.delay(350).duration(300))}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: ACCENT.bright }}>{availableExams.length}</Text>
@@ -878,7 +878,7 @@ export default function ScribeHomeView() {
           <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="award" size={15} color={THEME.accentText} />
           </View>
-          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Contributions</Text>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>{t('my_contributions')}</Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           {/* Card 1: Hours Contributed */}
@@ -886,10 +886,10 @@ export default function ScribeHomeView() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Feather name="clock" size={16} color={ACCENT.main} />
               <View style={{ backgroundColor: ACCENT.tint08, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: ACCENT.main }}>HOURS</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: ACCENT.main }}>{t('hours_upper')}</Text>
               </View>
             </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>{completedExamsCount * 3} Hours</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>{completedExamsCount * 3} {t('hours')}</Text>
           </View>
 
           {/* Card 2: Requests Completed */}
@@ -897,10 +897,10 @@ export default function ScribeHomeView() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Feather name="award" size={16} color="#d97706" />
               <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>EXAMS</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>{t('exams_upper')}</Text>
               </View>
             </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>{completedExamsCount} Requests</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>{completedExamsCount} {t('requests_word')}</Text>
           </View>
         </View>
       </View>
@@ -937,7 +937,7 @@ export default function ScribeHomeView() {
           }}>
             <Ionicons name="flash" size={16} color={isSosRegistered ? '#ef4444' : '#64748b'} />
           </View>
-          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Opt SOS Standby Duty</Text>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '900', color: '#0f172a' }}>{t('opt_sos_standby')}</Text>
         </View>
 
         <TouchableOpacity
@@ -945,7 +945,7 @@ export default function ScribeHomeView() {
           disabled={togglingSos}
           activeOpacity={0.8}
           accessibilityRole="switch"
-          accessibilityLabel="Opt SOS Standby Duty"
+          accessibilityLabel={t('opt_sos_standby')}
           aria-checked={isSosRegistered}
           aria-disabled={togglingSos}
           style={{ marginLeft: 10 }}
@@ -972,7 +972,7 @@ export default function ScribeHomeView() {
           <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="calendar" size={15} color={THEME.accentText} />
           </View>
-          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Plans</Text>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>{t('my_plans')}</Text>
         </View>
 
         {scribeCommitments.length > 0 ? (
@@ -984,40 +984,37 @@ export default function ScribeHomeView() {
               <View 
                 key={exam.id} 
                 style={{ 
-                  backgroundColor: '#ffffff', 
+                  backgroundColor: isEmergency ? '#fffdfd' : '#ffffff', 
                   borderRadius: 20, 
-                  borderWidth: isEmergency ? 2 : 1.5, 
-                  borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
-                  shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
-                  shadowOffset: { width: 0, height: 6 }, 
-                  shadowOpacity: isEmergency ? 0.12 : 0.07, 
-                  shadowRadius: 16, 
-                  elevation: 3, 
-                  marginBottom: 10,
+                  borderWidth: 1.5, 
+                  borderColor: isEmergency ? '#fca5a5' : '#e2e8f0',
+                  shadowColor: '#0f172a', 
+                  shadowOffset: { width: 0, height: 4 }, 
+                  shadowOpacity: isEmergency ? 0.06 : 0.05, 
+                  shadowRadius: 12, 
+                  elevation: 2, 
+                  marginBottom: 12,
                   overflow: 'hidden'
                 }}
               >
-                {/* Status accent strip */}
-                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: isEmergency ? '#dc2626' : '#16a34a' }} />
-
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleMatchCard(exam.id)}
                   activeOpacity={0.8}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
-                    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+                    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
                   }}
                 >
                   {/* Subject icon */}
                   <View style={{
-                    width: 38, height: 38, borderRadius: 11,
+                    width: 42, height: 42, borderRadius: 13,
                     backgroundColor: isEmergency ? '#fef2f2' : BLUE_BG_LIGHT,
                     alignItems: 'center', justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: isEmergency ? '#fecaca' : 'rgba(37,99,235,0.18)',
+                    borderColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.15)',
                   }}>
-                    <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
+                    <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={17}
                       color={isEmergency ? '#dc2626' : BLUE} />
                   </View>
 
@@ -1031,18 +1028,20 @@ export default function ScribeHomeView() {
                   {/* Status pill */}
                   <View style={{ 
                     backgroundColor: 'rgba(22,163,74,0.08)', borderWidth: 1, borderColor: 'rgba(22,163,74,0.2)', 
-                    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 20, marginRight: 4
+                    paddingVertical: 3.5, paddingHorizontal: 10, borderRadius: 999, marginRight: 4
                   }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a' }}>
-                      Confirmed
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: '#16a34a' }}>
+                      {t('status_matched')}
                     </Text>
                   </View>
 
-                  {/* Chevron */}
-                  <Feather
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={16} color={MUTED}
-                  />
+                  {/* Chevron Button */}
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f1f5f9' }}>
+                    <Feather
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={14} color="#64748b"
+                    />
+                  </View>
                 </TouchableOpacity>
 
                 {/* ── Expanded Detail Panel ── */}
@@ -1055,7 +1054,7 @@ export default function ScribeHomeView() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                          Level: {exam.exam_type}
+                          {t('level_prefix')}{exam.exam_type}
                         </Text>
                       </View>
 
@@ -1063,7 +1062,7 @@ export default function ScribeHomeView() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                          Date & Time: {exam.exam_date || t('date_not_specified')}
+                          {t('date_time_prefix')}{exam.exam_date || t('date_not_specified')}
                         </Text>
                       </View>
 
@@ -1071,7 +1070,7 @@ export default function ScribeHomeView() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                          Location: {exam.exam_venue || t('venue_not_specified')}
+                          {t('location_prefix')}{exam.exam_venue || t('venue_not_specified')}
                         </Text>
                       </View>
 
@@ -1121,7 +1120,7 @@ export default function ScribeHomeView() {
         ) : (
           <View style={{ backgroundColor: '#ffffff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: THEME.cardBorder, alignItems: 'center' }}>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '600', color: '#94a3b8' }}>
-              No confirmed upcoming exam commitments.
+              {t('no_confirmed_commitments')}
             </Text>
           </View>
         )}
@@ -1137,13 +1136,13 @@ export default function ScribeHomeView() {
           <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name="star" size={15} color={THEME.accentText} />
           </View>
-          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>My Achievements</Text>
+          <Text accessibilityRole="header" style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}>{t('my_achievements')}</Text>
           </View>
           <TouchableOpacity
             onPress={() => router.push('/console/scribe/achievements' as any)}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: THEME.accentText }}>View All</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: THEME.accentText }}>{t('view_all')}</Text>
             <Feather name="chevron-right" size={13} color={THEME.accentText} />
           </TouchableOpacity>
         </View>
@@ -1158,11 +1157,11 @@ export default function ScribeHomeView() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Ionicons name="trophy-outline" size={16} color="#d97706" />
               <View style={{ backgroundColor: 'rgba(217,119,6,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>BADGES</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#d97706' }}>{t('badges_upper')}</Text>
               </View>
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>
-              {(completedExamsCount >= 5 ? 1 : 0) + (completedExamsCount >= 15 ? 1 : 0) + (completedExamsCount >= 30 ? 1 : 0)} Badges
+              {(completedExamsCount >= 5 ? 1 : 0) + (completedExamsCount >= 15 ? 1 : 0) + (completedExamsCount >= 30 ? 1 : 0)} {t('badges')}
             </Text>
           </TouchableOpacity>
 
@@ -1175,11 +1174,11 @@ export default function ScribeHomeView() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Ionicons name="ribbon-outline" size={16} color="#2563eb" />
               <View style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#2563eb' }}>VERIFIED</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#2563eb' }}>{t('verified_upper')}</Text>
               </View>
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT }}>
-              {completedExamsCount} Certify
+              {completedExamsCount} {t('certify')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1218,40 +1217,37 @@ export default function ScribeHomeView() {
               <View 
                 key={exam.id} 
                 style={{ 
-                  backgroundColor: '#ffffff', 
+                  backgroundColor: isEmergency ? '#fffdfd' : '#ffffff', 
                   borderRadius: 20, 
-                  borderWidth: isEmergency ? 2 : 1.5, 
-                  borderColor: isEmergency ? '#fca5a5' : THEME.cardBorder,
-                  shadowColor: isEmergency ? '#dc2626' : THEME.shadow, 
-                  shadowOffset: { width: 0, height: 6 }, 
-                  shadowOpacity: isEmergency ? 0.12 : 0.07, 
-                  shadowRadius: 16, 
-                  elevation: 3, 
-                  marginBottom: 10,
+                  borderWidth: 1.5, 
+                  borderColor: isEmergency ? '#fca5a5' : (exam.private_scribe_id ? '#fbcfe8' : '#e2e8f0'),
+                  shadowColor: '#0f172a', 
+                  shadowOffset: { width: 0, height: 4 }, 
+                  shadowOpacity: isEmergency ? 0.06 : 0.05, 
+                  shadowRadius: 12, 
+                  elevation: 2, 
+                  marginBottom: 12,
                   overflow: 'hidden'
                 }}
               >
-                {/* Status accent strip */}
-                <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: isEmergency ? '#dc2626' : exam.private_scribe_id ? '#db2777' : THEME.primary }} />
-
                 {/* ── Collapsed Header Row ── */}
                 <TouchableOpacity
                   onPress={() => toggleAvailableCard(exam.id)}
                   activeOpacity={0.8}
                   style={{
                     flexDirection: 'row', alignItems: 'center',
-                    paddingHorizontal: 16, paddingVertical: 14, gap: 10,
+                    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
                   }}
                 >
                   {/* Subject icon */}
                   <View style={{
-                    width: 38, height: 38, borderRadius: 11,
+                    width: 42, height: 42, borderRadius: 13,
                     backgroundColor: isEmergency ? '#fef2f2' : BLUE_BG_LIGHT,
                     alignItems: 'center', justifyContent: 'center',
                     borderWidth: 1,
-                    borderColor: isEmergency ? '#fecaca' : 'rgba(37,99,235,0.18)',
+                    borderColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.15)',
                   }}>
-                    <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={16}
+                    <Feather name={isEmergency ? 'alert-triangle' : 'book-open'} size={17}
                       color={isEmergency ? '#dc2626' : BLUE} />
                   </View>
 
@@ -1265,25 +1261,26 @@ export default function ScribeHomeView() {
                   {/* Badges container */}
                   <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginRight: 4 }}>
                     {isEmergency && (
-                      <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Ionicons name="flash" size={8} color="#b91c1c" />
-                          <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#b91c1c' }}>SOS</Text>
-                        </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fca5a5' }}>
+                        <Ionicons name="flash" size={10} color="#dc2626" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '900', color: '#dc2626', letterSpacing: 0.4 }}>SOS</Text>
                       </View>
                     )}
                     {!!exam.private_scribe_id && (
-                      <View style={{ paddingVertical: 3, paddingHorizontal: 8, borderRadius: 12, backgroundColor: 'rgba(219,39,119,0.08)', borderWidth: 1, borderColor: 'rgba(219,39,119,0.2)' }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#db2777' }}>INVITE</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fdf2f8', borderWidth: 1, borderColor: '#fbcfe8' }}>
+                        <Feather name="lock" size={9} color="#db2777" />
+                        <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: '#db2777' }}>INVITE</Text>
                       </View>
                     )}
                   </View>
 
-                  {/* Chevron */}
-                  <Feather
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={16} color={MUTED}
-                  />
+                  {/* Chevron Button */}
+                  <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f1f5f9' }}>
+                    <Feather
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={14} color="#64748b"
+                    />
+                  </View>
                 </TouchableOpacity>
 
                 {/* ── Expanded Detail Panel ── */}
@@ -1348,7 +1345,7 @@ export default function ScribeHomeView() {
                             }
                           }
                         } else {
-                          Alert.alert(t('error'), 'અરજી કરવા માટે કૃપા કરીને પહેલા તમારી ચકાસણી પૂર્ણ કરો.');
+                          Alert.alert(t('error'), t('verify_first_error'));
                         }
                       }}
                       style={{ 

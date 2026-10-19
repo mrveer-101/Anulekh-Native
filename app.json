@@ -5,7 +5,7 @@
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nativemobile",
+    "scheme": ["nativemobile", "anulekh"],
     "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon",
@@ -38,6 +38,24 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "anulekh"
+            },
+            {
+              "scheme": "nativemobile"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "web": {
@@ -91,7 +109,8 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withAndroidShortcuts.js"
     ],
     "experiments": {
       "typedRoutes": true

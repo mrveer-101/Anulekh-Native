@@ -230,11 +230,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* નોટિફિકેશન સેટિંગ્સ */}
-        {/* Notification preferences: these switches only change local state and are not persisted */}
+        {/* Notification preferences: DUMMY TOGGLE. Default is ON (true).
+            Toggling updates local UI state only and does NOT disable native background push
+            or backend notifications, preventing any operational issues. */}
         <View style={{ backgroundColor: 'rgba(255,255,255,0.85)', padding: 18, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, marginBottom: 16 }}>
           <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 12, letterSpacing: 0.5 }}>{t('notifications_settings')}</Text>
           
           <View style={{ gap: 14 }}>
+            {/* DUMMY TOGGLE: Push notification switch */}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#0f172a' }}>{t('app_notifications')}</Text>

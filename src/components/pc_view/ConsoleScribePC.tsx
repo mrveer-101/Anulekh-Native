@@ -15,7 +15,7 @@
  * `backgroundImage` are web-only and cast with `as any`.
  */
 import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
@@ -29,6 +29,7 @@ import SharedNotificationsPCView from './SharedNotificationsPCView';
 import ScribePlanView from '../scribe/ScribePlanView';
 import { TabPane } from '@/components/ui/TabPane';
 import { DesktopShellProvider } from '@/components/ui/DesktopShell';
+import { useLanguage } from '@/core/translation';
 
 /**
  * Props for ConsoleScribePC.
@@ -69,6 +70,7 @@ export default function ConsoleScribePC({
   unreadCount = 0,
   onNotificationsOpened,
 }: ConsoleScribePCProps) {
+  const { t } = useLanguage();
   // Local UI state: fallback tab selection, sidebar collapsed flag, profile dropdown visibility.
   const [internalActiveTab, setInternalActiveTab] = useState('home');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -95,12 +97,12 @@ export default function ConsoleScribePC({
   // Sidebar entries; `id` must match the TabPane keys below. 'settings' has no sidebar
   // entry and is reached only from the profile dropdown.
   const navItems = [
-    { id: 'home', label: 'Exam Matches', icon: 'grid' as const },
-    { id: 'explore', label: 'Explore Requests', icon: 'search' as const },
-    { id: 'commitments', label: 'My Commitments', icon: 'file-text' as const },
-    { id: 'plan', label: 'Plan & Calendar', icon: 'calendar' as const },
-    { id: 'profile', label: 'My Account', icon: 'user' as const },
-    { id: 'notifications', label: 'Notifications', icon: 'bell' as const },
+    { id: 'home', label: t('nav_exam_matches'), icon: 'grid' as const },
+    { id: 'explore', label: t('nav_explore_requests'), icon: 'search' as const },
+    { id: 'commitments', label: t('nav_my_commitments'), icon: 'file-text' as const },
+    { id: 'plan', label: t('nav_plan_calendar'), icon: 'calendar' as const },
+    { id: 'profile', label: t('nav_my_account'), icon: 'user' as const },
+    { id: 'notifications', label: t('notifications_settings'), icon: 'bell' as const },
   ];
 
   // Dynamic Theme Colors (Ultra-Glassmorphic System)
@@ -155,12 +157,12 @@ export default function ConsoleScribePC({
             })}
           >
             <View style={{
-              width: 38, height: 38, borderRadius: 12,
+              width: 40, height: 40, borderRadius: 12,
               backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center',
-              padding: 1,
+              padding: 1.5,
               overflow: 'hidden',
-              shadowColor: '#16a34a', shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.2, shadowRadius: 8, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0',
+              shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08, shadowRadius: 10, elevation: 4, borderWidth: 1.5, borderColor: '#F8FAFC',
             }}>
               <Image
                 source={require('../../../assets/images/custom/Pen_Logo.jpg')}
@@ -169,9 +171,35 @@ export default function ConsoleScribePC({
               />
             </View>
             {!isCollapsed && (
-              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: textPrimary, letterSpacing: -0.5 }}>
-                Anulekh
-              </Text>
+              <>
+                <View style={{ width: 1.5, height: 24, backgroundColor: '#CBD5E1', marginHorizontal: 10 }} />
+                <View style={{ justifyContent: 'center' }}>
+                  <Text style={{
+                    fontFamily: Platform.select({
+                      ios: 'System',
+                      android: 'sans-serif-medium',
+                      default: '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif',
+                    }),
+                    fontSize: 19,
+                    fontWeight: '800',
+                    color: textPrimary,
+                    letterSpacing: -0.5,
+                    lineHeight: 21,
+                  }}>
+                    Anulekh<Text style={{ color: '#059669', fontWeight: '900' }}>.</Text>
+                  </Text>
+                  <Text style={{
+                    fontSize: 9,
+                    fontWeight: '700',
+                    color: '#64748B',
+                    letterSpacing: 1.8,
+                    textTransform: 'uppercase',
+                    marginTop: 2,
+                  }}>
+                    SCRIBE PORTAL
+                  </Text>
+                </View>
+              </>
             )}
           </Pressable>
         </View>

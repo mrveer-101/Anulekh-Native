@@ -21,11 +21,11 @@
  *   - Voice notes are recorded with expo-audio (m4a on phones, the browser's format on web).
  *   - Messages also understand an older inline format (`[audio/m4a;base64]...`, `[file/image;name=...;base64]...`,
  *     `[file/pdf;name=...;base64]...`) for rows that predate `message_type` / `media_url`.
- *   - A copy of the portal's bottom tab bar is rendered so users can jump back to a portal tab.
+ *   - Bottom tab bar is hidden to provide a focused, full-screen conversation view with a floating input bar.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Linking, Modal, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Linking, Modal, Image, LayoutAnimation, UIManager } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -37,7 +37,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { storageService, UploadKind } from '@/services/storageService';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
-import { useInDesktopFrame } from '@/components/ui/DesktopShell';
+import { ChatDoodlePattern } from '@/components/ui/ChatDoodlePattern';
 
 /**
  * A row of the `chat_messages` table.
@@ -62,13 +62,16 @@ interface Message {
 
 import { VoiceMessageBubble } from '../../../components/voice_msg/VoiceMessageBubble';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
 /**
  * Chat room screen for a single exam request (see the file header for routing, data and behaviour).
  * Takes no props; reads `requestId` from the route.
  */
 export default function ChatRoomScreen() {
-  // Inside the desktop page frame the phone tab bar is hidden (the header's back arrow remains).
-  const inDesktopFrame = useInDesktopFrame();
+  const insets = useSafeAreaInsets();
   // `t` translates UI strings into the user's chosen language.
   const { t } = useLanguage();
   const params = useLocalSearchParams<{ requestId: string }>();
@@ -81,10 +84,33 @@ export default function ChatRoomScreen() {
   const [exam, setExam] = useState<any>(null);
   const [otherPartyName, setOtherPartyName] = useState('User');
   const [otherPartyRole, setOtherPartyRole] = useState('');
+  // Passive online/offline status (defaults to offline without active polling)
+  const [isOtherPartyOnline, setIsOtherPartyOnline] = useState<boolean>(false);
   
   // Message list (refreshed by polling) and the text currently in the composer.
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const isTypingOrSelected = isInputFocused || newMessage.length > 0;
+
+  const handleFocus = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsInputFocused(true);
+  };
+
+  const handleBlur = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsInputFocused(false);
+  };
+
+  const handleTextChange = (text: string) => {
+    const wasEmpty = newMessage.length === 0;
+    const isNowEmpty = text.length === 0;
+    if (wasEmpty !== isNowEmpty && !isInputFocused) {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+    setNewMessage(text);
+  };
 
   // Voice notes: expo-audio recorder (AAC .m4a on phones, webm/mp4 on web) + an elapsed-seconds timer.
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -222,6 +248,7 @@ export default function ChatRoomScreen() {
     if (!newMessage.trim() || !currentUser || !exam) return;
 
     const msgText = newMessage.trim();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setNewMessage('');
 
     try {
@@ -420,11 +447,14 @@ export default function ChatRoomScreen() {
   const examEnded = isExamPast(exam?.exam_date);
   const canCall = examToday && !examEnded;
 
-  const themeColor = isStudent ? '#2481cc' : '#00a884'; // Telegram Blue / WhatsApp Green
-  const headerBg = isStudent ? '#2481cc' : '#00a884';
-  const bubbleBg = isStudent ? '#2481cc' : '#00a884';
-  const bubbleBgLight = isStudent ? 'rgba(36,129,204,0.08)' : 'rgba(0,168,132,0.08)';
-  const inputBarBg = isStudent ? '#e7ebf0' : '#efeae2'; // Telegram light blue-grey / WhatsApp beige
+  // Exact Brand Palette from Reference (Bright Blue & Orange Chat UI):
+  // Bright White: #FFFFFF, Vibrant Blue: #1676D2, Bright Orange: #F07820, Cool White: #F3F8FC
+  const themeColor = isStudent ? '#1676D2' : '#00a884'; // Vibrant Blue for student, WhatsApp Green for scribe
+  const accentOrange = '#F07820'; // Bright Orange
+  const screenBg = isStudent ? '#F3F8FC' : '#efeae2'; // Cool White
+  const headerBg = isStudent ? '#FFFFFF' : '#00a884';
+  const bubbleBg = isStudent ? '#1676D2' : '#00a884';
+  const bubbleBgLight = isStudent ? 'rgba(22,118,210,0.08)' : 'rgba(0,168,132,0.08)';
 
   /** Header back arrow: pop the stack, or (deep link / web refresh) fall back to the user's portal home. */
   const handleBack = () => {
@@ -435,77 +465,112 @@ export default function ChatRoomScreen() {
     }
   };
 
-  /**
-   * Mirror of the portal's bottom tab bar (Ionicons names). Tapping a tab replaces the route with the
-   * portal and a `tab` param, so the portal opens on that tab. None is highlighted here.
-   */
-  const TABS = isStudent ? [
-    { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home'     },
-    { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
-    { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan'     },
-    { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account'  },
-  ] : [
-    { id: 'home',        iconActive: 'home',          iconInactive: 'home',          label: 'Home'    },
-    { id: 'explore',     iconActive: 'search',        iconInactive: 'search',        label: 'Search'  },
-    { id: 'commitments', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Applied' },
-    { id: 'settings',    iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
-  ];
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: isStudent ? '#d4e3ed' : '#efeae2' }}>
-      <StatusBar style="light" />
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: screenBg }}>
+      <StatusBar style={isStudent ? 'dark' : 'light'} />
       
-      <View style={{ paddingHorizontal: 16, paddingVertical: 18, backgroundColor: headerBg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 }}>
+      {/* ── TOP FLOATING HEADER CARD ── */}
+      <View style={{
+        marginHorizontal: 14,
+        marginTop: Platform.OS === 'ios' ? 4 : 8,
+        marginBottom: 6,
+        backgroundColor: headerBg,
+        borderRadius: 24,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: isStudent ? '#E2E8F0' : 'transparent',
+      }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
           <TouchableOpacity 
             onPress={handleBack} 
-            style={{ marginRight: 10, padding: 4 }}
+            style={{ marginRight: 8, padding: 4 }}
           >
-            <Feather name="arrow-left" size={25} color="white" />
+            <Feather name="arrow-left" size={22} color={isStudent ? '#1676D2' : 'white'} />
           </TouchableOpacity>
 
-          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', marginRight: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 19, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false }}>
+          <View style={{
+            width: 44, height: 44, borderRadius: 22,
+            backgroundColor: isStudent ? '#E3F2FD' : 'rgba(255,255,255,0.2)',
+            alignItems: 'center', justifyContent: 'center',
+            marginRight: 10, borderWidth: 1,
+            borderColor: isStudent ? 'rgba(22,118,210,0.15)' : 'rgba(255,255,255,0.1)'
+          }}>
+            <Text style={{ fontFamily: 'Roboto', color: isStudent ? '#1676D2' : 'white', fontWeight: '900', fontSize: 18, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false }}>
               {otherPartyName.charAt(0).toUpperCase()}
             </Text>
           </View>
 
           <View style={{ flex: 1, justifyContent: 'center' }}>
-            <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '900', fontSize: 18, lineHeight: 22 }} numberOfLines={1}>
+            <Text style={{ fontFamily: 'Roboto', color: isStudent ? '#0F172A' : 'white', fontWeight: '800', fontSize: 16, lineHeight: 20 }} numberOfLines={1}>
               {otherPartyName}
             </Text>
-            <Text style={{ fontFamily: 'Roboto', color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 3 }}>
-              {otherPartyRole} • Online
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+              <View style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: isOtherPartyOnline
+                  ? (isStudent ? '#16A34A' : '#4ADE80')
+                  : (isStudent ? '#94A3B8' : 'rgba(255,255,255,0.55)'),
+                marginRight: 5,
+              }} />
+              <Text style={{
+                fontFamily: 'Roboto',
+                color: isStudent
+                  ? (isOtherPartyOnline ? '#16A34A' : '#64748B')
+                  : (isOtherPartyOnline ? '#DCFCE7' : 'rgba(255,255,255,0.75)'),
+                fontSize: 11,
+                fontWeight: '700',
+              }}>
+                {(otherPartyRole ? (otherPartyRole.charAt(0).toUpperCase() + otherPartyRole.slice(1).toLowerCase()) : (isStudent ? 'Volunteer' : 'Student'))} • {isOtherPartyOnline ? 'Online' : 'Offline'}
+              </Text>
+            </View>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          {/* Call Icon Button — only available on the day of the exam (hidden otherwise),
-              and locked once the exam has ended. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Call Icon Button — only available on the day of the exam (hidden otherwise) */}
           {examToday ? (
             canCall ? (
               <TouchableOpacity
                 onPress={() => {
                   if (otherPartyPhone) {
                     Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
-                      Alert.alert(t('error'), 'આ ઉપકરણ પર કૉલ શરૂ કરી શકાયો નથી.');
+                      Alert.alert(t('error'), t('call_not_supported'));
                     });
                   } else {
-                    Alert.alert(t('error'), 'કૉલ કરવા માટે ફોન નંબર ઉપલબ્ધ નથી.');
+                    Alert.alert(t('error'), t('phone_not_available'));
                   }
                 }}
-                style={{ padding: 4 }}
+                style={{
+                  width: 40, height: 40, borderRadius: 14,
+                  backgroundColor: isStudent ? '#E3F2FD' : 'rgba(255,255,255,0.2)',
+                  borderWidth: 1, borderColor: isStudent ? 'rgba(22,118,210,0.15)' : 'transparent',
+                  alignItems: 'center', justifyContent: 'center'
+                }}
               >
-                <Feather name="phone" size={24} color="white" />
+                <Feather name="phone" size={18} color={isStudent ? '#1676D2' : 'white'} />
               </TouchableOpacity>
             ) : (
               // Exam day but already ended → locked
               <TouchableOpacity
                 onPress={() => Alert.alert('Calling Locked', 'Calling is disabled now that the exam has ended.')}
-                style={{ padding: 4, opacity: 0.5 }}
+                style={{
+                  width: 40, height: 40, borderRadius: 14,
+                  backgroundColor: isStudent ? '#F1F5F9' : 'rgba(255,255,255,0.1)',
+                  alignItems: 'center', justifyContent: 'center', opacity: 0.6
+                }}
               >
-                <Feather name="phone-off" size={24} color="white" />
+                <Feather name="phone-off" size={18} color={isStudent ? '#94A3B8' : 'white'} />
               </TouchableOpacity>
             )
           ) : null}
@@ -514,9 +579,26 @@ export default function ChatRoomScreen() {
           {exam?.scribe_id ? (
             <TouchableOpacity 
               onPress={() => setIsDeclarationOpen(true)}
-              style={{ padding: 4 }}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel="View Scribe Declaration Letter"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 14,
+                backgroundColor: isStudent ? '#EFF6FF' : 'rgba(255,255,255,0.2)',
+                borderWidth: 1.5,
+                borderColor: isStudent ? '#DBEAFE' : 'rgba(255,255,255,0.3)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#0F172A',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: isStudent ? 0.05 : 0,
+                shadowRadius: 4,
+                elevation: isStudent ? 2 : 0,
+              }}
             >
-              <Feather name="file-text" size={24} color="white" />
+              <Ionicons name="document-text" size={19} color={isStudent ? '#1D4ED8' : 'white'} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -528,46 +610,57 @@ export default function ChatRoomScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Chat Wallpaper Decorative Background */}
-        <View style={{
-          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: isStudent ? '#d4e3ed' : '#efeae2',
-          zIndex: -1,
-          opacity: 0.8
-        }}>
-          {isStudent ? (
-            // Telegram Ambient Gradients
-            <View style={{ flex: 1 }}>
-              <View style={{ position: 'absolute', top: -50, left: -50, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(36,129,204,0.18)' }} />
-              <View style={{ position: 'absolute', bottom: 100, right: -50, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(5,150,105,0.12)' }} />
-              <View style={{ position: 'absolute', top: '40%', left: '20%', width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(234,179,8,0.06)' }} />
-            </View>
-          ) : (
-            // WhatsApp Doodle Pattern Overlay
-            <View style={{ flex: 1, opacity: 0.05, flexDirection: 'row', flexWrap: 'wrap', padding: 8 }}>
-              {Array.from({ length: 80 }).map((_, i) => (
-                <View key={i} style={{ width: '20%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', padding: 4 }}>
-                  <Feather name={['heart', 'message-circle', 'star', 'smile', 'phone', 'video', 'music', 'image', 'compass', 'award'][i % 10] as any} size={18} color="#000" />
-                </View>
-              ))}
-            </View>
-          )}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: screenBg,
+            zIndex: 0,
+          }}
+        >
+          <ChatDoodlePattern opacity={0.045} color="#000000" />
         </View>
 
         <ScrollView
           ref={scrollViewRef}
           style={{ flex: 1, backgroundColor: 'transparent' }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, paddingBottom: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 24 }}
         >
+          {/* Centered Date Pill ("TODAY") from reference */}
+          <View style={{ alignItems: 'center', marginVertical: 10 }}>
+            <View style={{
+              backgroundColor: '#FFFFFF',
+              paddingHorizontal: 16,
+              paddingVertical: 4.5,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.03,
+              shadowRadius: 3,
+              elevation: 1,
+            }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748B', letterSpacing: 0.8 }}>
+                TODAY
+              </Text>
+            </View>
+          </View>
+
           {messages.length === 0 ? (
             <View style={{ justifyContent: 'center', paddingVertical: 10, marginTop: 40, alignItems: 'center' }}>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.8)', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 16, paddingVertical: 14, borderRadius: 20, maxWidth: 280, shadowColor: '#000', shadowOpacity: 0.02, shadowRadius: 3, elevation: 1 }}>
-                <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 12, textAlign: 'center', lineHeight: 18, fontWeight: '600' }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.9)', borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 18, paddingVertical: 14, borderRadius: 20, maxWidth: 280, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 }}>
+                <Text style={{ fontFamily: 'Roboto', color: '#64748B', fontSize: 12.5, textAlign: 'center', lineHeight: 18, fontWeight: '600' }}>
                   {t('start_chat_desc')}
                 </Text>
               </View>
             </View>
           ) : (
-            messages.map((msg) => {
+            messages.map((msg, index) => {
               const isMine = msg.sender_id === currentUser.id;
               const formattedTime = new Date(msg.created_at).toLocaleTimeString('en-IN', {
                 hour: '2-digit',
@@ -599,78 +692,143 @@ export default function ChatRoomScreen() {
               }
 
               return (
-                <View
-                  key={msg.id}
-                  style={{ flexDirection: 'row', marginBottom: 12, justifyContent: isMine ? 'flex-end' : 'flex-start' }}
-                >
+                <View key={msg.id}>
                   <View
-                    style={{
-                      maxWidth: '78%', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1, borderWidth: 1,
-                      backgroundColor: isMine ? bubbleBg : '#fff',
-                      borderColor: isMine ? 'transparent' : '#f1f5f9',
-                      borderTopRightRadius: isMine ? 0 : 20,
-                      borderTopLeftRadius: isMine ? 20 : 0,
-                    }}
+                    style={{ flexDirection: 'row', marginBottom: 10, justifyContent: isMine ? 'flex-end' : 'flex-start' }}
                   >
-                    {isVoice ? (
-                      <VoiceMessageBubble 
-                        messageId={msg.id} 
-                        audioUrl={voiceUrl}
-                        base64Audio={base64Audio} 
-                        duration={msg.media_duration || msg.voice_duration}
-                        isMine={isMine} 
-                        themeColor={themeColor} 
-                        formattedTime={formattedTime} 
-                      />
-                    ) : isImage ? (
-                      <View style={{ width: 190, gap: 6 }}>
-                        <Image 
-                          source={{ uri: imageUrl }} 
-                          style={{ width: '100%', height: 120, borderRadius: 12, backgroundColor: '#f8fafc' }} 
+                    <View
+                      style={{
+                        maxWidth: '78%', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18,
+                        shadowColor: isMine ? (isStudent ? '#1D4ED8' : bubbleBg) : '#0f172a',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: isMine ? 0.12 : 0.04,
+                        shadowRadius: 3,
+                        elevation: 1,
+                        borderWidth: isMine ? 0 : 1,
+                        backgroundColor: isMine ? (isStudent ? '#1D4ED8' : bubbleBg) : '#FFFFFF',
+                        borderColor: isMine ? 'transparent' : '#E2E8F0',
+                        borderTopRightRadius: isMine ? 4 : 18,
+                        borderTopLeftRadius: isMine ? 18 : 4,
+                      }}
+                    >
+                      {isVoice ? (
+                        <VoiceMessageBubble 
+                          messageId={msg.id} 
+                          audioUrl={voiceUrl}
+                          base64Audio={base64Audio} 
+                          duration={msg.media_duration || msg.voice_duration}
+                          isMine={isMine} 
+                          themeColor={themeColor} 
+                          formattedTime={formattedTime} 
                         />
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 }}>
-                          <Feather name="image" size={12} color={isMine ? 'rgba(255,255,255,0.8)' : '#64748b'} />
-                          <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: isMine ? '#fff' : '#1e293b' }} numberOfLines={1}>
-                            {imageName}
-                          </Text>
-                        </View>
-                      </View>
-                    ) : isPdf ? (
-                      <View style={{ width: 190, gap: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isMine ? 'rgba(255,255,255,0.1)' : '#f8fafc', padding: 10, borderRadius: 12 }}>
-                          <Feather name="file-text" size={24} color={isMine ? '#fff' : '#ef4444'} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isMine ? '#fff' : '#1e293b' }} numberOfLines={1}>
-                              {pdfName}
-                            </Text>
-                            <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: isMine ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: 1 }}>
-                              Document
+                      ) : isImage ? (
+                        <View style={{ width: 200, gap: 6 }}>
+                          <Image 
+                            source={{ uri: imageUrl }} 
+                            style={{ width: '100%', height: 130, borderRadius: 12, backgroundColor: '#f8fafc' }} 
+                          />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 }}>
+                            <Feather name="image" size={12} color={isMine ? 'rgba(255,255,255,0.8)' : '#64748b'} />
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: isMine ? '#fff' : '#1e293b' }} numberOfLines={1}>
+                              {imageName}
                             </Text>
                           </View>
                         </View>
-                        <TouchableOpacity 
-                          onPress={() => {
-                            if (pdfUrl) {
-                              Linking.openURL(pdfUrl).catch(() => Alert.alert('Error', 'Cannot open document'));
-                            } else {
-                              Alert.alert(t('download') || 'Download', `Downloading ${pdfName}...`);
-                            }
-                          }}
-                          style={{ backgroundColor: isMine ? 'rgba(255,255,255,0.2)' : '#f1f5f9', paddingVertical: 8, borderRadius: 10, alignItems: 'center' }}
-                        >
-                          <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : '#475569' }}>
-                            {t('download') || 'ડાઉનલોડ'}
+                      ) : isPdf ? (
+                        <View style={{ width: 200, gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isMine ? 'rgba(255,255,255,0.12)' : '#f8fafc', padding: 10, borderRadius: 12 }}>
+                            <Feather name="file-text" size={24} color={isMine ? '#fff' : '#ef4444'} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isMine ? '#fff' : '#1e293b' }} numberOfLines={1}>
+                                {pdfName}
+                              </Text>
+                              <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: isMine ? 'rgba(255,255,255,0.7)' : '#64748b', marginTop: 1 }}>
+                                Document
+                              </Text>
+                            </View>
+                          </View>
+                          <TouchableOpacity 
+                            onPress={() => {
+                              if (pdfUrl) {
+                                Linking.openURL(pdfUrl).catch(() => Alert.alert('Error', 'Cannot open document'));
+                              } else {
+                                Alert.alert(t('download') || 'Download', `Downloading ${pdfName}...`);
+                              }
+                            }}
+                            style={{ backgroundColor: isMine ? 'rgba(255,255,255,0.2)' : '#f1f5f9', paddingVertical: 8, borderRadius: 10, alignItems: 'center' }}
+                          >
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: isMine ? '#fff' : '#475569' }}>
+                              {t('download')}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={{ minWidth: 64 }}>
+                          <View style={{
+                            flexDirection: 'row',
+                            flexWrap: 'wrap',
+                            alignItems: 'flex-end',
+                            justifyContent: isMine ? 'flex-end' : 'flex-start',
+                            rowGap: 2,
+                          }}>
+                            <Text style={{
+                              fontFamily: 'Roboto',
+                              fontSize: 14.5,
+                              lineHeight: 20,
+                              fontWeight: '400',
+                              color: isMine ? '#FFFFFF' : '#0F172A',
+                              marginRight: 8,
+                              flexShrink: 1,
+                            }}>
+                              {msg.message}
+                            </Text>
+
+                            <View style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              alignSelf: 'flex-end',
+                              marginLeft: 'auto',
+                              gap: 3,
+                              paddingBottom: 1,
+                            }}>
+                              <Text style={{
+                                fontFamily: 'Roboto',
+                                fontSize: 9.5,
+                                fontWeight: '600',
+                                color: isMine ? 'rgba(255,255,255,0.75)' : '#94A3B8',
+                              }}>
+                                {formattedTime}
+                              </Text>
+                              {isMine && (
+                                <Ionicons
+                                  name="checkmark-done"
+                                  size={14}
+                                  color="#93C5FD"
+                                  style={{ marginLeft: 1 }}
+                                />
+                              )}
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      {/* Timestamp & Read Status for Image & PDF */}
+                      {(isImage || isPdf) && (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: isMine ? 'flex-end' : 'flex-start', marginTop: 4, gap: 3 }}>
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '600', color: isMine ? 'rgba(255,255,255,0.75)' : '#94A3B8' }}>
+                            {formattedTime}
                           </Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, lineHeight: 18, fontWeight: '500', color: isMine ? '#fff' : '#1e293b' }}>
-                        {msg.message}
-                      </Text>
-                    )}
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 8, textAlign: 'right', marginTop: 6, fontWeight: '700', textTransform: 'uppercase', color: isMine ? 'rgba(255,255,255,0.6)' : '#94a3b8' }}>
-                      {formattedTime}
-                    </Text>
+                          {isMine && (
+                            <Ionicons
+                              name="checkmark-done"
+                              size={14}
+                              color="#93C5FD"
+                              style={{ marginLeft: 1 }}
+                            />
+                          )}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
               );
@@ -678,22 +836,37 @@ export default function ChatRoomScreen() {
           )}
         </ScrollView>
 
-        <View style={{ backgroundColor: inputBarBg, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingBottom: Platform.OS === 'ios' ? 4 : 8, shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 4 }}>
+        {/* Floating Chat Input Block (Exact reference from Image 1 & 2) */}
+        <View style={{
+          marginHorizontal: 14,
+          marginBottom: Math.max(insets.bottom, 12) + 4,
+          backgroundColor: '#FFFFFF',
+          borderRadius: 26,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
+          elevation: 3,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+        }}>
           {/* Upload status: progress while a file is being sent, or the error with Retry */}
           {upload && (
             <View
               accessibilityLiveRegion="polite"
-              style={{ marginHorizontal: 16, marginTop: 10, padding: 10, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: upload.error ? '#fef2f2' : '#fff', borderWidth: 1, borderColor: upload.error ? '#fecaca' : 'rgba(0,0,0,0.06)' }}
+              style={{ marginBottom: 6, padding: 10, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: upload.error ? '#fef2f2' : '#F3F8FC', borderWidth: 1, borderColor: upload.error ? '#fecaca' : '#E2E8F0' }}
             >
               <Feather name={upload.error ? 'alert-circle' : 'upload-cloud'} size={16} color={upload.error ? '#dc2626' : themeColor} />
               <View style={{ flex: 1 }}>
-                <Text numberOfLines={1} style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>
+                <Text numberOfLines={1} style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
                   {upload.error ? `Couldn't send ${upload.label}` : `Sending ${upload.label}… ${Math.round(upload.progress * 100)}%`}
                 </Text>
                 {upload.error ? (
                   <Text numberOfLines={2} style={{ fontFamily: 'Roboto', fontSize: 11, color: '#b91c1c', marginTop: 2 }}>{upload.error}</Text>
                 ) : (
-                  <View style={{ height: 4, borderRadius: 2, backgroundColor: '#e2e8f0', marginTop: 6, overflow: 'hidden' }}>
+                  <View style={{ height: 4, borderRadius: 2, backgroundColor: '#E2E8F0', marginTop: 6, overflow: 'hidden' }}>
                     <View style={{ height: '100%', width: `${Math.round(upload.progress * 100)}%`, backgroundColor: themeColor }} />
                   </View>
                 )}
@@ -704,7 +877,7 @@ export default function ChatRoomScreen() {
                     <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 12, fontWeight: '800' }}>Retry</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setUpload(null)} accessibilityRole="button" accessibilityLabel="Dismiss" style={{ padding: 4 }}>
-                    <Feather name="x" size={16} color="#64748b" />
+                    <Feather name="x" size={16} color="#64748B" />
                   </TouchableOpacity>
                 </>
               )}
@@ -712,66 +885,140 @@ export default function ChatRoomScreen() {
           )}
 
           {/* 1. INPUT ROW */}
-          <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center' }}>
-            {isRecording ? (
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 12, fontWeight: '600' }}>
-                    {t('recording')} {formatRecordTime(recordDuration)}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity onPress={cancelRecording} style={{ padding: 4 }}>
-                    <Feather name="trash-2" size={18} color="#ef4444" />
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={stopAndSendRecording} style={{ padding: 4 }}>
-                    <Feather name="check-circle" size={18} color={themeColor} />
-                  </TouchableOpacity>
-                </View>
+          {isRecording ? (
+            <View style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, width: '100%' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                <Text style={{ fontFamily: 'Roboto', color: '#64748B', fontSize: 13, fontWeight: '600' }}>
+                  {t('recording')} {formatRecordTime(recordDuration)}
+                </Text>
               </View>
-            ) : (
-              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {/* Attachment Button */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity onPress={cancelRecording} style={{ padding: 6, borderRadius: 16, backgroundColor: '#FEF2F2' }}>
+                  <Feather name="trash-2" size={18} color="#EF4444" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={stopAndSendRecording} style={{ padding: 6, borderRadius: 16, backgroundColor: themeColor }}>
+                  <Feather name="check" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' }}>
+              {/* Attachment Button: Hidden when typing or input is selected */}
+              {!isTypingOrSelected && (
                 <TouchableOpacity
                   onPress={() => setIsAttachmentModalOpen(true)}
-                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
-                >
-                  <Feather name="paperclip" size={17} color={themeColor} />
-                </TouchableOpacity>
-
-                <TextInput
-                  value={newMessage}
-                  onChangeText={setNewMessage}
-                  placeholder={t('type_message')}
-                  placeholderTextColor="#94a3b8"
-                  style={{ flex: 1, fontFamily: 'Roboto', backgroundColor: '#fff', borderRadius: 18, paddingHorizontal: 14, height: 36, fontSize: 13, color: '#1e293b', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
-                  multiline={false}
-                />
-
-                {/* Voice Record Button */}
-                <TouchableOpacity
-                  onPress={startRecording}
-                  style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)' }}
-                >
-                  <Feather name="mic" size={16} color={themeColor} />
-                </TouchableOpacity>
-
-                {/* Send Button */}
-                <TouchableOpacity
-                  onPress={handleSendMessage}
-                  disabled={newMessage.trim() === ''}
-                  style={{ 
-                    width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', 
-                    backgroundColor: newMessage.trim() === '' ? '#cbd5e1' : themeColor,
-                    shadowColor: themeColor, shadowOffset: { width: 0, height: 3 }, shadowOpacity: newMessage.trim() === '' ? 0 : 0.2, shadowRadius: 4, elevation: newMessage.trim() === '' ? 0 : 2 
+                  accessibilityRole="button"
+                  accessibilityLabel="Attach file"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    flexShrink: 0,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isStudent ? '#EBF3FE' : '#f8fafc',
                   }}
                 >
-                  <Feather name="send" size={15} color="white" />
+                  <Feather
+                    name="paperclip"
+                    size={19}
+                    color={themeColor}
+                    style={{
+                      textAlign: 'center',
+                      textAlignVertical: 'center',
+                      includeFontPadding: false,
+                    }}
+                  />
                 </TouchableOpacity>
-              </View>
-            )}
-          </View>
+              )}
+
+              {/* Text Message Input */}
+              <TextInput
+                value={newMessage}
+                onChangeText={handleTextChange}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                placeholder={t('type_message')}
+                placeholderTextColor="#94A3B8"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontFamily: 'Roboto',
+                  height: 40,
+                  fontSize: 13.5,
+                  color: '#0F172A',
+                  backgroundColor: isStudent ? '#F3F6FA' : '#f8fafc',
+                  borderRadius: 14,
+                  paddingHorizontal: 12,
+                  paddingVertical: 0,
+                  textAlignVertical: 'center',
+                  borderWidth: 0,
+                  ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+                } as any}
+                multiline={false}
+              />
+
+              {/* Voice Record Button: Hidden when typing or input is selected */}
+              {!isTypingOrSelected && (
+                <TouchableOpacity
+                  onPress={startRecording}
+                  accessibilityRole="button"
+                  accessibilityLabel="Record voice message"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    flexShrink: 0,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: isStudent ? '#FFF0E6' : '#f8fafc',
+                  }}
+                >
+                  <Feather
+                    name="mic"
+                    size={19}
+                    color={isStudent ? '#F07820' : themeColor}
+                    style={{
+                      textAlign: 'center',
+                      textAlignVertical: 'center',
+                      includeFontPadding: false,
+                    }}
+                  />
+                </TouchableOpacity>
+              )}
+
+              {/* Send Button */}
+              <TouchableOpacity
+                onPress={handleSendMessage}
+                disabled={newMessage.trim() === ''}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+                style={{ 
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  flexShrink: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center', 
+                  backgroundColor: isStudent ? '#1676D2' : themeColor,
+                }}
+              >
+                <Feather
+                  name="send"
+                  size={18}
+                  color="#FFFFFF"
+                  style={{
+                    marginLeft: 2,
+                    marginTop: -1,
+                    textAlign: 'center',
+                    textAlignVertical: 'center',
+                    includeFontPadding: false,
+                  }}
+                />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -826,138 +1073,276 @@ export default function ChatRoomScreen() {
         </View>
       </Modal>
 
-      {/* ── DECLARATION MODAL ── */}
+      {/* ── DECLARATION MODAL (Compact Official Certified Frame — No Scroll Needed) ── */}
       <Modal animationType="fade" transparent visible={isDeclarationOpen} onRequestClose={() => setIsDeclarationOpen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.35)', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0,0,0,0.05)', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15 }}>
-            <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{t('scribe_declaration')}</Text>
-              <TouchableOpacity onPress={() => setIsDeclarationOpen(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={18} color="#64748b" />
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            width: '100%',
+            maxWidth: 390,
+            borderRadius: 20,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: '#E2E8F0',
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 12 },
+            shadowOpacity: 0.14,
+            shadowRadius: 24,
+            elevation: 10,
+          }}>
+            {/* Header */}
+            <View style={{
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: '#F1F5F9',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#FFFFFF',
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 10,
+                  backgroundColor: isStudent ? '#EFF6FF' : '#F0FDF4',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: isStudent ? '#DBEAFE' : '#DCFCE7',
+                }}>
+                  <Ionicons name="document-text" size={16} color={isStudent ? '#1D4ED8' : '#16A34A'} />
+                </View>
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8.5, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                    Anulekh Certification
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A', letterSpacing: -0.2 }}>
+                    {t('scribe_declaration')}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsDeclarationOpen(false)}
+                activeOpacity={0.7}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#F1F5F9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="x" size={15} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
-              <View style={{ alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 20, color: themeColor }}>Anulekh Portal</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 }}>{t('official_cert_letter')}</Text>
-              </View>
-
-              <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('exam_details')}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>{t('candidate_student')}: {exam?.subject}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_level')}: {exam?.exam_type}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_date')}: {exam?.exam_date}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_venue')}: {exam?.exam_venue}</Text>
-              </View>
-
-              <View style={{ gap: 10 }}>
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{isStudent ? profile?.full_name : otherProfileData?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>ધોરણ: {exam?.education_grade || 'ચકાસાયેલ'}</Text>
+            {/* Document Content - Compact Fitted Frame (No Scroll Needed) */}
+            <View style={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}>
+              {/* Letterhead & Reference Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 14, color: isStudent ? '#1D4ED8' : '#16A34A' }}>
+                    Anulekh Portal
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8.5, color: '#64748B', fontWeight: '700', textTransform: 'uppercase' }}>
+                    • {t('official_cert_letter')}
+                  </Text>
                 </View>
-
-                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
-
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{isStudent ? otherProfileData?.full_name : profile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>વ્યવસાય: {isStudent ? (otherProfileData?.occupation || 'વિદ્યાર્થી લખિયો') : (profile?.occupation || 'વિદ્યાર્થી લખિયો')}</Text>
+                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8.5, fontWeight: '700', color: '#475569' }}>
+                    REF #ANU-DECL-{exam?.id || '2026'}
+                  </Text>
                 </View>
               </View>
 
-              <View style={{ backgroundColor: isStudent ? 'rgba(37,99,235,0.05)' : 'rgba(5,150,105,0.05)', borderWidth: 1, borderColor: isStudent ? 'rgba(37,99,235,0.18)' : 'rgba(5,150,105,0.18)', padding: 12, borderRadius: 16, marginTop: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: themeColor, lineHeight: 16, fontStyle: 'italic', textAlign: 'center' }}>
+              {/* Exam Details Card */}
+              <View style={{
+                backgroundColor: '#F8FAFC',
+                padding: 10,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                gap: 3,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <Ionicons name="school" size={12} color={isStudent ? '#1D4ED8' : '#16A34A'} />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 8.5, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {t('exam_details')}
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, color: '#64748B', fontWeight: '600' }}>
+                    {exam?.exam_type || 'Standard Examination'}
+                  </Text>
+                </View>
+
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, color: '#0F172A', fontWeight: '800' }} numberOfLines={1}>
+                  {exam?.subject || 'Exam Request'}
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                    <Feather name="calendar" size={11} color="#64748B" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#475569' }} numberOfLines={1}>
+                      {exam?.exam_date || 'Scheduled Date'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'flex-end' }}>
+                    <Feather name="map-pin" size={11} color="#64748B" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#475569' }} numberOfLines={1}>
+                      {exam?.exam_venue || 'Designated Center'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Parties Section (Side-by-side columns: Student & Scribe) */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {/* Candidate / Student */}
+                <View style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  padding: 8,
+                }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    {t('candidate_student')}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0F172A', fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                    {isStudent ? profile?.full_name : otherProfileData?.full_name}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                    Grade: {exam?.education_grade || t('status_verified_label')}
+                  </Text>
+                </View>
+
+                {/* Volunteer / Scribe */}
+                <View style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: '#E2E8F0',
+                  borderRadius: 12,
+                  padding: 8,
+                }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    {t('volunteer_scribe')}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0F172A', fontWeight: '800', marginTop: 2 }} numberOfLines={1}>
+                    {isStudent ? otherProfileData?.full_name : profile?.full_name}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, color: '#64748B', marginTop: 1 }} numberOfLines={1}>
+                    {t('occupation_label')}{isStudent ? (otherProfileData?.occupation || t('student_scribe_fallback')) : (profile?.occupation || t('student_scribe_fallback'))}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Legal Declaration / Undertaking */}
+              <View style={{
+                backgroundColor: isStudent ? 'rgba(29, 78, 216, 0.05)' : 'rgba(22, 163, 74, 0.05)',
+                borderWidth: 1,
+                borderColor: isStudent ? 'rgba(29, 78, 216, 0.15)' : 'rgba(22, 163, 74, 0.15)',
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+                borderRadius: 12,
+              }}>
+                <Text style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 9.5,
+                  color: isStudent ? '#1D4ED8' : '#16A34A',
+                  lineHeight: 14,
+                  fontStyle: 'italic',
+                  textAlign: 'center',
+                  fontWeight: '500',
+                }}>
                   {t('declaration_agreement_text')}
                 </Text>
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}>
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('status')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>✓ ચકાસાયેલ લખિયો</Text>
+              {/* Official Seal / Audit Stamp */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Ionicons name="shield-checkmark" size={13} color="#10B981" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, color: '#059669', fontWeight: '800' }}>
+                    {t('verified_scribe_profile')}
+                  </Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', marginLeft: 'auto' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('official_stamp')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#0f172a', fontWeight: '800', marginTop: 2 }}>ANULEKH ONLINE</Text>
-                </View>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 8, color: '#64748B', fontWeight: '800', letterSpacing: 0.5 }}>
+                  ANULEKH ONLINE AUDITED
+                </Text>
               </View>
-            </ScrollView>
+            </View>
 
-            <View style={{ padding: 16, backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#f1f5f9', flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity onPress={() => setIsDeclarationOpen(false)} style={{ flex: 1, backgroundColor: '#e2e8f0', paddingVertical: 11, borderRadius: 12, alignItems: 'center' }}>
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '700', fontSize: 13 }}>{t('close')}</Text>
+            {/* Footer Buttons */}
+            <View style={{
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              backgroundColor: '#F8FAFC',
+              borderTopWidth: 1,
+              borderTopColor: '#F1F5F9',
+              flexDirection: 'row',
+              gap: 10,
+            }}>
+              <TouchableOpacity
+                onPress={() => setIsDeclarationOpen(false)}
+                activeOpacity={0.7}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1.5,
+                  borderColor: '#E2E8F0',
+                  paddingVertical: 9,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '700', fontSize: 12.5 }}>
+                  {t('close')}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => Alert.alert(t('download'), t('download_declaration'))} style={{ flex: 1, backgroundColor: themeColor, paddingVertical: 11, borderRadius: 12, alignItems: 'center', shadowColor: themeColor, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}>
-                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 13 }}>{t('download')}</Text>
+
+              <TouchableOpacity
+                onPress={() => Alert.alert(t('download'), t('download_declaration'))}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1.3,
+                  backgroundColor: isStudent ? '#1D4ED8' : '#16A34A',
+                  paddingVertical: 9,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 6,
+                  shadowColor: '#0F172A',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.1,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}
+              >
+                <Feather name="download" size={14} color="#FFFFFF" />
+                <Text style={{ fontFamily: 'Roboto', color: '#FFFFFF', fontWeight: '800', fontSize: 12.5 }}>
+                  {t('download')}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-      {/* ── DEFAULT BOTTOM NAV BAR ── (phones only) */}
-      {!inDesktopFrame && (
-      <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: '#fff',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
-      }}>
-        <View style={{
-          flexDirection: 'row',
-          paddingVertical: 8,
-          paddingHorizontal: 8,
-          gap: 4,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.07)',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}>
-          {TABS.map((tab) => {
-            const translationKey = tab.id === 'home' ? 'nav_home' :
-                                   tab.id === 'explore' ? 'nav_explore' :
-                                   tab.id === 'requests' ? 'nav_requests' :
-                                   tab.id === 'commitments' ? 'nav_applied' :
-                                   tab.id === 'plan' ? 'nav_plan' : 'nav_account';
-            const translatedLabel = t(translationKey as any);
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                onPress={() => {
-                  router.replace({
-                    pathname: isStudent ? '/console/student' : '/console/scribe',
-                    params: { tab: tab.id }
-                  });
-                }}
-                style={{
-                  flex: 1, alignItems: 'center', paddingVertical: 9,
-                  borderRadius: 20,
-                  backgroundColor: 'transparent',
-                }}
-              >
-                <Ionicons name={tab.iconInactive as any} size={24} color={'#94a3b8'} />
-                <Text style={{
-                  fontFamily: 'Roboto',
-                  fontSize: 11, fontWeight: '600',
-                  marginTop: 3, color: '#94a3b8',
-                }}>
-                  {translatedLabel}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </SafeAreaView>
-      )}
+
 
       {/* ── ATTACHMENT CHOICE MODAL ── */}
       <Modal animationType="slide" transparent visible={isAttachmentModalOpen} onRequestClose={() => setIsAttachmentModalOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a' }}>દસ્તાવેજ મોકલો (Send Attachment)</Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a' }}>{t('send_attachment')}</Text>
               <TouchableOpacity onPress={() => setIsAttachmentModalOpen(false)} style={{ padding: 4 }}>
                 <Feather name="x" size={20} color="#64748b" />
               </TouchableOpacity>
@@ -971,8 +1356,8 @@ export default function ChatRoomScreen() {
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(37,99,235,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="image" size={20} color="#2563eb" />
                 </View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>ફોટો પસંદ કરો</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Upload Photo/Image</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>{t('select_photo')}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Photo / Image</Text>
               </TouchableOpacity>
 
               <TouchableOpacity 
@@ -982,8 +1367,8 @@ export default function ChatRoomScreen() {
                 <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(239,68,68,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                   <Feather name="file-text" size={20} color="#ef4444" />
                 </View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>દસ્તાવેજ પસંદ કરો</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>Upload PDF/Document</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1e293b' }}>{t('select_document')}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#64748b' }}>PDF / Document</Text>
               </TouchableOpacity>
             </View>
 
@@ -991,7 +1376,7 @@ export default function ChatRoomScreen() {
               onPress={() => setIsAttachmentModalOpen(false)}
               style={{ backgroundColor: '#f1f5f9', paddingVertical: 12, borderRadius: 12, alignItems: 'center' }}
             >
-              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>રદ કરો (Cancel)</Text>
+              <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '800', fontSize: 13 }}>{t('cancel')}</Text>
             </TouchableOpacity>
           </View>
         </View>

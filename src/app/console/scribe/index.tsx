@@ -27,8 +27,10 @@ import {
   Animated,
   Platform,
   Image,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -36,7 +38,6 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '@/core/translation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
-
 
 import ScribeHomeView from '@/components/scribe/ScribeHomeView';
 import ScribeExploreView from '@/components/scribe/ScribeExploreView';
@@ -46,6 +47,11 @@ import SharedNotificationsView from '@/components/shared/SharedNotificationsView
 import { useWindowDimensions } from 'react-native';
 import ConsoleScribePC from '@/components/pc_view/ConsoleScribePC';
 import { TabPane } from '@/components/ui/TabPane';
+import { ClassicHeader } from '@/components/navigation/ClassicHeader';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 /**
  * Every tab id the console understands. Note: only home, explore,
@@ -81,6 +87,7 @@ const MUTED      = '#64748b';
  * optional `tab` search param to pre-select a tab.
  */
 export default function ScribeDashboard() {
+  const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
 
   // ── ALL STATE (must come before any useEffect) ──────────────────────────
@@ -229,105 +236,16 @@ export default function ScribeDashboard() {
     <View style={{ flex: 1, backgroundColor: BG, height: Platform.OS === 'web' ? '100vh' as any : '100%', maxHeight: Platform.OS === 'web' ? '100vh' as any : undefined, overflow: 'hidden' }}>
       <StatusBar style="dark" />
 
-      {/* Background orbs removed for clean white style */}
-
-      {/* ── HEADER ── */}
-      <SafeAreaView edges={['top']} style={{
-        backgroundColor: '#ffffff',
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        shadowColor: '#0f172a', shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
-        zIndex: 10,
-      }}>
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12,
-          borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)',
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-        }}>
-          {/* Logo & Portal Tag */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={{
-              width: 44, height: 44, borderRadius: 14,
-              backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: ACCENT_BD,
-              alignItems: 'center', justifyContent: 'center',
-              padding: 1,
-              overflow: 'hidden',
-            }}>
-              <Image 
-                source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%', borderRadius: 11 }}
-                resizeMode="cover"
-              />
-            </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: TEXT, letterSpacing: -0.5 }}>Anulekh</Text>
-            <View style={{
-              backgroundColor: ACCENT_BG, borderWidth: 1, borderColor: ACCENT_BD,
-              borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
-            }}>
-              <Text style={{ fontFamily: 'Roboto', color: ACCENT, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>SCRIBE</Text>
-            </View>
-          </View>
-
-          {/* Right Action Icons: Notifications + Profile */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-
-            {/* Notifications bell: opens the notifications tab and clears the local unread dot */}
-            <TouchableOpacity
-              onPress={() => { setActiveTab('notifications'); setUnread(0); }}
-              activeOpacity={0.75}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={`Notifications, ${unreadNotifs} unread`}
-              style={{
-                width: 44, height: 44, borderRadius: 15,
-                backgroundColor: '#2563eb',
-                borderWidth: 1.5, borderColor: '#1d4ed8',
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: '#2563eb', shadowOffset: { width: 0, height: 3 },
-                shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
-              }}
-            >
-              <Ionicons 
-                name={activeTab === 'notifications' ? "notifications" : "notifications-outline"} 
-                size={20} 
-                color="#ffffff" 
-              />
-              {unreadNotifs > 0 && (
-                <View style={{
-                  position: 'absolute', top: 5, right: 5,
-                  width: 9, height: 9, borderRadius: 4.5,
-                  backgroundColor: '#ef4444', borderWidth: 1.5, borderColor: '#ffffff',
-                }} />
-              )}
-            </TouchableOpacity>
-
-            {/* Avatar: cached photo or first initial; opens the Account (settings) tab */}
-            <TouchableOpacity
-              onPress={() => setActiveTab('settings')}
-              activeOpacity={0.8}
-              style={{
-                width: 44, height: 44, borderRadius: 22,
-                backgroundColor: ACCENT_BG, borderWidth: 1.5, borderColor: ACCENT_BD,
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: ACCENT, shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15, shadowRadius: 6, elevation: 3,
-                overflow: 'hidden',
-              }}
-            >
-              {profilePhoto ? (
-                <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%' }} />
-              ) : (
-                <Text style={{ color: ACCENT, fontWeight: '900', fontSize: 18 }}>
-                  {profile?.full_name?.charAt(0)?.toUpperCase() ?? 'S'}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
+      {/* ── HEADER (Classic Header active) ── */}
+      <ClassicHeader
+        role="scribe"
+        unreadCount={unreadNotifs}
+        isNotificationActive={activeTab === 'notifications'}
+        profilePhoto={profilePhoto}
+        fullName={profile?.full_name}
+        onNotificationPress={() => { setActiveTab('notifications'); setUnread(0); }}
+        onProfilePress={() => setActiveTab('settings')}
+      />
 
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
@@ -339,25 +257,28 @@ export default function ScribeDashboard() {
         <TabPane active={activeTab === 'notifications'}><SharedNotificationsView /></TabPane>
       </View>
 
-      {/* ── BOTTOM NAV — top corners rounded ── */}
-      <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: '#ffffff',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        shadowColor: '#0f172a', shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.06, shadowRadius: 16, elevation: 8,
-      }}>
+      {/* ── SMOOTH DOCKED BOTTOM NAVBAR ── */}
+      <SafeAreaView
+        edges={['bottom']}
+        style={{
+          backgroundColor: '#ffffff',
+          borderTopWidth: 1,
+          borderTopColor: '#f1f5f9',
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.05,
+          shadowRadius: 14,
+          elevation: 8,
+          zIndex: 100,
+        }}
+      >
         <View style={{
           flexDirection: 'row',
           alignItems: 'center',
-          paddingTop: 12,
-          paddingBottom: 12,
-          paddingHorizontal: 16,
-          gap: 6,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.05)',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          justifyContent: 'space-around',
+          paddingHorizontal: 8,
+          paddingTop: 8,
+          paddingBottom: Math.max(insets.bottom > 0 ? 6 : 10, 6),
         }}>
           {/* One button per tab; icon and text are hidden from screen readers because the button carries the label */}
           {TABS.map((tab) => {
@@ -367,10 +288,12 @@ export default function ScribeDashboard() {
                                    tab.id === 'explore' ? 'nav_explore' :
                                    tab.id === 'commitments' ? 'nav_applied' : 'nav_account';
             const translatedLabel = t(translationKey as any);
+
             return (
               <TouchableOpacity
                 key={tab.id}
                 onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setActiveTab(tab.id);
                   announceForAccessibility(`${translatedLabel} tab selected`);
                 }}
@@ -384,34 +307,42 @@ export default function ScribeDashboard() {
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingVertical: 9,
-                  paddingHorizontal: 4,
-                  borderRadius: 18,
-                  backgroundColor: active ? ACCENT_BG : 'transparent',
-                  borderWidth: 1,
-                  borderColor: active ? ACCENT_BD : 'transparent',
+                  paddingVertical: 3,
                 }}
               >
                 <Ionicons
                   name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={21}
-                  color={active ? ACCENT : '#94a3b8'}
+                  size={24}
+                  color={active ? '#059669' : '#94A3B8'}
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}
                 />
+
                 <Text
                   importantForAccessibility="no"
                   accessibilityElementsHidden={true}
                   style={{
                     fontFamily: 'Roboto',
-                    fontSize: 11.5,
-                    fontWeight: active ? '800' : '600',
+                    fontSize: 11,
+                    fontWeight: active ? '800' : '500',
+                    color: active ? '#059669' : '#64748B',
+                    letterSpacing: -0.1,
                     marginTop: 3,
-                    color: active ? ACCENT : '#64748b',
                   }}
                 >
                   {translatedLabel}
                 </Text>
+
+                {/* Micro indicator dot below label */}
+                <View
+                  style={{
+                    width: 4,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: active ? '#059669' : 'transparent',
+                    marginTop: 3,
+                  }}
+                />
               </TouchableOpacity>
             );
           })}

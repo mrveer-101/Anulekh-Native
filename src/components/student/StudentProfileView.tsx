@@ -17,12 +17,14 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { useLanguage } from '@/core/translation';
 
 /**
  * Student profile editor (no props; reads the current session itself).
  * Side effects: updates `profiles`, writes the photo to AsyncStorage.
  */
 export default function StudentProfileView() {
+  const { t } = useLanguage();
   // Loading/saving flags, the auth user, and controlled form fields.
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -99,7 +101,7 @@ export default function StudentProfileView() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow photo library access to upload a profile photo.');
+        Alert.alert(t('permission_required'), t('photo_permission_desc'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -116,7 +118,7 @@ export default function StudentProfileView() {
         await AsyncStorage.setItem(`profile_photo_${user.id}`, dataUri);
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to select image.');
+      Alert.alert(t('error'), e.message || 'Failed to select image.');
     }
   };
 
@@ -124,7 +126,7 @@ export default function StudentProfileView() {
   const handleUpdateProfile = async () => {
     // Both fields are required.
     if (!fullName.trim() || !phone.trim()) {
-      Alert.alert('Missing Fields', 'Full Name and Phone Number are required.');
+      Alert.alert(t('missing_fields'), t('name_phone_required'));
       return;
     }
 
@@ -143,9 +145,9 @@ export default function StudentProfileView() {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Profile updated successfully!');
+      Alert.alert(t('success'), t('profile_updated_success'));
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to update profile.');
+      Alert.alert(t('error'), error.message || 'Failed to update profile.');
     } finally {
       setUpdating(false);
     }
@@ -161,7 +163,7 @@ export default function StudentProfileView() {
   }
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1, paddingHorizontal: 20 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       {/* Profile Header Card (3-Column Layout) */}
       <View style={{
         backgroundColor: '#ffffff',
@@ -207,7 +209,7 @@ export default function StudentProfileView() {
         {/* User Info (In Between / Middle) */}
         <View style={{ flex: 1, marginLeft: 16, marginRight: 12, justifyContent: 'center' }}>
           <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }} numberOfLines={1}>
-            {fullName || 'Student'}
+            {fullName || t('candidate_student')}
           </Text>
           <Text style={{ fontSize: 11.5, fontWeight: '500', color: '#64748b', marginTop: 4 }} numberOfLines={1}>
             {email}
@@ -231,41 +233,41 @@ export default function StudentProfileView() {
         >
           <Feather name="camera" size={14} color="#2563eb" style={{ marginBottom: 2 }} />
           <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#2563eb', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Upload
+            {t('upload')}
           </Text>
         </TouchableOpacity>
       </View>
 
       {/* Editable Account Information Card */}
       <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 4, marginBottom: 16 }}>
-        <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 14, letterSpacing: 0.5 }}>Basic Information</Text>
+        <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 14, letterSpacing: 0.5 }}>{t('basic_information')}</Text>
         
         <View style={{ gap: 14 }}>
           <View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>Full Name</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>{t('full_name')}</Text>
             <TextInput
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Your Full Name"
+              placeholder={t('full_name')}
               placeholderTextColor="#94a3b8"
               style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
             />
           </View>
 
           <View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>Phone Number</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 6 }}>{t('phone_number')}</Text>
             <TextInput
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
-              placeholder="Phone Number"
+              placeholder={t('phone_number')}
               placeholderTextColor="#94a3b8"
               style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
             />
           </View>
 
           <View>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8', marginBottom: 6 }}>Email Address (Non-editable)</Text>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8', marginBottom: 6 }}>{t('email_non_editable')}</Text>
             <TextInput
               value={email}
               editable={false}
@@ -283,7 +285,7 @@ export default function StudentProfileView() {
           {updating ? (
             <ActivityIndicator size="small" color="#ffffff" />
           ) : (
-            <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>Save Changes</Text>
+            <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>{t('save_changes')}</Text>
           )}
         </TouchableOpacity>
       </View>

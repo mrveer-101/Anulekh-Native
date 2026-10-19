@@ -35,7 +35,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { supabase } from '@/core/supabase';
 import { FormSection, RequestHeader, RequestPage, RequestTabBar, RequestTypeChooser, SubmitButton } from '@/components/student/RequestKit';
+import VoiceExamWizard from '@/components/student/VoiceExamWizard';
 import { announceForAccessibility } from '@/core/a11y';
+import { useLanguage } from '@/core/translation';
 
 /** Base URL of the Rust/Axum backend; used here only for the hall-ticket AI parser endpoint. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
@@ -82,14 +84,17 @@ const MOCK_LOCATIONS = [
  * date/time picker, venue picker and "reading hall ticket" overlay modals.
  */
 export default function ScribeRequestForm() {
+  const { t } = useLanguage();
 
   // Edit mode is driven by the `id` query param (set by StudentRequestsView).
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
   const isEditing = !!params.id;
 
-  // Entry choice: ask the student whether to fill manually or auto-fill from an admit card.
+  // Entry choice: ask the student whether to fill manually, auto-fill from an admit card, or use voice.
   // Editing an existing request skips straight to the form.
-  const [entryMode, setEntryMode] = useState<'choice' | 'form'>(isEditing ? 'form' : 'choice');
+  const [entryMode, setEntryMode] = useState<'choice' | 'form' | 'voice'>(
+    isEditing ? 'form' : (params.mode === 'voice' ? 'voice' : 'choice')
+  );
 
   // Submit spinner and the logged-in student's profile (its fields are copied into each request).
   const [loading, setLoading] = useState(false);
@@ -656,13 +661,31 @@ export default function ScribeRequestForm() {
     else router.replace('/console/student' as any);
   };
 
-  // Entry-choice screen: Exam (scan admit card / fill manually) or Assignment.
+  // Voice Assistant Mode: hands-free conversational exam request creator
+  if (entryMode === 'voice') {
+    return (
+      <VoiceExamWizard
+        profile={profile}
+        onCancel={() => setEntryMode('choice')}
+        onSuccess={() => {
+          Alert.alert(t('success'), 'Exam request created successfully via Voice Assistant!');
+          router.replace('/console/student/' as any);
+        }}
+      />
+    );
+  }
+
+  // Entry-choice screen: Exam (voice / scan admit card / fill manually) or Assignment.
   if (entryMode === 'choice') {
     return (
       <RequestPage>
-        <RequestHeader title="New Request" subtitle="Get a scribe for an exam or assignment" onBack={leavePage} />
+        <RequestHeader title={t('new_request')} subtitle={t('chooser_subtitle')} onBack={leavePage} />
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 70 }}>
           <RequestTypeChooser
+            onVoice={() => {
+              setEntryMode('voice');
+              announceForAccessibility('Voice assistant request wizard opened');
+            }}
             onAutoFill={startAutoFillEntry}
             onManual={() => {
               setEntryMode('form');
@@ -681,8 +704,8 @@ export default function ScribeRequestForm() {
     <RequestPage>
       {/* Back: a new request returns to the chooser; editing leaves the page */}
       <RequestHeader
-        title={isEditing ? 'Edit Exam Request' : 'Exam Request'}
-        subtitle={isEditing ? undefined : 'Fill in your exam details'}
+        title={isEditing ? t('edit_exam_request') : t('new_request')}
+        subtitle={isEditing ? undefined : t('fill_exam_details')}
         onBack={() => (isEditing ? leavePage() : setEntryMode('choice'))}
       />
 
@@ -691,12 +714,12 @@ export default function ScribeRequestForm() {
         <View style={{ gap: 14 }}>
           
           {/* Section: Exam Classification */}
-          <FormSection icon="layers" title="Exam Classification">
+          <FormSection icon="layers" title={t('exam_classification')}>
 
             <View className="space-y-3">
               {/* 1. Exam Type Segments */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">Exam Type *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">{t('exam_type')} *</Text>
                 <View className="flex-row bg-slate-100 p-1 rounded-xl">
                   {EXAM_TYPES.map((type) => {
                     const isSelected = examType === type;
@@ -723,7 +746,7 @@ export default function ScribeRequestForm() {
 
               {/* 2. Searchable Sub-topic Dropdown */}
               <View className="z-50">
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Sub-topic / Board / Course *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">{t('exam_subtopic')} *</Text>
                 <View className="w-full relative">
                   <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 flex-row items-center justify-between">
                     <TextInput
@@ -788,7 +811,7 @@ export default function ScribeRequestForm() {
 
               {/* Language Selection */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">Language of Examination *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">{t('exam_language_req')} *</Text>
                 <View className="flex-row flex-wrap gap-1.5">
                   {EXAM_LANGUAGES.map((lang) => {
                     const isSelected = examLanguages.includes(lang);
@@ -821,7 +844,7 @@ export default function ScribeRequestForm() {
           </FormSection>
 
           {/* Section: Exam Details — includes Admit Card Upload */}
-          <FormSection icon="file-text" title="Exam Details">
+          <FormSection icon="file-text" title={t('exam_details')}>
 
             {/* Pre-Booking toggle (create mode only) */}
             {!isEditing && (
@@ -835,8 +858,8 @@ export default function ScribeRequestForm() {
                 <View className="flex-row items-center flex-1 pr-3">
                   <Feather name="clock" size={16} color={isPreBooking ? '#2563eb' : '#94a3b8'} />
                   <View className="ml-2.5 flex-1">
-                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>Pre-Book a Scribe</Text>
-                    <Text className="text-[9px] text-slate-400 mt-0.5">Reserve early, before your hall ticket is published. Admit card optional.</Text>
+                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>{t('prebook_scribe')}</Text>
+                    <Text className="text-[9px] text-slate-400 mt-0.5">{t('prebook_desc')}</Text>
                   </View>
                 </View>
                 <View className={`w-9 h-5 rounded-full justify-center px-0.5 ${isPreBooking ? 'bg-blue-500 items-end' : 'bg-slate-300 items-start'}`}>
@@ -848,7 +871,7 @@ export default function ScribeRequestForm() {
             <View className="space-y-3">
               {/* Subject / paper name */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Subject / Paper Name *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">{t('subject_paper_name')} *</Text>
                 <TextInput
                   value={subject}
                   onChangeText={setSubject}
@@ -863,7 +886,7 @@ export default function ScribeRequestForm() {
 
               {/* Date & Time Picker Trigger */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Date & Time *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">{t('exam_date_time')} *</Text>
                 <TouchableOpacity
                   onPress={() => { setActiveExtraIndex(-1); setShowDatePicker(true); }}
                   activeOpacity={0.8}
@@ -874,7 +897,7 @@ export default function ScribeRequestForm() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between active:border-blue-500"
                 >
                   <Text className={`text-sm ${examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
-                    {examDate || 'Select Date & Time'}
+                    {examDate || t('select_date')}
                   </Text>
                   <Feather name="calendar" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                 </TouchableOpacity>
@@ -882,7 +905,7 @@ export default function ScribeRequestForm() {
 
               {/* Venue & Map Trigger */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Exam Venue & Address *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">{t('exam_venue_address')} *</Text>
                 <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between focus-within:border-blue-500 focus-within:bg-white">
                   <TextInput
                     value={examVenue}
@@ -929,7 +952,7 @@ export default function ScribeRequestForm() {
               {/* Admit Card Upload + AI Auto-Fill */}
               <View className="pt-1">
                 <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
-                  Upload Admit Card / Hall Ticket (Optional)
+                  {t('upload_admit_card_optional')}
                 </Text>
                 <TouchableOpacity
                   onPress={handlePickAdmitCard}
@@ -954,13 +977,13 @@ export default function ScribeRequestForm() {
                         importantForAccessibility="no" accessibilityElementsHidden={true}
                       />
                       <Text className="text-xs font-semibold text-slate-800 mt-1">{admitCardFileName || admitCardImage}</Text>
-                      <Text className="text-[10px] text-emerald-600 font-bold mt-0.5">Tap to change file</Text>
+                      <Text className="text-[10px] text-emerald-600 font-bold mt-0.5">{t('tap_to_change_file')}</Text>
                     </View>
                   ) : (
                     <View className="items-center">
                       <Feather name="upload-cloud" size={24} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                      <Text className="text-xs font-semibold text-slate-600 mt-1">Upload Hall Ticket (Photo or PDF)</Text>
-                      <Text className="text-[10px] text-slate-400 mt-0.5">We'll auto-fill subject, date & venue for you</Text>
+                      <Text className="text-xs font-semibold text-slate-600 mt-1">{t('upload_hall_ticket_prompt')}</Text>
+                      <Text className="text-[10px] text-slate-400 mt-0.5">{t('autofill_hint')}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -973,7 +996,7 @@ export default function ScribeRequestForm() {
           {!isEditing && (
             <FormSection
               icon="copy"
-              title="Additional Exams"
+              title={t('additional_exams')}
               right={extraSubjects.length > 0 ? (
                 <View className="bg-blue-50 px-2 py-0.5 rounded-full">
                   <Text className="text-[9px] font-bold text-blue-600">{extraSubjects.length + 1} total</Text>
@@ -981,7 +1004,7 @@ export default function ScribeRequestForm() {
               ) : undefined}
             >
               <Text className="text-[10px] text-slate-400 mb-2.5 ml-0.5">
-                Sitting multiple papers? Add them here — each becomes a separate request scribes can apply to.
+                {t('additional_exams_desc')}
               </Text>
 
               {/* One card per extra exam: subject, date/time and venue (same pickers, targeted via activeExtraIndex) */}
@@ -1008,7 +1031,7 @@ export default function ScribeRequestForm() {
                       className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex-row items-center justify-between"
                     >
                       <Text className={`text-sm ${row.examDate ? 'text-slate-800 font-semibold' : 'text-slate-400'}`}>
-                        {row.examDate || 'Select Date & Time'}
+                        {row.examDate || t('select_date')}
                       </Text>
                       <Feather name="calendar" size={16} color="#2563eb" />
                     </TouchableOpacity>
@@ -1052,13 +1075,13 @@ export default function ScribeRequestForm() {
                 className="w-full border-2 border-dashed border-blue-200 bg-blue-50/40 rounded-xl py-2.5 flex-row items-center justify-center active:bg-blue-50"
               >
                 <Feather name="plus" size={16} color="#2563eb" />
-                <Text className="text-blue-600 font-bold text-xs ml-1.5">Add another subject</Text>
+                <Text className="text-blue-600 font-bold text-xs ml-1.5">{t('add_another_exam')}</Text>
               </TouchableOpacity>
             </FormSection>
           )}
 
           {/* Submit Button */}
-          <SubmitButton label={isEditing ? 'Update Request' : 'Submit Request'} onPress={() => handleSubmit()} loading={loading} />
+          <SubmitButton label={isEditing ? t('save_changes') : (extraSubjects.length > 0 ? t('post_n_requests', { count: extraSubjects.length + 1 }) : t('post_scribe_request'))} onPress={() => handleSubmit()} loading={loading} />
 
         </View>
       </ScrollView>

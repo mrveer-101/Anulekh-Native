@@ -23,13 +23,14 @@
  * Styling mixes NativeWind `className` utilities and inline styles (no StyleSheet).
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Modal, TextInput, Image, Platform } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { useInDesktopFrame } from '@/components/ui/DesktopShell';
+import { useLanguage } from '@/core/translation';
 
 /** One `scribe_applications` row as shown on this screen, plus data added by fetchApplications. */
 interface Application {
@@ -60,6 +61,8 @@ interface Application {
  * confirmation modal, success overlay, scribe profile modal and a copy of the console's bottom tab bar.
  */
 export default function ViewApplicationsPage() {
+  const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   // Inside the desktop page frame the phone header bar and tab bar are hidden (the frame has its own brand bar).
   const inDesktopFrame = useInDesktopFrame();
   // Route params: `id` is the request id; `type=assignment` switches to assignment_requests.
@@ -395,32 +398,65 @@ export default function ViewApplicationsPage() {
           justifyContent: 'space-between',
           paddingHorizontal: 24,
         }}>
-          {/* Logo */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Logo & Modern Brand Wordmark with Subtitle */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{
-              width: 44, height: 44, borderRadius: 12,
-              backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+              width: 44, height: 44, borderRadius: 14,
+              backgroundColor: '#ffffff',
+              borderWidth: 1.5, borderColor: '#F8FAFC',
               alignItems: 'center', justifyContent: 'center',
-              padding: 1,
+              padding: 1.5,
               overflow: 'hidden',
+              shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
             }}>
               <Image 
                 source={require('../../../../assets/images/custom/Pen_Logo.jpg')} 
-                style={{ width: '100%', height: '100%', borderRadius: 9 }}
+                style={{ width: '100%', height: '100%', borderRadius: 11 }}
                 resizeMode="cover"
               />
             </View>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#0f172a', letterSpacing: -0.5 }}>Anulekh</Text>
+
+            {/* Inset vertical divider line */}
+            <View style={{ width: 1.5, height: 24, backgroundColor: '#CBD5E1', marginHorizontal: 12 }} />
+
+            {/* Title + Subtitle Column */}
+            <View style={{ justifyContent: 'center' }}>
+              <Text style={{
+                fontFamily: 'Roboto',
+                fontSize: 20,
+                fontWeight: '800',
+                color: '#0f172a',
+                letterSpacing: -0.5,
+                lineHeight: 22,
+              }}>
+                Anulekh<Text style={{ color: '#2563eb', fontWeight: '900' }}>.</Text>
+              </Text>
+              <Text style={{
+                fontFamily: 'Roboto',
+                fontSize: 9.5,
+                fontWeight: '700',
+                color: '#64748B',
+                letterSpacing: 1.8,
+                textTransform: 'uppercase',
+                marginTop: 2,
+              }}>
+                STUDENT PORTAL
+              </Text>
+            </View>
           </View>
 
           {/* Right Profile Initials */}
-          {/* Static "S" badge; opens the console's Account (settings) tab */}
           <TouchableOpacity
             onPress={() => router.replace('/console/student?tab=settings')}
             style={{
-              width: 44, height: 44, borderRadius: 22,
-              backgroundColor: 'rgba(37,99,235,0.09)', borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.22)',
+              width: 42, height: 42, borderRadius: 21,
+              backgroundColor: '#F8FAFC',
+              borderWidth: 2, borderColor: '#F8FAFC',
               alignItems: 'center', justifyContent: 'center',
+              shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08, shadowRadius: 10, elevation: 4,
+              overflow: 'hidden',
             }}
           >
             <Text style={{ color: '#2563eb', fontWeight: '900', fontSize: 18 }}>S</Text>
@@ -445,7 +481,7 @@ export default function ViewApplicationsPage() {
           <Feather name="arrow-left" size={24} color="#334155" />
         </TouchableOpacity>
         <View className="flex-1">
-          <Text className="text-xl font-black text-slate-800" numberOfLines={1}>Scribe Applications</Text>
+          <Text className="text-xl font-black text-slate-800" numberOfLines={1}>{t('scribe_applications_title')}</Text>
           <Text className="text-[10px] font-semibold text-slate-400 mt-0.5">{exam?.subject || 'Exam'}</Text>
         </View>
       </View>
@@ -458,7 +494,7 @@ export default function ViewApplicationsPage() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search scribes by name..."
+              placeholder={t('search_applicants')}
               placeholderTextColor="#94a3b8"
               className="flex-1 text-slate-800 text-xs py-2 font-semibold"
             />
@@ -477,12 +513,12 @@ export default function ViewApplicationsPage() {
           <View className="bg-white p-8 rounded-3xl border border-slate-100 items-center justify-center mt-10">
             <Feather name="users" size={48} color="#94a3b8" />
             <Text className="text-slate-800 text-base font-bold mt-4">
-              {searchQuery.length > 0 ? 'No Matching Scribes' : 'No Applicants Yet'}
+              {searchQuery.length > 0 ? t('no_requests_found') : t('no_applicants_yet')}
             </Text>
             <Text className="text-slate-400 text-xs mt-1 text-center">
               {searchQuery.length > 0
                 ? 'Try searching with another name or clear the query.'
-                : 'Scribes will appear here once they apply to assist you.'}
+                : t('no_applicants_desc')}
             </Text>
           </View>
         ) : (
@@ -566,7 +602,7 @@ export default function ViewApplicationsPage() {
                   <View className="flex-row items-center">
                     <Feather name="map-pin" size={12} color="#64748b" className="mr-2" />
                     <Text className="text-slate-600 text-xs">
-                      <Text className="font-semibold text-slate-755 font-bold">Location: </Text>
+                      <Text className="font-semibold text-slate-755 font-bold">{t('location')}: </Text>
                       {app.profile?.location || 'N/A'}
                     </Text>
                   </View>
@@ -577,7 +613,7 @@ export default function ViewApplicationsPage() {
                   onPress={() => handleOpenScribeProfile(app)}
                   style={{ backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}
                 >
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569' }}>View Scribe Account</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#475569' }}>{t('view_profile_btn')}</Text>
                 </TouchableOpacity>
 
                 {/* Action Buttons */}
@@ -587,7 +623,7 @@ export default function ViewApplicationsPage() {
                     disabled={isWorking}
                     className="flex-1 bg-red-50 border border-red-100 active:bg-red-100 py-2.5 rounded-xl items-center justify-center"
                   >
-                    <Text className="text-red-600 font-bold text-xs">Reject</Text>
+                    <Text className="text-red-600 font-bold text-xs">{t('reject_applicant')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -598,7 +634,7 @@ export default function ViewApplicationsPage() {
                     {isWorking ? (
                       <ActivityIndicator color="white" size="small" />
                     ) : (
-                      <Text className="text-white font-bold text-xs">Accept</Text>
+                      <Text className="text-white font-bold text-xs">{t('accept_applicant')}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -823,31 +859,36 @@ export default function ViewApplicationsPage() {
         </View>
       </Modal>
 
-      {/* Bottom Nav Bar (matches dashboard look; phones only) */}
+      {/* ── DOCKED BOTTOM NAVBAR (phones only) ── */}
       {!inDesktopFrame && (
-      <SafeAreaView edges={['bottom']} style={{
-        backgroundColor: 'rgba(255,255,255,0.82)',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        shadowColor: '#000', shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.07, shadowRadius: 12, elevation: 5,
-      }}>
-        <View style={{
-          flexDirection: 'row',
-          paddingVertical: 8,
-          paddingHorizontal: 8,
-          gap: 4,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(0,0,0,0.07)',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
-        }}>
+        <SafeAreaView
+          edges={['bottom']}
+          style={{
+            backgroundColor: '#ffffff',
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(0,0,0,0.05)',
+            shadowColor: '#0f172a',
+            shadowOffset: { width: 0, height: -3 },
+            shadowOpacity: 0.04,
+            shadowRadius: 12,
+            elevation: 6,
+            zIndex: 100,
+          }}
+        >
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            paddingHorizontal: 8,
+            paddingTop: 10,
+            paddingBottom: Math.max(insets.bottom > 0 ? 6 : 12, 6),
+          }}>
           {/* Tabs go back to the student console with ?tab=...; "Requests" is shown as active */}
           {[
-            { id: 'home',     iconActive: 'home',          iconInactive: 'home',          label: 'Home' },
-            { id: 'requests', iconActive: 'document-text',  iconInactive: 'document-text',  label: 'Requests' },
-            { id: 'plan',     iconActive: 'calendar',       iconInactive: 'calendar',       label: 'Plan' },
-            { id: 'settings', iconActive: 'person',        iconInactive: 'person',        label: 'Account' },
+            { id: 'home',     iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
+            { id: 'requests', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
+            { id: 'plan',     iconActive: 'calendar',      iconInactive: 'calendar-outline',      label: 'Plan' },
+            { id: 'settings', iconActive: 'person',        iconInactive: 'person-outline',        label: 'Account' },
           ].map((tab) => {
             const active = tab.id === 'requests';
             return (
@@ -860,31 +901,53 @@ export default function ViewApplicationsPage() {
                     router.replace(`/console/student?tab=${tab.id}`);
                   }
                 }}
+                activeOpacity={0.7}
                 style={{
-                  flex: 1, alignItems: 'center', paddingVertical: 9,
-                  borderRadius: 20,
-                  backgroundColor: active ? 'rgba(37,99,235,0.09)' : 'transparent',
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 3,
+                  position: 'relative',
                 }}
               >
-                <Ionicons name={(active ? tab.iconActive : tab.iconInactive) as any} size={24} color={active ? '#2563eb' : '#94a3b8'} />
+                {/* Soft ambient aura around active icon */}
+                {active && (
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: 'absolute',
+                      top: -4,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      backgroundColor: 'rgba(37, 99, 235, 0.07)',
+                      ...(Platform.OS === 'web'
+                        ? ({
+                            background: 'radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0) 72%)',
+                          } as any)
+                        : {}),
+                    }}
+                  />
+                )}
+                <Ionicons
+                  name={(active ? tab.iconActive : tab.iconInactive) as any}
+                  size={24}
+                  color={active ? '#1D4ED8' : '#64748B'}
+                />
                 <Text style={{
                   fontFamily: 'Roboto',
-                  fontSize: 11, fontWeight: active ? '800' : '600',
-                  marginTop: 3, color: active ? '#2563eb' : '#94a3b8',
+                  fontSize: 12,
+                  fontWeight: active ? '700' : '500',
+                  marginTop: 4,
+                  color: active ? '#1D4ED8' : '#64748B',
                 }}>
                   {tab.label}
                 </Text>
-                {active && (
-                  <View style={{
-                    position: 'absolute', bottom: 2,
-                    width: 4, height: 4, borderRadius: 2, backgroundColor: '#2563eb',
-                  }} />
-                )}
               </TouchableOpacity>
             );
           })}
-        </View>
-      </SafeAreaView>
+          </View>
+        </SafeAreaView>
       )}
 
     </View>

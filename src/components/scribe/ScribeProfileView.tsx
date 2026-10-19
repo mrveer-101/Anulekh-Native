@@ -307,7 +307,7 @@ export default function ScribeProfileView() {
         >
           <Feather name="camera" size={14} color="#16a34a" style={{ marginBottom: 2 }} />
           <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            Upload
+            {t('upload')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -317,10 +317,10 @@ export default function ScribeProfileView() {
 
         {/* Card title with the "Details" / "Collapse" toggle for the extra fields. */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Basic Information</Text>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('basic_information')}</Text>
           <TouchableOpacity onPress={() => setIsExpanded(!isExpanded)}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb' }}>
-              {isExpanded ? 'Collapse' : 'Details'}
+              {isExpanded ? t('collapse') : t('details')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -330,12 +330,12 @@ export default function ScribeProfileView() {
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <Feather name="user" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Full Name</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('full_name')}</Text>
             </View>
             <TextInput
               value={fullName}
               onChangeText={setFullName}
-              placeholder="Your Name"
+              placeholder={t('your_name')}
               placeholderTextColor="#94a3b8"
               style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
             />
@@ -345,13 +345,13 @@ export default function ScribeProfileView() {
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <Feather name="phone" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Mobile Number</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('mobile_number')}</Text>
             </View>
             <TextInput
               value={phone}
               onChangeText={setPhone}
               keyboardType="phone-pad"
-              placeholder="Phone Number"
+              placeholder={t('mobile_number')}
               placeholderTextColor="#94a3b8"
               style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
             />
@@ -361,7 +361,7 @@ export default function ScribeProfileView() {
           <View>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
               <Feather name="mail" size={12} color="#94a3b8" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>Email Address (Non-editable)</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#94a3b8' }}>{t('email_address_readonly')}</Text>
             </View>
             <TextInput
               value={email}
@@ -378,7 +378,7 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Feather name="calendar" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Date of Birth</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('dob')}</Text>
                 </View>
                 <TextInput
                   value={dob}
@@ -393,12 +393,12 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Ionicons name="transgender-outline" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Gender</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('gender')}</Text>
                 </View>
                 <TextInput
                   value={gender}
                   onChangeText={setGender}
-                  placeholder="Gender"
+                  placeholder={t('gender')}
                   placeholderTextColor="#94a3b8"
                   style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
                 />
@@ -408,12 +408,12 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Feather name="map-pin" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>City / State</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('city_state')}</Text>
                 </View>
                 <TextInput
                   value={location}
                   onChangeText={setLocation}
-                  placeholder="City, State"
+                  placeholder={t('city_state')}
                   placeholderTextColor="#94a3b8"
                   style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
                 />
@@ -423,12 +423,12 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Feather name="book-open" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Highest Qualification Level</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('highest_qualification')}</Text>
                 </View>
                 <TextInput
                   value={educationLevel}
                   onChangeText={setEducationLevel}
-                  placeholder="e.g. Undergraduate"
+                  placeholder={t('highest_qualification')}
                   placeholderTextColor="#94a3b8"
                   style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
                 />
@@ -438,12 +438,12 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Feather name="briefcase" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Current Status / Occupation</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('current_status_occupation')}</Text>
                 </View>
                 <TextInput
                   value={occupation}
                   onChangeText={setOccupation}
-                  placeholder="e.g. Working Professional"
+                  placeholder={t('current_status_occupation')}
                   placeholderTextColor="#94a3b8"
                   style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
                 />
@@ -453,12 +453,12 @@ export default function ScribeProfileView() {
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
                   <Feather name="shield" size={12} color="#16a34a" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>Aadhar / Government ID Number</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>{t('aadhar_gov_id')}</Text>
                 </View>
                 <TextInput
                   value={aadharNumber}
                   onChangeText={setAadharNumber}
-                  placeholder="Government ID / Aadhar Number"
+                  placeholder={t('aadhar_gov_id')}
                   placeholderTextColor="#94a3b8"
                   style={{ backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '600' }}
                 />
@@ -466,8 +466,7 @@ export default function ScribeProfileView() {
 
               {/* Verification Proof Documents (Read Only Row style) */}
               <View style={{ borderTopWidth: 1.5, borderTopColor: '#f8fafc', paddingTop: 10, gap: 10 }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Verification Documents</Text>
-                {/* Only file names are shown; the "View" buttons open a placeholder alert, not the real document. */}
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('verification_documents')}</Text>
 
                 {/* Government ID Document Row */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0' }}>
@@ -478,7 +477,7 @@ export default function ScribeProfileView() {
                     </Text>
                   </View>
                   <TouchableOpacity onPress={() => Alert.alert('Preview', 'Simulated document viewer opening.')} style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>View</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>{t('view')}</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -491,7 +490,7 @@ export default function ScribeProfileView() {
                     </Text>
                   </View>
                   <TouchableOpacity onPress={() => Alert.alert('Preview', 'Simulated document viewer opening.')} style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>View</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff' }}>{t('view')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -506,9 +505,9 @@ export default function ScribeProfileView() {
       <View style={{ backgroundColor: '#ffffff', borderRadius: 24, padding: 20, borderWidth: 1.5, borderColor: '#e2e8f0', shadowColor: '#64748b', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.18, shadowRadius: 24, elevation: 6, marginBottom: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
           <Feather name="globe" size={13} color="#16a34a" style={{ marginRight: 6 }} />
-          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>Preferred Scribe Languages</Text>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 }}>{t('preferred_scribe_languages')}</Text>
         </View>
-        <Text style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10 }}>Select all languages you are comfortable writing exams in:</Text>
+        <Text style={{ fontSize: 10, color: '#94a3b8', marginBottom: 10 }}>{t('select_comfortable_languages')}</Text>
         
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {/* Toggleable language chips; a check mark shows the selected ones. */}
@@ -540,7 +539,7 @@ export default function ScribeProfileView() {
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="trophy" size={16} color="#eab308" />
-            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a' }}>Achievements & Badges</Text>
+            <Text style={{ fontSize: 13, fontWeight: '900', color: '#0f172a' }}>{t('achievements_badges')}</Text>
           </View>
           {/* "View Certificate": shows an alert with a certificate id derived from the user id and the backend's /api/certificates/view/<userId> link. */}
           <TouchableOpacity
@@ -552,16 +551,16 @@ export default function ScribeProfileView() {
             }}
             style={{ backgroundColor: 'rgba(37,99,235,0.08)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(37,99,235,0.2)' }}
           >
-            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563eb' }}>📜 View Certificate</Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#2563eb' }}>{t('view_certificate')}</Text>
           </TouchableOpacity>
         </View>
 
         <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 14 }}>
-          Earn verified volunteer milestone badges and official certificates as you complete scribing assignments.
+          {t('earn_milestone_badges_desc')}
         </Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-          {/* Static demo badge list: `unlocked` is hard-coded, not computed from the scribe's completed jobs. */}
+          {/* Static demo badge list */}
           {[
             { title: 'Bronze Volunteer', icon: 'award', color: '#cd7f32', unlocked: true, desc: '5 Jobs' },
             { title: 'Silver Volunteer', icon: 'shield-checkmark', color: '#94a3b8', unlocked: false, desc: '15 Jobs' },
@@ -615,7 +614,7 @@ export default function ScribeProfileView() {
           <Feather name={isLangDropdownOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
         </TouchableOpacity>
 
-        {/* Language options; picking one switches the app UI language and closes the list. */}
+        {/* Language options */}
         {isLangDropdownOpen && (
           <View style={{ marginTop: 6, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#f1f5f9', borderRadius: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 5, elevation: 2, overflow: 'hidden' }}>
             {(['English', 'Hindi', 'Gujarati'] as LanguageType[]).map((l) => (
@@ -648,7 +647,7 @@ export default function ScribeProfileView() {
         {updating ? (
           <ActivityIndicator size="small" color="#ffffff" />
         ) : (
-          <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>Save Changes</Text>
+          <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>{t('save_changes')}</Text>
         )}
       </TouchableOpacity>
 
@@ -673,7 +672,7 @@ export default function ScribeProfileView() {
         activeOpacity={0.85}
       >
         <Feather name="log-out" size={16} color="#ffffff" style={{ marginRight: 8 }} />
-        <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>Log Out</Text>
+        <Text style={{ color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('sign_out')}</Text>
       </TouchableOpacity>
 
     </ScrollView>

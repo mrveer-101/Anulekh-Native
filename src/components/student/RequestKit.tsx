@@ -8,12 +8,13 @@
  */
 import React from 'react';
 import { View, Text, Pressable, ActivityIndicator, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { gradient, portalCardStyle, STUDENT_THEME as THEME } from '@/core/portalTheme';
 import { useInDesktopFrame } from '@/components/ui/DesktopShell';
+import { useLanguage } from '@/core/translation';
 
 type FeatherName = React.ComponentProps<typeof Feather>['name'];
 
@@ -40,7 +41,7 @@ export function RequestPage({ children }: { children: React.ReactNode }) {
 /** Top bar: round back button, title and an optional one-line subtitle. */
 export function RequestHeader({ title, subtitle, onBack }: { title: string; subtitle?: string; onBack: () => void }) {
   return (
-    <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomLeftRadius: 22, borderBottomRightRadius: 22, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}>
+    <SafeAreaView edges={['top']} style={{ backgroundColor: '#ffffff', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)', shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 18, paddingVertical: 14 }}>
         <Pressable
           onPress={onBack}
@@ -129,30 +130,92 @@ export function SubmitButton({
 
 /** The student console's bottom tab bar with "Requests" active. Hidden inside the desktop frame. */
 const TABS = [
-  { id: 'home', icon: 'home', label: 'Home' },
-  { id: 'requests', icon: 'document-text', label: 'Requests' },
-  { id: 'plan', icon: 'calendar', label: 'Plan' },
-  { id: 'settings', icon: 'person', label: 'Account' },
+  { id: 'home', iconActive: 'home', iconInactive: 'home-outline', label: 'Home' },
+  { id: 'requests', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
+  { id: 'plan', iconActive: 'calendar', iconInactive: 'calendar-outline', label: 'Plan' },
+  { id: 'settings', iconActive: 'person', iconInactive: 'person-outline', label: 'Account' },
 ] as const;
 
 export function RequestTabBar() {
+  const { t } = useLanguage();
   const inFrame = useInDesktopFrame();
+  const insets = useSafeAreaInsets();
   if (inFrame) return null;
   return (
-    <SafeAreaView edges={['bottom']} style={{ backgroundColor: '#ffffff', borderTopLeftRadius: 20, borderTopRightRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.07, shadowRadius: 12, elevation: 5 }}>
-      <View style={{ flexDirection: 'row', padding: 8, gap: 4 }}>
+    <SafeAreaView
+      edges={['bottom']}
+      style={{
+        backgroundColor: '#ffffff',
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(0,0,0,0.05)',
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        elevation: 6,
+        zIndex: 100,
+      }}
+    >
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        paddingHorizontal: 8,
+        paddingTop: 10,
+        paddingBottom: Math.max(insets.bottom > 0 ? 6 : 12, 6),
+      }}>
         {TABS.map((tab) => {
           const active = tab.id === 'requests';
+          const label = tab.id === 'home' ? t('nav_home') :
+                        tab.id === 'requests' ? t('nav_requests') :
+                        tab.id === 'plan' ? t('nav_plan') : t('nav_account');
           return (
             <Pressable
               key={tab.id}
               onPress={() => router.replace(`/console/student?tab=${tab.id}` as any)}
               accessibilityRole="tab"
-              accessibilityLabel={tab.label}
-              style={{ flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: 20, backgroundColor: active ? THEME.soft : 'transparent' }}
+              accessibilityLabel={label}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 3,
+                position: 'relative',
+              }}
             >
-              <Ionicons name={tab.icon} size={23} color={active ? THEME.primary : '#94a3b8'} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: active ? '800' : '600', marginTop: 3, color: active ? THEME.primary : '#94a3b8' }}>{tab.label}</Text>
+              {/* Soft ambient aura around active icon */}
+              {active && (
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    top: -4,
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    backgroundColor: 'rgba(37, 99, 235, 0.07)',
+                    ...(Platform.OS === 'web'
+                      ? ({
+                          background: 'radial-gradient(circle, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0) 72%)',
+                        } as any)
+                      : {}),
+                  }}
+                />
+              )}
+              <Ionicons
+                name={(active ? tab.iconActive : tab.iconInactive) as any}
+                size={24}
+                color={active ? '#1D4ED8' : '#64748B'}
+              />
+              <Text style={{
+                fontFamily: 'Roboto',
+                fontSize: 12,
+                fontWeight: active ? '700' : '500',
+                marginTop: 4,
+                color: active ? '#1D4ED8' : '#64748B',
+              }}>
+                {label}
+              </Text>
             </Pressable>
           );
         })}
@@ -347,14 +410,17 @@ function GroupLabel({
  * Beautifully color-coded: Blue for Exam Scribes, Warm Orange for Assignments.
  */
 export function RequestTypeChooser({
+  onVoice,
   onAutoFill,
   onManual,
   onAssignment,
 }: {
+  onVoice?: () => void;
   onAutoFill: () => void;
   onManual: () => void;
   onAssignment: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <View>
       <Text
@@ -367,26 +433,40 @@ export function RequestTypeChooser({
           letterSpacing: -0.4,
         }}
       >
-        What do you need help with?
+        {t('chooser_title')}
       </Text>
       <Text style={{ fontFamily: 'Roboto', fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 10 }}>
-        Pick a request category below to get started.
+        {t('chooser_subtitle')}
       </Text>
 
       {/* ── EXAMS SECTION (Blue #2563eb theme) ── */}
       <GroupLabel
         icon="edit-3"
-        label="Exam Scribe Requests"
+        label={t('exam_requests_group')}
         tint="#1d4ed8"
         bg="#eff6ff"
         borderColor="#bfdbfe"
       />
+      {onVoice && (
+        <ChoiceCard
+          icon="mic"
+          title={t('voice_exam_request')}
+          text={t('voice_exam_request_desc')}
+          badge={t('hands_free_ai')}
+          tint="#4f46e5"
+          borderColor="#c7d2fe"
+          badgeBg="#e0e7ff"
+          badgeTextColor="#4338ca"
+          onPress={onVoice}
+          a11yHint="Opens hands-free conversational voice assistant to create exam request"
+        />
+      )}
       <ChoiceCard
         filled
         icon="upload-cloud"
-        title="Scan Admit Card"
-        text="Upload photo or PDF hall ticket — exam details auto-filled by AI"
-        badge="FASTEST • AI"
+        title={t('scan_admit_card_title')}
+        text={t('scan_admit_card_desc')}
+        badge={t('fastest_ai')}
         tint="#2563eb"
         badgeBg="#ffffff"
         badgeTextColor="#1d4ed8"
@@ -395,9 +475,9 @@ export function RequestTypeChooser({
       />
       <ChoiceCard
         icon="edit-3"
-        title="Fill Exam Manually"
-        text="Enter subject, date, time and venue yourself step by step"
-        badge="STEP BY STEP"
+        title={t('fill_exam_manually')}
+        text={t('fill_exam_manually_desc')}
+        badge={t('step_by_step')}
         tint="#2563eb"
         borderColor="#bfdbfe"
         badgeBg="#eff6ff"
@@ -409,16 +489,16 @@ export function RequestTypeChooser({
       {/* ── ASSIGNMENTS SECTION (Warm Orange #ea580c theme) ── */}
       <GroupLabel
         icon="file-text"
-        label="Academic Writing & Assignments"
+        label={t('assignments_group')}
         tint="#c2410c"
         bg="#fff7ed"
         borderColor="#fed7aa"
       />
       <ChoiceCard
         icon="file-text"
-        title="Assignment Help"
-        text="Get a verified writer to complete your written homework, reports or projects"
-        badge="WRITING HELP"
+        title={t('assignment_help_title')}
+        text={t('assignment_help_desc')}
+        badge={t('writing_help')}
         tint="#ea580c"
         borderColor="#fed7aa"
         badgeBg="#fff7ed"

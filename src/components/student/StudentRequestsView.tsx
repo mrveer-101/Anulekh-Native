@@ -27,7 +27,7 @@
  * come from STUDENT_THEME and `gradient()` in core/portalTheme.ts; cards use fixed status colours.
  */
 import React, { useState, useCallback } from 'react';
-import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput } from 'react-native';
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -486,24 +486,21 @@ export default function StudentRequestsView() {
     return (
       <Animated.View entering={rise(index + 1)} style={{
         backgroundColor: '#ffffff',
-        borderRadius: 24,
+        borderRadius: 20,
         borderWidth: 1.5,
-        borderColor: isMatched ? '#a7f3d0' : '#bfdbfe',
-        shadowColor: isMatched ? '#059669' : '#2563eb',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-        elevation: 4,
-        marginBottom: 16,
-        padding: 18,
+        borderColor: isMatched ? '#a7f3d0' : '#e2e8f0',
+        shadowColor: '#0f172a',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        elevation: 2,
+        marginBottom: 12,
+        padding: 16,
       }}>
-        {/* Status accent strip (matches the status badge colour) */}
-        <View style={{ position: 'absolute', left: 0, top: 18, bottom: 18, width: 4, borderTopRightRadius: 4, borderBottomRightRadius: 4, backgroundColor: statusColor.text }} />
-
         {/* Header Row: Subject & Level Subtitle on Left, Status Badge on Right */}
-        <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
           <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }}>
               {item.subject}
             </Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
@@ -513,13 +510,13 @@ export default function StudentRequestsView() {
 
           {/* Status Badge */}
           <View style={{
-            paddingVertical: 5, paddingHorizontal: 11,
-            borderRadius: 20,
+            paddingVertical: 3.5, paddingHorizontal: 9,
+            borderRadius: 999,
             borderWidth: 1,
             borderColor: statusColor.border,
             backgroundColor: statusColor.bg,
           }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: statusColor.text, letterSpacing: 0.3 }}>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 9.5, fontWeight: '800', color: statusColor.text, letterSpacing: 0.4 }}>
               {statusLabel}
             </Text>
           </View>
@@ -787,7 +784,7 @@ export default function StudentRequestsView() {
             }}
           >
             <Feather name="search" size={14} color="#2563eb" />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#2563eb' }}>Find Scribes</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#2563eb' }}>{t('find_scribes')}</Text>
           </TouchableOpacity>
 
           {/* New Request: asks whether to create an exam scribe or an assignment writer request */}
@@ -797,7 +794,7 @@ export default function StudentRequestsView() {
                 'Select Request Type',
                 'What type of request would you like to create?',
                 [
-                  { text: 'Cancel', style: 'cancel' },
+                  { text: t('cancel'), style: 'cancel' },
                   { text: 'Exam Scribe', onPress: () => router.push('/console/student/request_form' as any) },
                   { text: 'Assignment Writer', onPress: () => router.push('/console/student/assignment_form' as any) }
                 ]
@@ -821,7 +818,7 @@ export default function StudentRequestsView() {
             }}
           >
             <Feather name="plus" size={14} color="#fff" />
-            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#fff' }}>New Request</Text>
+            <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#fff' }}>{t('new_request')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -830,7 +827,7 @@ export default function StudentRequestsView() {
           {[
             { 
               key: 'requests', 
-              label: 'Exams', 
+              label: t('exams'), 
               activeBg: '#2563eb', 
               activeBorder: '#2563eb', 
               inactiveBg: '#eff6ff', 
@@ -839,7 +836,7 @@ export default function StudentRequestsView() {
             },
             { 
               key: 'assignments', 
-              label: 'Assignments', 
+              label: t('assignments'), 
               activeBg: '#f97316', 
               activeBorder: '#f97316', 
               inactiveBg: '#fff7ed', 
@@ -848,7 +845,7 @@ export default function StudentRequestsView() {
             },
             { 
               key: 'past_scribes', 
-              label: 'Past Scribes', 
+              label: t('past_scribes'), 
               activeBg: '#16a34a', 
               activeBorder: '#16a34a', 
               inactiveBg: '#f0fdf4', 
@@ -903,7 +900,7 @@ export default function StudentRequestsView() {
         style={{ flex: 1 }}
         data={activeTab === 'requests' ? requests : assignmentRequests}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: inShell ? 0 : 24, paddingTop: 8, paddingBottom: 40 }}
+        contentContainerStyle={{ padding: inShell ? 0 : 24, paddingTop: 8, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
         }
@@ -1089,53 +1086,28 @@ export default function StudentRequestsView() {
 
           const isExpanded = expandedCards[item.id] || false;
 
-          // Card Border & Shadow Colors based on status
-          let cardBorderColor = '#bfdbfe';
-          let cardShadowColor = '#2563eb';
-          let cardBorderWidth = 1.5;
-          let cardShadowOpacity = 0.12;
-
-          if (isEmergency) {
-            cardBorderColor = '#fca5a5';
-            cardShadowColor = '#dc2626';
-            cardBorderWidth = 2;
-            cardShadowOpacity = 0.15;
-          } else if (isMatched) {
-            cardBorderColor = '#a7f3d0';
-            cardShadowColor = '#059669';
-            cardBorderWidth = 1.5;
-            cardShadowOpacity = 0.12;
-          } else {
-            // Not Assigned / Pending
-            cardBorderColor = '#bfdbfe';
-            cardShadowColor = '#2563eb';
-            cardBorderWidth = 1.5;
-            cardShadowOpacity = 0.12;
-          }
+          // Card Border & Background Colors based on status
+          let cardBorderColor = isEmergency ? '#fca5a5' : isMatched ? '#a7f3d0' : '#e2e8f0';
 
           return (
             <Animated.View entering={rise(index + 1)} style={{
-              backgroundColor: '#fff',
-              borderRadius: 24,
-              borderWidth: cardBorderWidth,
+              backgroundColor: isEmergency ? '#fffdfd' : '#fff',
+              borderRadius: 20,
+              borderWidth: 1.5,
               borderColor: cardBorderColor,
-              shadowColor: cardShadowColor,
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: cardShadowOpacity,
-              shadowRadius: 16,
-              elevation: 4,
-              marginBottom: 16,
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.05,
+              shadowRadius: 12,
+              elevation: 2,
+              marginBottom: 12,
               overflow: 'hidden',
             }}>
-
-              {/* Status accent strip (matches the status badge colour) */}
-              <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, zIndex: 1, backgroundColor: statusColor.text }} />
-
               {/* ── Top section: Title & Subtitle on Left, Status Badge on Right ── */}
-              <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ padding: 18, paddingBottom: 14 }}>
+              <TouchableOpacity onPress={() => toggleCard(item.id)} activeOpacity={0.85} style={{ padding: 16, paddingBottom: 12 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                   <View style={{ flex: 1, marginRight: 10 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }}>
                       {item.subject || 'Exam'}
                     </Text>
                     <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 3 }}>
@@ -1145,13 +1117,13 @@ export default function StudentRequestsView() {
 
                   {/* Status Badge */}
                   <View style={{
-                    paddingVertical: 5, paddingHorizontal: 11, borderRadius: 20,
+                    paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
                     backgroundColor: statusColor.bg,
                     borderWidth: 1, borderColor: statusColor.border
                   }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      {isEmergency && <Feather name="alert-triangle" size={10} color={statusColor.text} />}
-                      <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.3 }}>
+                      {isEmergency && <Feather name="alert-triangle" size={9} color={statusColor.text} />}
+                      <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 }}>
                         {statusLabel}
                       </Text>
                     </View>
@@ -1506,10 +1478,10 @@ export default function StudentRequestsView() {
               {/* 1. Exam Details */}
               <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('exam_details')}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>વિષય: {selectedExam?.subject}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>{t('subject_label')} {selectedExam?.subject}</Text>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_level')}: {selectedExam?.exam_type}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>તારીખ: {selectedExam?.exam_date}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>સ્થળ: {selectedExam?.exam_venue}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('date_label')}: {selectedExam?.exam_date}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>{t('exam_venue')}: {selectedExam?.exam_venue}</Text>
               </View>
 
               {/* 2. Candidate & Scribe Details */}
@@ -1517,8 +1489,8 @@ export default function StudentRequestsView() {
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{studentProfile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>ધોરણ: {selectedExam?.education_grade}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>આધાર ID: ચકાસાયેલ</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>{t('grade_label')}: {selectedExam?.education_grade}</Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>{t('aadhar_id')}: {t('status_verified_label')}</Text>
                 </View>
 
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
@@ -1655,14 +1627,14 @@ export default function StudentRequestsView() {
               </View>
               <View>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: '#0f172a' }}>
-                  {callExam?.scribeProfile?.full_name ?? 'લખિયો'}
+                  {callExam?.scribeProfile?.full_name ?? t('student_scribe_fallback')}
                 </Text>
                 <View style={{
                   marginTop: 4, backgroundColor: 'rgba(37,99,235,0.09)',
                   borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
                   alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(37,99,235,0.22)',
                 }}>
-                  <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontSize: 10, fontWeight: '800' }}>VOLUNTEER SCRIBE</Text>
+                  <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontSize: 10, fontWeight: '800' }}>{t('volunteer_scribe').toUpperCase()}</Text>
                 </View>
               </View>
             </View>
@@ -1699,7 +1671,7 @@ export default function StudentRequestsView() {
 
             {/* Exam context */}
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-              વિષય: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> પરીક્ષાના સ્વયંસેવક
+              {t('subject_label')} <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> {t('exam_volunteer_suffix')}
             </Text>
           </View>
 
@@ -1712,10 +1684,10 @@ export default function StudentRequestsView() {
                 if (supported) {
                   await Linking.openURL(url);
                 } else {
-                  Alert.alert(t('error'), 'આ ઉપકરણથી કૉલ કરવો શક્ય નથી.');
+                  Alert.alert(t('error'), t('call_not_supported'));
                 }
               } catch {
-                Alert.alert(t('error'), 'કૉલ શરૂ કરવામાં ભૂલ આવી.');
+                Alert.alert(t('error'), t('call_error'));
               }
             }}
             style={{
@@ -1746,139 +1718,389 @@ export default function StudentRequestsView() {
       ═══════════════════════════════════════════════════ */}
       {/* Five 1-5 star scores plus a remark; submitting calls submitRating (review + mark completed) */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent
         visible={isRatingOpen}
         onRequestClose={() => setIsRatingOpen(false)}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: '#fff', width: '100%', maxWidth: 380, borderRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15 }}>
-            {/* Title + close */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>Rate your Scribe</Text>
-              <TouchableOpacity onPress={() => setIsRatingOpen(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={20} color="#64748b" />
+        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 20 }}>
+          <View style={{
+            backgroundColor: '#FFFFFF',
+            width: '100%',
+            maxWidth: 420,
+            borderRadius: 28,
+            paddingHorizontal: 20,
+            paddingVertical: 20,
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 20 },
+            shadowOpacity: 0.12,
+            shadowRadius: 28,
+            elevation: 16,
+            borderWidth: 1,
+            borderColor: '#EDF2F7',
+          }}>
+            {/* Header: Badge + Title + Close */}
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
+                {/* Clipboard Badge */}
+                <View style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 16,
+                  backgroundColor: '#EFF6FF',
+                  borderWidth: 1.5,
+                  borderColor: '#DBEAFE',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 12,
+                  shadowColor: '#1676D2',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 6,
+                }}>
+                  <Ionicons name="clipboard" size={26} color="#1676D2" />
+                  <Ionicons name="star" size={13} color="#F59E0B" style={{ position: 'absolute', top: 18 }} />
+                </View>
+
+                {/* Title & Subtitle */}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0B192C', letterSpacing: -0.3 }}>
+                    Rate your Scribe
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, color: '#64748B', marginTop: 3, lineHeight: 17 }}>
+                    Please provide feedback for{' '}
+                    <Text style={{ fontWeight: '800', color: '#1676D2' }}>
+                      {ratingExam?.scribeProfile?.full_name || ratingExam?.scribeProfile?.official_name || 'Volunteer Scribe'}
+                    </Text>{' '}
+                    across 5 fields.
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setIsRatingOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={{ padding: 6, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#F1F5F9' }}
+              >
+                <Feather name="x" size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {/* Scrollable star rows and remark box */}
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }} contentContainerStyle={{ paddingBottom: 10 }}>
+            {/* Scrollable Star Rows & Remark */}
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }} contentContainerStyle={{ paddingBottom: 6 }}>
               
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-                Please provide feedback for <Text style={{ fontWeight: '700', color: '#0f172a' }}>{ratingExam?.scribeProfile?.full_name || 'Volunteer Scribe'}</Text> across 5 fields.
-              </Text>
-
-              {/* 1. Punctuality */}
-              <View style={{ marginVertical: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>1. Punctuality (Time Management)</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* 1. Punctuality (Time Management) */}
+              <View style={{
+                backgroundColor: '#F0F7FD',
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 9,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#D9ECFD',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}>
+                    <Feather name="clock" size={18} color="#1676D2" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                      1. Punctuality
+                    </Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }}>
+                      (Time Management)
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRatingPunctuality(star)}>
-                      <Ionicons name={star <= ratingPunctuality ? 'star' : 'star-outline'} size={24} color={star <= ratingPunctuality ? '#eab308' : '#cbd5e1'} />
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingPunctuality(star)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
+                    >
+                      <Ionicons
+                        name="star"
+                        size={21}
+                        color={star <= ratingPunctuality ? '#F58220' : '#D1DFEC'}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* 2. Communication */}
-              <View style={{ marginVertical: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>2. Communication (Interaction)</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* 2. Communication (Interaction) */}
+              <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: '#EDF2F7',
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 9,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#FFF0E6',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}>
+                    <Feather name="message-square" size={17} color="#F07820" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                      2. Communication
+                    </Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '500', color: '#64748B', marginTop: 1 }}>
+                      (Interaction)
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRatingCommunication(star)}>
-                      <Ionicons name={star <= ratingCommunication ? 'star' : 'star-outline'} size={24} color={star <= ratingCommunication ? '#eab308' : '#cbd5e1'} />
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingCommunication(star)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
+                    >
+                      <Ionicons
+                        name="star"
+                        size={21}
+                        color={star <= ratingCommunication ? '#F58220' : '#D1DFEC'}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* 3. Writing Speed */}
-              <View style={{ marginVertical: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>3. Scribing Speed & Accuracy</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* 3. Scribing Speed & Accuracy */}
+              <View style={{
+                backgroundColor: '#F0F7FD',
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 9,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#D9ECFD',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}>
+                    <Ionicons name="speedometer-outline" size={19} color="#1676D2" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                      3. Scribing Speed & Accuracy
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRatingSpeed(star)}>
-                      <Ionicons name={star <= ratingSpeed ? 'star' : 'star-outline'} size={24} color={star <= ratingSpeed ? '#eab308' : '#cbd5e1'} />
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingSpeed(star)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
+                    >
+                      <Ionicons
+                        name="star"
+                        size={21}
+                        color={star <= ratingSpeed ? '#F58220' : '#D1DFEC'}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* 4. Behavior */}
-              <View style={{ marginVertical: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>4. Conduct & Behavior</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* 4. Conduct & Behavior */}
+              <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: '#EDF2F7',
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 9,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#FFF0E6',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}>
+                    <Feather name="user" size={18} color="#F07820" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                      4. Conduct & Behavior
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRatingBehavior(star)}>
-                      <Ionicons name={star <= ratingBehavior ? 'star' : 'star-outline'} size={24} color={star <= ratingBehavior ? '#eab308' : '#cbd5e1'} />
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingBehavior(star)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
+                    >
+                      <Ionicons
+                        name="star"
+                        size={21}
+                        color={star <= ratingBehavior ? '#F58220' : '#D1DFEC'}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* 5. Overall */}
-              <View style={{ marginVertical: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>5. Overall Experience</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+              {/* 5. Overall Experience */}
+              <View style={{
+                backgroundColor: '#F0F7FD',
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  <View style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#D9ECFD',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}>
+                    <Feather name="star" size={18} color="#1676D2" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                      5. Overall Experience
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 4 }}>
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <TouchableOpacity key={star} onPress={() => setRatingOverall(star)}>
-                      <Ionicons name={star <= ratingOverall ? 'star' : 'star-outline'} size={24} color={star <= ratingOverall ? '#eab308' : '#cbd5e1'} />
+                    <TouchableOpacity
+                      key={star}
+                      onPress={() => setRatingOverall(star)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 3, right: 3 }}
+                    >
+                      <Ionicons
+                        name="star"
+                        size={21}
+                        color={star <= ratingOverall ? '#F58220' : '#D1DFEC'}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* Remark */}
-              <View style={{ marginVertical: 8 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>Remarks & Feedback</Text>
+              {/* Remarks & Feedback */}
+              <View style={{ marginTop: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <Feather name="message-square" size={15} color="#1676D2" />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                    Remarks & Feedback
+                  </Text>
+                </View>
                 <TextInput
                   value={remark}
                   onChangeText={setRemark}
                   placeholder="Write a brief review about your experience with this scribe..."
+                  placeholderTextColor="#94A3B8"
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={3}
                   style={{
                     width: '100%',
-                    backgroundColor: '#f8fafc',
-                    borderWidth: 1.5,
-                    borderColor: '#e2e8f0',
-                    borderRadius: 14,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
+                    backgroundColor: '#F3F8FC',
+                    borderWidth: 1,
+                    borderColor: '#DCE8F5',
+                    borderRadius: 16,
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
                     fontSize: 13,
-                    color: '#0f172a',
-                    minHeight: 80,
-                    textAlignVertical: 'top'
-                  }}
+                    fontFamily: 'Roboto',
+                    color: '#0F172A',
+                    minHeight: 84,
+                    textAlignVertical: 'top',
+                    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
+                  } as any}
                 />
               </View>
             </ScrollView>
 
-            {/* Submit button (spinner while saving) */}
-            <View style={{ marginTop: 14 }}>
-              <TouchableOpacity
-                onPress={submitRating}
-                disabled={submittingRating}
-                style={{
-                  backgroundColor: '#10b981',
-                  borderRadius: 16,
-                  paddingVertical: 14,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#10b981',
-                  shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 10,
-                  elevation: 4
-                }}
-              >
-                {submittingRating ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#fff' }}>Submit & Mark Complete</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            {/* Submit & Mark Complete Button */}
+            <TouchableOpacity
+              onPress={submitRating}
+              disabled={submittingRating}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#F07820',
+                borderRadius: 22,
+                paddingVertical: 14,
+                marginTop: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                shadowColor: '#F07820',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.25,
+                shadowRadius: 10,
+                elevation: 4,
+              }}
+            >
+              {submittingRating ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <>
+                  <Feather name="send" size={16} color="#FFFFFF" style={{ marginLeft: 2, marginTop: -1 }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+                    Submit & Mark Complete
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

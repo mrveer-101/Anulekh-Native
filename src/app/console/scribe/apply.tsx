@@ -26,6 +26,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import PolicyModal from '@/components/modals/PolicyModal';
+import { useLanguage } from '@/core/translation';
 
 /**
  * Request details page where a scribe applies to (or responds to an invitation for) an exam or
@@ -33,6 +34,7 @@ import PolicyModal from '@/components/modals/PolicyModal';
  * the tables touched.
  */
 export default function ScribeApplyDetailsPage() {
+  const { t } = useLanguage();
   // Route params: `id` is the request's primary key; `type` picks the table ('assignment' vs exam).
   const params = useLocalSearchParams<{ id: string; type?: string }>();
   const type = params.type || 'exam';
@@ -353,7 +355,7 @@ export default function ScribeApplyDetailsPage() {
           <Feather name="arrow-left" size={24} color="#334155" />
         </TouchableOpacity>
         <Text className="text-xl font-black text-slate-800">
-          {type === 'exam' ? 'Exam Details' : 'Assignment Details'}
+          {type === 'exam' ? t('exam_details_title') : t('assignment_details_title')}
         </Text>
       </View>
  
@@ -364,9 +366,9 @@ export default function ScribeApplyDetailsPage() {
           {/* Header & Status */}
           <View className="flex-row items-center justify-between border-b border-slate-50 pb-3">
             <View className="flex-1 pr-2">
-              <Text className="text-xl font-black text-slate-850 text-slate-900">{exam.subject || 'Details'}</Text>
+              <Text className="text-xl font-black text-slate-850 text-slate-900">{exam.subject || t('details')}</Text>
               <Text className="text-xs font-semibold text-slate-400 mt-0.5">
-                {type === 'exam' ? exam.exam_type : `Level: ${exam.academic_level}`}
+                {type === 'exam' ? exam.exam_type : `${t('grade_label')}: ${exam.academic_level}`}
               </Text>
             </View>
             <View className={`py-1 px-3 rounded-full border ${
@@ -386,7 +388,7 @@ export default function ScribeApplyDetailsPage() {
                 <View className="flex-row items-start">
                   <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Date & Time</Text>
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('date_time')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_date || 'Date not specified'}</Text>
                   </View>
                 </View>
@@ -394,7 +396,7 @@ export default function ScribeApplyDetailsPage() {
                 <View className="flex-row items-start">
                   <Feather name="map-pin" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Exam Venue</Text>
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('exam_venue_address')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_venue || 'Venue not specified'}</Text>
                   </View>
                 </View>
@@ -402,7 +404,7 @@ export default function ScribeApplyDetailsPage() {
                 <View className="flex-row items-start">
                   <Feather name="globe" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Languages Required</Text>
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('languages_required')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_language}</Text>
                   </View>
                 </View>
@@ -413,7 +415,7 @@ export default function ScribeApplyDetailsPage() {
                 <View className="flex-row items-start">
                   <Feather name="calendar" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Deadline</Text>
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('submission_deadline')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.deadline}</Text>
                   </View>
                 </View>
@@ -421,7 +423,7 @@ export default function ScribeApplyDetailsPage() {
                 <View className="flex-row items-start">
                   <Feather name="file-text" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                   <View className="flex-1">
-                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Assignment Title</Text>
+                    <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('assignment_title_label')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.assignment_title}</Text>
                   </View>
                 </View>
@@ -430,7 +432,7 @@ export default function ScribeApplyDetailsPage() {
                   <View className="flex-row items-start">
                     <Feather name="layers" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                     <View className="flex-1">
-                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Page Count Estimate</Text>
+                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('page_count_estimate')}</Text>
                       <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.page_count} {parseInt(exam.page_count) === 1 ? 'Page' : 'Pages'}</Text>
                     </View>
                   </View>
@@ -440,7 +442,7 @@ export default function ScribeApplyDetailsPage() {
                   <View className="flex-row items-start">
                     <Feather name="info" size={16} color="#059669" className="mr-3.5 mt-0.5" />
                     <View className="flex-1">
-                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Instructions</Text>
+                      <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('instructions_optional')}</Text>
                       <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.description}</Text>
                     </View>
                   </View>
@@ -452,7 +454,7 @@ export default function ScribeApplyDetailsPage() {
             <View className="flex-row items-start">
               <Feather name="user" size={16} color="#059669" className="mr-3.5 mt-0.5" />
               <View className="flex-1">
-                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Student Name</Text>
+                <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('student_name')}</Text>
                 <Text className="text-sm font-semibold text-slate-700 mt-0.5">
                   {exam.student_name} {type === 'exam' ? `(${exam.education_grade})` : ''}
                 </Text>
@@ -552,14 +554,13 @@ export default function ScribeApplyDetailsPage() {
             </TouchableOpacity>
 
             <Text style={{ flex: 1, fontSize: 12, color: '#334155', lineHeight: 18 }}>
-              I agree to the{' '}
+              {t('agree_guidelines')}{' '}
               <Text
                 onPress={() => setShowGuidelinesModal(true)}
                 style={{ color: '#16a34a', fontWeight: '800', textDecorationLine: 'underline' }}
               >
-                Anulekh Scribe Guidelines & Code of Conduct
-              </Text>{' '}
-              (Write only what is dictated, 0 money/gifts, stay on-platform).
+                (Anulekh Code of Conduct)
+              </Text>
             </Text>
           </View>
         )}
@@ -573,7 +574,7 @@ export default function ScribeApplyDetailsPage() {
               return (
                 <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
                   <Feather name="check-circle" size={16} color="#059669" className="mr-2" />
-                  <Text className="text-emerald-800 text-xs font-bold">Assigned Scribe (Confirmed) 🎉</Text>
+                  <Text className="text-emerald-800 text-xs font-bold">{t('matched_assigned')} 🎉</Text>
                 </View>
               );
             }
@@ -591,7 +592,7 @@ export default function ScribeApplyDetailsPage() {
                       {submitting ? (
                         <ActivityIndicator color="white" size="small" />
                       ) : (
-                        <Text className="text-white font-bold text-xs">Accept Invite</Text>
+                        <Text className="text-white font-bold text-xs">{t('accept_invitation')}</Text>
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -602,7 +603,7 @@ export default function ScribeApplyDetailsPage() {
                       {submitting ? (
                         <ActivityIndicator color="white" size="small" />
                       ) : (
-                        <Text className="text-white font-bold text-xs">Decline</Text>
+                        <Text className="text-white font-bold text-xs">{t('decline_invitation')}</Text>
                       )}
                     </TouchableOpacity>
                   </View>
@@ -613,7 +614,7 @@ export default function ScribeApplyDetailsPage() {
             return (
               <View className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex-row items-center justify-center">
                 <Feather name="clock" size={16} color="#059669" className="mr-2" />
-                <Text className="text-emerald-800 text-xs font-bold">Application Pending Approval</Text>
+                <Text className="text-emerald-800 text-xs font-bold">{t('application_pending_badge')}</Text>
               </View>
             );
           })()
@@ -627,7 +628,7 @@ export default function ScribeApplyDetailsPage() {
               <ActivityIndicator color="white" size="small" />
             ) : (
               <Text className="text-white font-bold text-sm">
-                {type === 'exam' ? 'Apply as Scribe' : 'Apply as Writer'}
+                {type === 'exam' ? t('apply_as_scribe') : t('apply_as_writer')}
               </Text>
             )}
           </TouchableOpacity>

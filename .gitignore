@@ -44,3 +44,4 @@ example
 .vercel
 *.aab
 *.apk
+serve_spa.py
