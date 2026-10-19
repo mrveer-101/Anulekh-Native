@@ -2,7 +2,7 @@
   "expo": {
     "name": "Anulekh",
     "slug": "anulekh",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": ["nativemobile", "anulekh"],
@@ -10,17 +10,18 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.celestialsteam.anulekh",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSMicrophoneUsageDescription": "Anulekh needs microphone access to record and exchange voice messages between students and scribes.",
+        "NSSpeechRecognitionUsageDescription": "Anulekh needs speech recognition access to transcribe exam booking voice commands and conversational inputs.",
         "NSPhotoLibraryUsageDescription": "Anulekh needs access to your photo library to upload admit cards, disability certificates, and identity documents.",
         "NSCameraUsageDescription": "Anulekh needs camera access to take photos of documents and profile pictures."
       }
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -110,7 +111,14 @@
       ],
       "expo-audio",
       "expo-asset",
-      "./plugins/withAndroidShortcuts.js"
+      "./plugins/withAndroidShortcuts.js",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Anulekh needs microphone access to listen to your exam booking details and voice commands.",
+          "speechRecognitionPermission": "Anulekh needs speech recognition access to understand your exam booking details."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

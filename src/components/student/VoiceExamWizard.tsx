@@ -14,6 +14,7 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
+import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { supabase } from '@/core/supabase';
 import { announceForAccessibility } from '@/core/a11y';
 import { useLanguage } from '@/core/translation';
@@ -58,6 +59,38 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
 
   // Web Speech Recognition reference
   const recognitionRef = useRef<any>(null);
+
+  // Active state ref to avoid stale closures during speech recognition event callbacks
+  const stepRef = useRef<WizardStep>(step);
+  stepRef.current = step;
+
+  const handleVoiceInputRef = useRef<(raw: string) => void>(() => {});
+
+  // Native Speech Recognition Event Hooks (Android & iOS)
+  useSpeechRecognitionEvent('start', () => {
+    setIsListening(true);
+    setTranscript('');
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    setIsListening(false);
+  });
+
+  useSpeechRecognitionEvent('result', (event) => {
+    const text = event.results?.[0]?.transcript || '';
+    if (text) {
+      setTranscript(text);
+      setCurrentInput(text);
+    }
+    if (event.isFinal && text.trim()) {
+      handleVoiceInputRef.current(text);
+    }
+  });
+
+  useSpeechRecognitionEvent('error', (event) => {
+    // End listening state gracefully on silence or speech timeout
+    setIsListening(false);
+  });
 
   // Start continuous pulse animation
   useEffect(() => {
@@ -177,65 +210,97 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
     }
   };
 
-  // Start Speech Recognition
-  const startListening = () => {
-    if (typeof window === 'undefined') return;
+  // Start Speech Recognition (Native via expo-speech-recognition, with web fallback)
+  const startListening = async () => {
+    stopSpeaking();
 
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      // Speech recognition not supported in this browser window
-      return;
-    }
-
+    // 1. Native Android / iOS Speech Recognition via expo-speech-recognition
     try {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {}
+      const perms = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      if (!perms.granted) {
+        Alert.alert(
+          'Microphone Permission Required',
+          'Please allow microphone permission so Anulekh can listen to your exam booking details.'
+        );
+        return;
       }
 
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.lang = 'en-IN';
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {}
 
-      recognition.onstart = () => {
-        setIsListening(true);
-        setTranscript('');
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentText = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentText += event.results[i][0].transcript;
-        }
-        setTranscript(currentText);
-        setCurrentInput(currentText);
-
-        // If final result, process after slight debounce
-        if (event.results[0].isFinal) {
-          handleVoiceInput(currentText);
-        }
-      };
-
-      recognition.onerror = () => {
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
-      setIsListening(false);
+      ExpoSpeechRecognitionModule.start({
+        lang: 'en-IN',
+        interimResults: true,
+        continuous: false,
+        androidIntent: 'android.speech.action.RECOGNIZE_SPEECH',
+        addsPunctuation: false,
+      });
+      setIsListening(true);
+      setTranscript('');
+      return;
+    } catch (nativeErr) {
+      console.warn('Native speech recognition start failed:', nativeErr);
     }
+
+    // 2. Web fallback (for browser testing / development)
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          if (recognitionRef.current) {
+            try {
+              recognitionRef.current.stop();
+            } catch {}
+          }
+
+          const recognition = new SpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = true;
+          recognition.lang = 'en-IN';
+
+          recognition.onstart = () => {
+            setIsListening(true);
+            setTranscript('');
+          };
+
+          recognition.onresult = (event: any) => {
+            let currentText = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              currentText += event.results[i][0].transcript;
+            }
+            setTranscript(currentText);
+            setCurrentInput(currentText);
+
+            if (event.results[0]?.isFinal) {
+              handleVoiceInputRef.current(currentText);
+            }
+          };
+
+          recognition.onerror = () => {
+            setIsListening(false);
+          };
+
+          recognition.onend = () => {
+            setIsListening(false);
+          };
+
+          recognitionRef.current = recognition;
+          recognition.start();
+          return;
+        } catch {}
+      }
+    }
+
+    setIsListening(false);
   };
 
   const stopListening = () => {
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch {}
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -249,6 +314,9 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
     return () => {
       stopSpeaking();
       stopListening();
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {}
     };
   }, []);
 
@@ -347,7 +415,9 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
     const cleaned = raw.trim();
     if (!cleaned) return;
 
-    if (step === 'subject') {
+    const currentStep = stepRef.current;
+
+    if (currentStep === 'subject') {
       const cleanSubject = cleaned.replace(/^(my exam is|it is|subject is|subject|exam for)\s+/i, '');
       setSubject(cleanSubject);
       setCurrentInput('');
@@ -355,7 +425,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       return;
     }
 
-    if (step === 'type') {
+    if (currentStep === 'type') {
       const lower = cleaned.toLowerCase();
       let matchedType = 'University';
       if (lower.includes('school') || lower.includes('10th') || lower.includes('12th')) matchedType = 'School';
@@ -369,7 +439,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       return;
     }
 
-    if (step === 'date') {
+    if (currentStep === 'date') {
       const parsedDate = parseSpokenDate(cleaned);
       setExamDate(parsedDate);
       setCurrentInput('');
@@ -377,7 +447,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       return;
     }
 
-    if (step === 'time') {
+    if (currentStep === 'time') {
       const parsedTime = parseSpokenTime(cleaned);
       setExamTime(parsedTime);
       setCurrentInput('');
@@ -385,7 +455,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       return;
     }
 
-    if (step === 'venue') {
+    if (currentStep === 'venue') {
       if (cleaned.toLowerCase().includes('current location') || cleaned.toLowerCase().includes('my location')) {
         handleGetGpsVenue();
         return;
@@ -397,12 +467,15 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       return;
     }
 
-    if (step === 'confirm') {
+    if (currentStep === 'confirm') {
       if (cleaned.toLowerCase().includes('yes') || cleaned.toLowerCase().includes('confirm') || cleaned.toLowerCase().includes('submit')) {
         submitVoiceRequest();
       }
     }
   };
+
+  // Sync ref on each render
+  handleVoiceInputRef.current = handleVoiceInput;
 
   // Execute step transitions with natural voice prompt
   useEffect(() => {

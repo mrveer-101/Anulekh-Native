@@ -96,6 +96,12 @@ export default function ScribeRequestForm() {
     isEditing ? 'form' : (params.mode === 'voice' ? 'voice' : 'choice')
   );
 
+  useEffect(() => {
+    if (params.mode === 'voice') {
+      setEntryMode('voice');
+    }
+  }, [params.mode]);
+
   // Submit spinner and the logged-in student's profile (its fields are copied into each request).
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<any>(null);
