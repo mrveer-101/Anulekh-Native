@@ -1,4 +1,9 @@
-const { withAndroidManifest, withDangerousMod } = require('@expo/config-plugins');
+const {
+  withAndroidManifest,
+  withStringsXml,
+  withDangerousMod,
+  AndroidConfig,
+} = require('@expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
@@ -9,7 +14,25 @@ const path = require('path');
  * and homescreen dynamic/static app shortcuts.
  */
 const withAndroidShortcuts = (config) => {
-  // 1. Add shortcuts meta-data to AndroidManifest.xml's main Activity
+  // 1. Add string resources to strings.xml safely
+  config = withStringsXml(config, (modConfig) => {
+    modConfig.modResults = AndroidConfig.Strings.setStringItem(
+      [
+        {
+          _: 'Voice Exam',
+          $: { name: 'voice_exam_shortcut_short' },
+        },
+        {
+          _: 'Create Exam Request with Voice',
+          $: { name: 'voice_exam_shortcut_long' },
+        },
+      ],
+      modConfig.modResults
+    );
+    return modConfig;
+  });
+
+  // 2. Add shortcuts meta-data to AndroidManifest.xml's main Activity
   config = withAndroidManifest(config, (modConfig) => {
     const mainApplication = modConfig.modResults.manifest.application?.[0];
     if (!mainApplication) return modConfig;
@@ -37,7 +60,7 @@ const withAndroidShortcuts = (config) => {
     return modConfig;
   });
 
-  // 2. Inject res/xml/shortcuts.xml for Android App Actions
+  // 3. Inject res/xml/shortcuts.xml with standard Android AAPT2 attributes
   config = withDangerousMod(config, [
     'android',
     async (modConfig) => {
@@ -69,8 +92,8 @@ const withAndroidShortcuts = (config) => {
         android:shortcutId="voice_exam_request"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"
-        android:shortLabel="@string/voice_exam_shortcut_short"
-        android:longLabel="@string/voice_exam_shortcut_long">
+        android:shortcutShortLabel="@string/voice_exam_shortcut_short"
+        android:shortcutLongLabel="@string/voice_exam_shortcut_long">
         <intent
             android:action="android.intent.action.VIEW"
             android:targetPackage="com.celestialsteam.anulekh"
@@ -85,24 +108,6 @@ const withAndroidShortcuts = (config) => {
 `;
 
       fs.writeFileSync(path.join(xmlDir, 'shortcuts.xml'), shortcutsXml, 'utf-8');
-
-      // Also ensure string resources exist in res/values/strings.xml
-      const valuesDir = path.join(
-        modConfig.modRequest.platformProjectRoot,
-        'app/src/main/res/values'
-      );
-      if (fs.existsSync(valuesDir)) {
-        const stringsPath = path.join(valuesDir, 'strings.xml');
-        if (fs.existsSync(stringsPath)) {
-          let stringsXml = fs.readFileSync(stringsPath, 'utf-8');
-          if (!stringsXml.includes('voice_exam_shortcut_short')) {
-            const insertion = `    <string name="voice_exam_shortcut_short">Voice Exam</string>\n    <string name="voice_exam_shortcut_long">Create Exam Request with Voice</string>\n</resources>`;
-            stringsXml = stringsXml.replace('</resources>', insertion);
-            fs.writeFileSync(stringsPath, stringsXml, 'utf-8');
-          }
-        }
-      }
-
       return modConfig;
     },
   ]);
