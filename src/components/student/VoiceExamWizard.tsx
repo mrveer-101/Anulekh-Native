@@ -12,6 +12,7 @@ import {
   Easing,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
 import { supabase } from '@/core/supabase';
 import { announceForAccessibility } from '@/core/a11y';
@@ -103,33 +104,73 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
     };
   }, []);
 
-  // Text-To-Speech helper
+  // Stop speaking on native and web
+  const stopSpeaking = () => {
+    try {
+      if (Speech && typeof Speech.stop === 'function') {
+        Speech.stop();
+      }
+    } catch {}
+    try {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch {}
+    setIsSpeaking(false);
+  };
+
+  // Text-To-Speech helper: uses native Android/iOS TTS via expo-speech, with web fallback
   const speakPrompt = (text: string, onEnd?: () => void) => {
     announceForAccessibility(text);
 
-    if (voiceMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    if (voiceMuted) {
       if (onEnd) setTimeout(onEnd, 300);
       return;
     }
 
     try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.05;
-      utterance.lang = 'en-IN';
+      stopSpeaking();
+      setIsSpeaking(true);
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        if (onEnd) onEnd();
-      };
-      utterance.onerror = () => {
-        setIsSpeaking(false);
-        if (onEnd) onEnd();
-      };
+      // 1. Native / universal TTS via expo-speech
+      if (Speech && typeof Speech.speak === 'function') {
+        Speech.speak(text, {
+          language: 'en-IN',
+          pitch: 1.05,
+          rate: 1.0,
+          onStart: () => setIsSpeaking(true),
+          onDone: () => {
+            setIsSpeaking(false);
+            if (onEnd) onEnd();
+          },
+          onError: () => {
+            setIsSpeaking(false);
+            if (onEnd) onEnd();
+          },
+        });
+        return;
+      }
 
-      window.speechSynthesis.speak(utterance);
+      // 2. Browser fallback via window.speechSynthesis
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.05;
+        utterance.lang = 'en-IN';
+        utterance.onstart = () => setIsSpeaking(true);
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          if (onEnd) onEnd();
+        };
+        utterance.onerror = () => {
+          setIsSpeaking(false);
+          if (onEnd) onEnd();
+        };
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+
+      if (onEnd) setTimeout(onEnd, 300);
     } catch {
       setIsSpeaking(false);
       if (onEnd) onEnd();
@@ -206,9 +247,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
   // Clean up speech and recognition on unmount
   useEffect(() => {
     return () => {
-      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeaking();
       stopListening();
     };
   }, []);
@@ -526,10 +565,8 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
       >
         <TouchableOpacity
           onPress={() => {
+            stopSpeaking();
             stopListening();
-            if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-              window.speechSynthesis.cancel();
-            }
             onCancel();
           }}
           accessibilityRole="button"
@@ -561,9 +598,7 @@ export default function VoiceExamWizard({ profile, onCancel, onSuccess }: VoiceE
         <TouchableOpacity
           onPress={() => {
             if (!voiceMuted) {
-              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-              }
+              stopSpeaking();
             }
             setVoiceMuted(!voiceMuted);
           }}
