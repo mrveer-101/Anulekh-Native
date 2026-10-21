@@ -1,11 +1,11 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert, Platform, Modal } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { parseExamDate } from '@/core/examDate';
-import MiniCalendar from '@/components/modals/MiniCalendar';
+import DateRangeCalendarModal from '@/components/modals/DateRangeCalendarModal';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
@@ -149,26 +149,56 @@ export default function ScribeExploreView() {
   const [appMap, setAppMap] = useState<Map<string, string>>(new Map());
   const [scribeProfile, setScribeProfile] = useState<any>(null);
   
-  // Search & Filter state
+  // Search & Filter state (multi-select arrays)
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLanguage, setSelectedLanguage] = useState('All');
-  const [selectedType, setSelectedType] = useState('All');
-  const [selectedSlot, setSelectedSlot] = useState('All');
-  const [selectedDay, setSelectedDay] = useState('All');
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [sosOnly, setSosOnly] = useState(false);
+  const [showSosInfoModal, setShowSosInfoModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Date-range filter (DD/MM/YYYY text inputs, inclusive on both ends)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // Assignment-specific filters
-  const [selectedAssignmentLevel, setSelectedAssignmentLevel] = useState('All');
+  // Assignment-specific filters (multi-select)
+  const [selectedAssignmentLevels, setSelectedAssignmentLevels] = useState<string[]>([]);
   const [deadlineFrom, setDeadlineFrom] = useState('');
   const [deadlineTo, setDeadlineTo] = useState('');
 
-  // Which date-range field the calendar popover is currently editing (if any)
-  const [activeDateField, setActiveDateField] = useState<null | 'examFrom' | 'examTo' | 'deadlineFrom' | 'deadlineTo'>(null);
+  // Which date range picker is currently open: 'exam' | 'deadline' | null
+  const [showDateRangeModal, setShowDateRangeModal] = useState<null | 'exam' | 'deadline'>(null);
+
+  /** Formats a compact display string for the single-row date range filter pill. */
+  const formatRangeLabel = (fromStr: string, toStr: string) => {
+    if (!fromStr && !toStr) return 'All Dates';
+    const parse = (s: string) => {
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (!m) return null;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${parseInt(m[1], 10)} ${months[parseInt(m[2], 10) - 1]}`;
+    };
+    const f = parse(fromStr);
+    const t = parse(toStr);
+    if (f && t) {
+      if (f === t) return f;
+      return `${f} – ${t}`;
+    }
+    if (f) return `From ${f}`;
+    if (t) return `To ${t}`;
+    return fromStr || toStr;
+  };
+
+  // Active dropdown modal picker state (for single-row concise multi-select filters)
+  const [activeDropdown, setActiveDropdown] = useState<{
+    title: string;
+    icon?: keyof typeof Feather.glyphMap;
+    options: string[];
+    selected: string[];
+    onSelect: (val: string[]) => void;
+  } | null>(null);
 
   const [expandedExamIds, setExpandedExamIds] = useState<Set<number>>(new Set());
   const [expandedAssignmentIds, setExpandedAssignmentIds] = useState<Set<number>>(new Set());
@@ -353,11 +383,11 @@ export default function ScribeExploreView() {
     return WEEKDAY_LABELS[d.getDay()];
   };
 
-  const LANGUAGE_OPTIONS = ['All', 'English', 'Hindi', 'Gujarati'];
-  const TYPE_OPTIONS = ['All', 'School', 'University', 'Competitive', 'Government'];
-  const SLOT_OPTIONS = ['All', 'Morning', 'Afternoon', 'Evening'];
-  const DAY_OPTIONS = ['All', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const ASSIGNMENT_LEVEL_OPTIONS = ['All', 'School', 'University', 'Competitive'];
+  const LANGUAGE_OPTIONS = ['English', 'Hindi', 'Gujarati'];
+  const TYPE_OPTIONS = ['School', 'University', 'Competitive', 'Government'];
+  const SLOT_OPTIONS = ['Morning', 'Afternoon', 'Evening'];
+  const DAY_OPTIONS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const ASSIGNMENT_LEVEL_OPTIONS = ['School', 'University', 'Competitive'];
 
   // Parses a DD/MM/YYYY filter input into a Date at local midnight, or null when incomplete/invalid.
   const parseFilterDate = (value: string): Date | null => {
@@ -371,24 +401,32 @@ export default function ScribeExploreView() {
   };
 
   // Count of non-default (active) filters, shown on the collapsed filter bar.
-  const activeFilterCount = [selectedLanguage, selectedType, selectedSlot, selectedDay]
-    .filter(v => v !== 'All').length + (dateFrom.trim() ? 1 : 0) + (dateTo.trim() ? 1 : 0) + (sosOnly ? 1 : 0);
+  const activeFilterCount =
+    (selectedLanguages.length > 0 ? 1 : 0) +
+    (selectedTypes.length > 0 ? 1 : 0) +
+    (selectedSlots.length > 0 ? 1 : 0) +
+    (selectedDays.length > 0 ? 1 : 0) +
+    (dateFrom.trim() ? 1 : 0) +
+    (dateTo.trim() ? 1 : 0) +
+    (sosOnly ? 1 : 0);
 
-  const activeAssignmentFilterCount = (selectedAssignmentLevel !== 'All' ? 1 : 0)
-    + (deadlineFrom.trim() ? 1 : 0) + (deadlineTo.trim() ? 1 : 0);
+  const activeAssignmentFilterCount =
+    (selectedAssignmentLevels.length > 0 ? 1 : 0) +
+    (deadlineFrom.trim() ? 1 : 0) +
+    (deadlineTo.trim() ? 1 : 0);
 
   const clearFilters = () => {
-    setSelectedLanguage('All');
-    setSelectedType('All');
-    setSelectedSlot('All');
-    setSelectedDay('All');
+    setSelectedLanguages([]);
+    setSelectedTypes([]);
+    setSelectedSlots([]);
+    setSelectedDays([]);
     setDateFrom('');
     setDateTo('');
     setSosOnly(false);
   };
 
   const clearAssignmentFilters = () => {
-    setSelectedAssignmentLevel('All');
+    setSelectedAssignmentLevels([]);
     setDeadlineFrom('');
     setDeadlineTo('');
   };
@@ -415,23 +453,24 @@ export default function ScribeExploreView() {
       (exam.exam_venue || '').toLowerCase().includes(actualSearchQuery.toLowerCase()) ||
       (exam.exam_date || '').toLowerCase().includes(actualSearchQuery.toLowerCase());
 
-    // exam_language may be a comma list (e.g. "English, Hindi") — match by substring.
-    const matchesLanguage = selectedLanguage === 'All' ||
-      (exam.exam_language || '').toLowerCase().includes(selectedLanguage.toLowerCase());
+    // exam_language may be a comma list (e.g. "English, Hindi") — match by any selected language.
+    const matchesLanguage = selectedLanguages.length === 0 ||
+      selectedLanguages.some(lang => (exam.exam_language || '').toLowerCase().includes(lang.toLowerCase()));
 
-    // exam_type is stored like "University (Semester End Exam)" — match by prefix.
-    // Older requests were saved under the previous label "College" — treat that as "University" too.
+    // exam_type is stored like "University (Semester End Exam)" — match by prefix for any selected type.
     const examTypePrefix = (exam.exam_type || '').trim().toLowerCase();
-    const matchesType = selectedType === 'All' ||
-      examTypePrefix.startsWith(selectedType.toLowerCase()) ||
-      (selectedType === 'University' && examTypePrefix.startsWith('college'));
+    const matchesType = selectedTypes.length === 0 ||
+      selectedTypes.some(type => {
+        const tLower = type.toLowerCase();
+        return examTypePrefix.startsWith(tLower) || (type === 'University' && examTypePrefix.startsWith('college'));
+      });
 
     // Time slot / day are derived from the free-text date; if unparseable, don't exclude.
     const slot = getExamSlot(exam.exam_date);
-    const matchesSlot = selectedSlot === 'All' || slot === null || slot === selectedSlot;
+    const matchesSlot = selectedSlots.length === 0 || slot === null || selectedSlots.includes(slot);
 
     const day = getExamDay(exam.exam_date);
-    const matchesDay = selectedDay === 'All' || day === null || day === selectedDay;
+    const matchesDay = selectedDays.length === 0 || day === null || selectedDays.includes(day);
 
     // Date range (From/To, inclusive). If the exam date can't be parsed, don't exclude it.
     const examDay = parseExamDate(exam.exam_date);
@@ -463,42 +502,116 @@ export default function ScribeExploreView() {
     return !venue.includes(scribeLocation);
   });
 
-  // Renders one labelled filter section as a wrapped row of selectable chips.
-  const renderFilterSection = (
+  const DAY_LABELS: Record<string, string> = {
+    Mon: 'Monday',
+    Tue: 'Tuesday',
+    Wed: 'Wednesday',
+    Thu: 'Thursday',
+    Fri: 'Friday',
+    Sat: 'Saturday',
+    Sun: 'Sunday',
+  };
+
+  // Renders one concise filter field as a single row with a dropdown selector button on the right.
+  const renderDropdownRow = (
     label: string,
+    iconName: keyof typeof Feather.glyphMap,
     options: string[],
-    selected: string,
-    onSelect: (value: string) => void
-  ) => (
-    <View style={{ marginBottom: 14 }}>
-      <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>{label}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {options.map((opt) => {
-          const active = selected === opt;
-          return (
-            <TouchableOpacity
-              key={opt}
-              onPress={() => onSelect(opt)}
-              accessibilityRole="button"
-              aria-selected={active}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: active ? THEME.solid : '#ffffff',
-                borderWidth: 1.5,
-                borderColor: active ? THEME.solid : '#e2e8f0'
-              }}
-            >
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: active ? '#ffffff' : '#475569' }}>
-                {opt === 'All' ? t('filter_all') : opt}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+    selected: string[],
+    onSelect: (value: string[]) => void
+  ) => {
+    const isFiltered = selected.length > 0;
+    const displayValue = (() => {
+      if (selected.length === 0) return t('filter_all');
+      if (selected.length === 1) return DAY_LABELS[selected[0]] || selected[0];
+      if (selected.length === 2) {
+        const first = DAY_LABELS[selected[0]] || selected[0];
+        const second = DAY_LABELS[selected[1]] || selected[1];
+        const combined = `${first}, ${second}`;
+        if (combined.length <= 16) return combined;
+      }
+      return `${selected.length} Selected`;
+    })();
+
+    return (
+      <View
+        key={label}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingVertical: 10,
+          minHeight: 44,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: isFiltered ? '#dcfce7' : '#f1f5f9',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Feather name={iconName} size={14} color={isFiltered ? '#16a34a' : '#64748b'} />
+          </View>
+          <Text
+            style={{
+              fontFamily: 'Roboto',
+              fontSize: 13,
+              fontWeight: '700',
+              color: isFiltered ? '#0f172a' : '#334155',
+            }}
+          >
+            {label}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          testID={`filter-dropdown-${label.toLowerCase().replace(/\s+/g, '-')}`}
+          activeOpacity={0.7}
+          onPress={() => setActiveDropdown({
+            title: label,
+            icon: iconName,
+            options,
+            selected,
+            onSelect,
+          })}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}: ${displayValue}`}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 7,
+            borderRadius: 10,
+            backgroundColor: isFiltered ? '#f0fdf4' : '#f8fafc',
+            borderWidth: 1.5,
+            borderColor: isFiltered ? '#16a34a' : '#e2e8f0',
+            minWidth: 110,
+          }}
+        >
+          <Text
+            numberOfLines={1}
+            style={{
+              fontFamily: 'Roboto',
+              fontSize: 12,
+              fontWeight: isFiltered ? '800' : '600',
+              color: isFiltered ? '#15803d' : '#475569',
+              maxWidth: 130,
+            }}
+          >
+            {displayValue}
+          </Text>
+          <Feather name="chevron-down" size={14} color={isFiltered ? '#16a34a' : '#94a3b8'} />
+        </TouchableOpacity>
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderExamCard = (exam: ExamRequest, index = 0) => {
     const examStatus = appMap.get(`${exam.id}_exam`);
@@ -860,11 +973,13 @@ export default function ScribeExploreView() {
       (assign.assignment_title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (assign.description || '').toLowerCase().includes(searchQuery.toLowerCase());
 
-    // academic_level is stored like "School" / "University (Semester End Exam)" — match by prefix.
+    // academic_level is stored like "School" / "University (Semester End Exam)" — match by prefix for any selected level.
     const levelPrefix = (assign.academic_level || '').trim().toLowerCase();
-    const matchesLevel = selectedAssignmentLevel === 'All' ||
-      levelPrefix.startsWith(selectedAssignmentLevel.toLowerCase()) ||
-      (selectedAssignmentLevel === 'University' && levelPrefix.startsWith('college'));
+    const matchesLevel = selectedAssignmentLevels.length === 0 ||
+      selectedAssignmentLevels.some(lvl => {
+        const lLower = lvl.toLowerCase();
+        return levelPrefix.startsWith(lLower) || (lvl === 'University' && levelPrefix.startsWith('college'));
+      });
 
     // Deadline range (From/To, inclusive). If the deadline can't be parsed, don't exclude it.
     const fromDate = parseFilterDate(deadlineFrom);
@@ -967,6 +1082,7 @@ export default function ScribeExploreView() {
         <View style={{ backgroundColor: '#fff', borderRadius: 18, borderWidth: 1.5, borderColor: THEME.cardBorder, overflow: 'hidden', marginBottom: 14 }}>
           {/* Toggle bar */}
           <TouchableOpacity
+            testID="filters-toggle-button"
             activeOpacity={0.7}
             onPress={() => setShowFilters(!showFilters)}
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
@@ -995,11 +1111,11 @@ export default function ScribeExploreView() {
           {/* Expandable sections */}
           {showFilters && activeSegment === 'exams' && (
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
-              {/* SOS Emergency Filter Toggle Bar (shifted inside filter block) */}
+              {/* SOS Scribe Only Row */}
               <View style={{
-                backgroundColor: sosOnly ? 'rgba(239,68,68,0.06)' : '#f8fafc',
+                backgroundColor: sosOnly ? '#fef2f2' : '#f8fafc',
                 borderWidth: 1.5,
-                borderColor: sosOnly ? 'rgba(239,68,68,0.3)' : '#e2e8f0',
+                borderColor: sosOnly ? '#fca5a5' : '#e2e8f0',
                 borderRadius: 14,
                 paddingHorizontal: 12,
                 paddingVertical: 10,
@@ -1007,37 +1123,46 @@ export default function ScribeExploreView() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
                   <View style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 9,
-                    backgroundColor: sosOnly ? '#ef4444' : 'rgba(239,68,68,0.12)',
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    backgroundColor: sosOnly ? '#fee2e2' : 'rgba(239,68,68,0.1)',
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}>
-                    <Ionicons name="flash" size={16} color={sosOnly ? '#ffffff' : '#ef4444'} />
+                    <Ionicons name="flash" size={15} color="#ef4444" />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: sosOnly ? '#991b1b' : '#0f172a' }}>
-                        {t('sos_emergency_only')}
-                      </Text>
-                      <View style={{ backgroundColor: '#ef4444', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}>
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '900', color: '#ffffff' }}>SOS</Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500', marginTop: 1 }}>
-                      {t('sos_emergency_desc')}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: sosOnly ? '#991b1b' : '#0f172a' }}>
+                      SOS Scribe
                     </Text>
+                    <TouchableOpacity
+                      testID="sos-info-button"
+                      activeOpacity={0.7}
+                      onPress={() => setShowSosInfoModal(true)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        backgroundColor: sosOnly ? '#fee2e2' : '#e2e8f0',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Feather name="help-circle" size={13} color={sosOnly ? '#dc2626' : '#64748b'} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
                 <TouchableOpacity
+                  testID="sos-toggle-switch"
                   activeOpacity={0.8}
                   onPress={() => setSosOnly(!sosOnly)}
                   accessibilityRole="switch"
-                  accessibilityLabel="Filter by SOS Emergency Only"
+                  accessibilityLabel="Filter by SOS Scribe"
                   aria-checked={sosOnly}
                   style={{
                     width: 44,
@@ -1064,70 +1189,172 @@ export default function ScribeExploreView() {
                 </TouchableOpacity>
               </View>
 
-              {renderFilterSection(t('filter_language'), LANGUAGE_OPTIONS, selectedLanguage, setSelectedLanguage)}
-              {renderFilterSection(t('filter_exam_type'), TYPE_OPTIONS, selectedType, setSelectedType)}
-              {renderFilterSection(t('filter_time_slot'), SLOT_OPTIONS, selectedSlot, setSelectedSlot)}
-              {renderFilterSection(t('filter_day'), DAY_OPTIONS, selectedDay, setSelectedDay)}
+              {/* Single-row Dropdown Filters */}
+              <View style={{ backgroundColor: '#ffffff', borderRadius: 14, borderWidth: 1.5, borderColor: '#f1f5f9', paddingHorizontal: 12 }}>
+                {renderDropdownRow(t('filter_language'), 'globe', LANGUAGE_OPTIONS, selectedLanguages, setSelectedLanguages)}
+                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
+                {renderDropdownRow(t('filter_exam_type'), 'book-open', TYPE_OPTIONS, selectedTypes, setSelectedTypes)}
+                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
+                {renderDropdownRow(t('filter_time_slot'), 'clock', SLOT_OPTIONS, selectedSlots, setSelectedSlots)}
+                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
+                {renderDropdownRow(t('filter_day'), 'calendar', DAY_OPTIONS, selectedDays, setSelectedDays)}
+                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
 
-              {/* Exam Date Range */}
-              <View>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                  {t('exam_date_range')}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => setActiveDateField('examFrom')}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
-                  >
-                    <Feather name="calendar" size={12} color="#94a3b8" />
-                    <Text style={{ flex: 1, fontSize: 11, color: dateFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {dateFrom || t('from_date_placeholder')}
+                {/* Single-row Exam Date Range */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 10,
+                  minHeight: 44,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                    <View style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: (dateFrom || dateTo) ? '#dcfce7' : '#f1f5f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Feather name="calendar" size={14} color={(dateFrom || dateTo) ? '#16a34a' : '#64748b'} />
+                    </View>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: (dateFrom || dateTo) ? '#0f172a' : '#334155' }}>
+                      {t('exam_date_range')}
                     </Text>
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
-                  <TouchableOpacity
-                    onPress={() => setActiveDateField('examTo')}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
-                  >
-                    <Feather name="calendar" size={12} color="#94a3b8" />
-                    <Text style={{ flex: 1, fontSize: 11, color: dateTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {dateTo || t('to_date_placeholder')}
-                    </Text>
-                  </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      testID="exam-date-range-button"
+                      activeOpacity={0.7}
+                      onPress={() => setShowDateRangeModal('exam')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 11,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        backgroundColor: (dateFrom || dateTo) ? '#f0fdf4' : '#f8fafc',
+                        borderWidth: 1.5,
+                        borderColor: (dateFrom || dateTo) ? '#16a34a' : '#e2e8f0',
+                      }}
+                    >
+                      {(dateFrom || dateTo) ? (
+                        <>
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#16a34a' }} />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#15803d' }}>
+                            {formatRangeLabel(dateFrom, dateTo)}
+                          </Text>
+                          {dateTo ? (
+                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ea580c' }} />
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <Feather name="calendar" size={12} color="#94a3b8" />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#64748b' }}>
+                            All Dates
+                          </Text>
+                        </>
+                      )}
+                      <Feather name="chevron-down" size={13} color={(dateFrom || dateTo) ? '#16a34a' : '#94a3b8'} />
+                    </TouchableOpacity>
+
+                    {(dateFrom || dateTo) ? (
+                      <TouchableOpacity
+                        onPress={() => { setDateFrom(''); setDateTo(''); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ padding: 2 }}
+                      >
+                        <Feather name="x-circle" size={15} color="#dc2626" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             </View>
           )}
 
           {showFilters && activeSegment === 'assignments' && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 2, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
-              {renderFilterSection(t('filter_academic_level'), ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevel, setSelectedAssignmentLevel)}
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 10 }}>
+              <View style={{ backgroundColor: '#ffffff', borderRadius: 14, borderWidth: 1.5, borderColor: '#f1f5f9', paddingHorizontal: 12 }}>
+                {renderDropdownRow(t('filter_academic_level'), 'award', ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevels, setSelectedAssignmentLevels)}
+                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
 
-              {/* Deadline Range */}
-              <View>
-                <Text style={{ fontSize: 10, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 7 }}>
-                  {t('deadline_range')}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => setActiveDateField('deadlineFrom')}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
-                  >
-                    <Feather name="calendar" size={12} color="#94a3b8" />
-                    <Text style={{ flex: 1, fontSize: 11, color: deadlineFrom ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {deadlineFrom || t('from_date_placeholder')}
+                {/* Single-row Deadline Range */}
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: 10,
+                  minHeight: 44,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                    <View style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: (deadlineFrom || deadlineTo) ? '#dcfce7' : '#f1f5f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                      <Feather name="calendar" size={14} color={(deadlineFrom || deadlineTo) ? '#16a34a' : '#64748b'} />
+                    </View>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: (deadlineFrom || deadlineTo) ? '#0f172a' : '#334155' }}>
+                      {t('deadline_range')}
                     </Text>
-                  </TouchableOpacity>
-                  <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '700' }}>–</Text>
-                  <TouchableOpacity
-                    onPress={() => setActiveDateField('deadlineTo')}
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', paddingHorizontal: 10, height: 38, gap: 6 }}
-                  >
-                    <Feather name="calendar" size={12} color="#94a3b8" />
-                    <Text style={{ flex: 1, fontSize: 11, color: deadlineTo ? '#0f172a' : '#94a3b8', fontWeight: '600' }}>
-                      {deadlineTo || t('to_date_placeholder')}
-                    </Text>
-                  </TouchableOpacity>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      testID="deadline-range-button"
+                      activeOpacity={0.7}
+                      onPress={() => setShowDateRangeModal('deadline')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 11,
+                        paddingVertical: 6,
+                        borderRadius: 10,
+                        backgroundColor: (deadlineFrom || deadlineTo) ? '#f0fdf4' : '#f8fafc',
+                        borderWidth: 1.5,
+                        borderColor: (deadlineFrom || deadlineTo) ? '#16a34a' : '#e2e8f0',
+                      }}
+                    >
+                      {(deadlineFrom || deadlineTo) ? (
+                        <>
+                          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#16a34a' }} />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#15803d' }}>
+                            {formatRangeLabel(deadlineFrom, deadlineTo)}
+                          </Text>
+                          {deadlineTo ? (
+                            <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#ea580c' }} />
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <Feather name="calendar" size={12} color="#94a3b8" />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#64748b' }}>
+                            All Dates
+                          </Text>
+                        </>
+                      )}
+                      <Feather name="chevron-down" size={13} color={(deadlineFrom || deadlineTo) ? '#16a34a' : '#94a3b8'} />
+                    </TouchableOpacity>
+
+                    {(deadlineFrom || deadlineTo) ? (
+                      <TouchableOpacity
+                        onPress={() => { setDeadlineFrom(''); setDeadlineTo(''); }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={{ padding: 2 }}
+                      >
+                        <Feather name="x-circle" size={15} color="#dc2626" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               </View>
             </View>
@@ -1209,28 +1436,392 @@ export default function ScribeExploreView() {
 
       </ScrollView>
 
-      <MiniCalendar
-        visible={activeDateField !== null}
-        onClose={() => setActiveDateField(null)}
-        title={
-          activeDateField === 'examFrom' ? 'Exam Date — From' :
-          activeDateField === 'examTo' ? 'Exam Date — To' :
-          activeDateField === 'deadlineFrom' ? 'Deadline — From' :
-          activeDateField === 'deadlineTo' ? 'Deadline — To' : undefined
-        }
-        value={
-          activeDateField === 'examFrom' ? dateFrom :
-          activeDateField === 'examTo' ? dateTo :
-          activeDateField === 'deadlineFrom' ? deadlineFrom :
-          activeDateField === 'deadlineTo' ? deadlineTo : ''
-        }
-        onSelect={(val) => {
-          if (activeDateField === 'examFrom') setDateFrom(val);
-          else if (activeDateField === 'examTo') setDateTo(val);
-          else if (activeDateField === 'deadlineFrom') setDeadlineFrom(val);
-          else if (activeDateField === 'deadlineTo') setDeadlineTo(val);
+      <DateRangeCalendarModal
+        visible={showDateRangeModal !== null}
+        onClose={() => setShowDateRangeModal(null)}
+        title={showDateRangeModal === 'exam' ? 'Exam Date Range' : 'Deadline Date Range'}
+        startDate={showDateRangeModal === 'exam' ? dateFrom : deadlineFrom}
+        endDate={showDateRangeModal === 'exam' ? dateTo : deadlineTo}
+        onApply={(start, end) => {
+          if (showDateRangeModal === 'exam') {
+            setDateFrom(start);
+            setDateTo(end);
+          } else if (showDateRangeModal === 'deadline') {
+            setDeadlineFrom(start);
+            setDeadlineTo(end);
+          }
         }}
       />
+
+      {/* Dropdown Multi-Select Modal */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={activeDropdown !== null}
+        onRequestClose={() => setActiveDropdown(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setActiveDropdown(null)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15,23,42,0.45)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{
+              width: '100%',
+              maxWidth: 350,
+              backgroundColor: '#ffffff',
+              borderRadius: 22,
+              padding: 18,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 24,
+              elevation: 8,
+            }}
+          >
+            {/* Modal Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: '#f1f5f9',
+                marginBottom: 10,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {activeDropdown?.icon && (
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 8,
+                      backgroundColor: '#dcfce7',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Feather name={activeDropdown.icon} size={14} color="#16a34a" />
+                  </View>
+                )}
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 14.5, fontWeight: '800', color: '#0f172a' }}>
+                    {activeDropdown?.title}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500' }}>
+                    {(activeDropdown?.selected.length || 0) === 0
+                      ? 'All selected (no filter)'
+                      : `${activeDropdown?.selected.length} selected`}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setActiveDropdown(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#f1f5f9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="x" size={15} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Options List with Checkboxes */}
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 6 }}>
+                {/* 'All' Option */}
+                {(() => {
+                  const isAllChecked = (activeDropdown?.selected.length || 0) === 0;
+                  return (
+                    <TouchableOpacity
+                      testID="filter-option-all"
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (activeDropdown) {
+                          activeDropdown.onSelect([]);
+                          setActiveDropdown(prev => prev ? { ...prev, selected: [] } : null);
+                        }
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        backgroundColor: isAllChecked ? '#f0fdf4' : '#ffffff',
+                        borderWidth: 1.5,
+                        borderColor: isAllChecked ? '#16a34a' : '#f1f5f9',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 6,
+                            backgroundColor: isAllChecked ? '#16a34a' : '#ffffff',
+                            borderWidth: 1.5,
+                            borderColor: isAllChecked ? '#16a34a' : '#cbd5e1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isAllChecked && <Feather name="check" size={13} color="#ffffff" />}
+                        </View>
+                        <Text
+                          style={{
+                            fontFamily: 'Roboto',
+                            fontSize: 13.5,
+                            fontWeight: isAllChecked ? '800' : '600',
+                            color: isAllChecked ? '#15803d' : '#334155',
+                          }}
+                        >
+                          {t('filter_all')}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })()}
+
+                {/* Specific Options */}
+                {activeDropdown?.options.map((opt) => {
+                  const isChecked = activeDropdown.selected.includes(opt);
+                  const labelText = DAY_LABELS[opt] || opt;
+
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      testID={`filter-option-${opt.toLowerCase()}`}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (!activeDropdown) return;
+                        const next = isChecked
+                          ? activeDropdown.selected.filter(s => s !== opt)
+                          : [...activeDropdown.selected, opt];
+                        activeDropdown.onSelect(next);
+                        setActiveDropdown(prev => prev ? { ...prev, selected: next } : null);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        backgroundColor: isChecked ? '#f0fdf4' : '#ffffff',
+                        borderWidth: 1.5,
+                        borderColor: isChecked ? '#16a34a' : '#f1f5f9',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 6,
+                            backgroundColor: isChecked ? '#16a34a' : '#ffffff',
+                            borderWidth: 1.5,
+                            borderColor: isChecked ? '#16a34a' : '#cbd5e1',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isChecked && <Feather name="check" size={13} color="#ffffff" />}
+                        </View>
+                        <Text
+                          style={{
+                            fontFamily: 'Roboto',
+                            fontSize: 13.5,
+                            fontWeight: isChecked ? '800' : '600',
+                            color: isChecked ? '#15803d' : '#334155',
+                          }}
+                        >
+                          {labelText}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions Footer */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: 12,
+                marginTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: '#f1f5f9',
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => {
+                  if (activeDropdown) {
+                    activeDropdown.onSelect([]);
+                    setActiveDropdown(prev => prev ? { ...prev, selected: [] } : null);
+                  }
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ paddingVertical: 6, paddingHorizontal: 4 }}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '700', color: '#dc2626' }}>
+                  Reset to All
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                testID="filter-done-button"
+                activeOpacity={0.8}
+                onPress={() => setActiveDropdown(null)}
+                style={{
+                  backgroundColor: '#16a34a',
+                  paddingHorizontal: 20,
+                  paddingVertical: 7,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ffffff' }}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* SOS Info Modal */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={showSosInfoModal}
+        onRequestClose={() => setShowSosInfoModal(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setShowSosInfoModal(false)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15,23,42,0.45)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{
+              width: '100%',
+              maxWidth: 360,
+              backgroundColor: '#ffffff',
+              borderRadius: 22,
+              padding: 20,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 24,
+              elevation: 8,
+            }}
+          >
+            {/* Modal Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: '#f1f5f9',
+                marginBottom: 12,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 9,
+                    backgroundColor: '#fee2e2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="flash" size={17} color="#ef4444" />
+                </View>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                  What is SOS System?
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowSosInfoModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#f1f5f9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="x" size={15} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Body */}
+            <Text style={{ fontFamily: 'Roboto', fontSize: 13, color: '#334155', lineHeight: 20, marginBottom: 12 }}>
+              The <Text style={{ fontWeight: '800', color: '#dc2626' }}>SOS Emergency System</Text> is designed for urgent exam requests where students need a scribe immediately (within 24–48 hours) due to unforeseen cancellations or emergency situations.
+            </Text>
+
+            <View style={{ backgroundColor: '#fef2f2', borderRadius: 12, borderWidth: 1, borderColor: '#fecaca', padding: 12, marginBottom: 16, gap: 5 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Feather name="alert-triangle" size={13} color="#dc2626" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#991b1b' }}>Urgent Priority Standby</Text>
+              </View>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#7f1d1d', lineHeight: 16 }}>
+                Enabling this filter shows only emergency requests that need an immediate scribe commitment.
+              </Text>
+            </View>
+
+            {/* Got It Button */}
+            <TouchableOpacity
+              testID="sos-info-understood-button"
+              activeOpacity={0.8}
+              onPress={() => setShowSosInfoModal(false)}
+              style={{
+                backgroundColor: '#16a34a',
+                borderRadius: 12,
+                paddingVertical: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#ffffff' }}>
+                Understood
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
     </View>
   );

@@ -1,20 +1,16 @@
 /**
- * App-wide update / "What's New" modal.
+ * App-wide update prompt & version status indicator.
  *
- * Mounted once in the root layout (app/_layout.tsx) so it can appear over any
- * screen. About 1.5 s after start-up it calls `versionService.checkVersion()`
- * (which hits the backend's GET /api/system/version and compares against the
- * installed build) and, unless the result is UP_TO_DATE, shows one of three
- * variants:
- *   - FORCE_UPDATE     : red, cannot be dismissed (Android back button is ignored);
- *                        only action is "Update Now", which opens the store.
- *   - UPDATE_AVAILABLE : blue, "Later" dismisses for this session, "Update" opens the store.
- *   - WHATS_NEW        : green, shown once after upgrading; dismissing records the
- *                        version as seen (AsyncStorage, via versionService.markVersionSeen).
- * Copy (title, message, feature bullets) comes from the server's release info.
- * Network failures are ignored so the check can never block the app.
+ * Mounted once in the root layout (app/_layout.tsx) so it can run across all screens.
+ * Checks for updates against GET /api/system/version on startup:
+ *   - When the user's installed build is UP_TO_DATE:
+ *     A small, subtle "Latest Version • vX.Y.Z" badge appears briefly at the top
+ *     and automatically fades away without blocking the user or showing any modal card.
+ *   - When the Play Store version is NEWER than the installed build:
+ *     The full update modal appears (FORCE_UPDATE or UPDATE_AVAILABLE) allowing
+ *     the user to update directly from the store.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Modal,
   View,
@@ -23,35 +19,54 @@ import {
   ScrollView,
   Platform,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { versionService, VersionCheckResult } from '@/services/versionService';
 
-/**
- * Self-contained update prompt (no props). Renders nothing until a version
- * check returns something other than UP_TO_DATE with release info attached.
- */
 export const AppUpdateModal: React.FC = () => {
-  // Latest version-check result and whether the modal is currently shown.
   const [result, setResult] = useState<VersionCheckResult | null>(null);
   const [visible, setVisible] = useState(false);
+  const [showLatestBadge, setShowLatestBadge] = useState(false);
+  const badgeAnim = useRef(new Animated.Value(0)).current;
 
-  // One-shot version check after mount; `isMounted` guards against setting state after unmount.
   useEffect(() => {
     let isMounted = true;
 
-    // Check version on startup with slight delay so initial render completes
+    // Check version on startup with slight delay so initial render completes smoothly
     const timer = setTimeout(async () => {
       try {
         const res = await versionService.checkVersion();
-        if (isMounted && res.status !== 'UP_TO_DATE') {
-          setResult(res);
+        if (!isMounted) return;
+
+        setResult(res);
+
+        if (res.status === 'FORCE_UPDATE' || res.status === 'UPDATE_AVAILABLE') {
+          // Play Store has a newer version than the user's phone: show update screen
           setVisible(true);
+        } else if (res.status === 'UP_TO_DATE' && res.info) {
+          // User is on latest version: show a brief subtle badge and move forward automatically
+          setShowLatestBadge(true);
+          Animated.sequence([
+            Animated.timing(badgeAnim, {
+              toValue: 1,
+              duration: 250,
+              useNativeDriver: true,
+            }),
+            Animated.delay(1800),
+            Animated.timing(badgeAnim, {
+              toValue: 0,
+              duration: 350,
+              useNativeDriver: true,
+            }),
+          ]).start(() => {
+            if (isMounted) setShowLatestBadge(false);
+          });
         }
       } catch {
         // Silently ignore network failures on startup
       }
-    }, 1500);
+    }, 1200);
 
     return () => {
       isMounted = false;
@@ -59,166 +74,196 @@ export const AppUpdateModal: React.FC = () => {
     };
   }, []);
 
-  // Nothing to show (still checking, up to date, dismissed, or no release info).
-  if (!visible || !result || !result.info) {
-    return null;
-  }
-
-  // Which of the three variants to render.
-  const { status, info } = result;
-  const isForce = status === 'FORCE_UPDATE';
-  const isWhatsNew = status === 'WHATS_NEW';
-
-  /**
-   * Opens the app store listing. For a forced update the modal stays open, so
-   * returning to the app without updating still blocks it.
-   */
   const handleUpdatePress = () => {
-    versionService.openStore(info);
-    if (!isForce) {
-      setVisible(false);
+    if (result?.info) {
+      versionService.openStore(result.info);
+      if (result.status !== 'FORCE_UPDATE') {
+        setVisible(false);
+      }
     }
   };
 
-  /**
-   * Closes the modal ("Later" / "Got it"). For What's New it first stores the
-   * version code as seen so the sheet is not shown again; an optional update
-   * will be offered again on the next app start.
-   */
-  const handleDismiss = async () => {
-    if (isWhatsNew) {
-      await versionService.markVersionSeen(info.latest_version_code);
-    }
+  const handleDismiss = () => {
     setVisible(false);
   };
 
-  // onRequestClose (Android back button) is a no-op for forced updates so the modal cannot be escaped.
+  const isForce = result?.status === 'FORCE_UPDATE';
+  const info = result?.info;
+
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={isForce ? () => {} : handleDismiss}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.card}>
-          {/* Header Icon */}
+    <>
+      {/* Subtle, non-blocking "Latest Version" badge that appears briefly */}
+      {showLatestBadge && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: Platform.OS === 'web' ? 16 : 48,
+            alignSelf: 'center',
+            zIndex: 99999,
+            opacity: badgeAnim,
+            transform: [
+              {
+                translateY: badgeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-10, 0],
+                }),
+              },
+            ],
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            paddingVertical: 6,
+            paddingHorizontal: 13,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(22, 163, 74, 0.25)',
+            shadowColor: '#0F172A',
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.1,
+            shadowRadius: 8,
+            elevation: 4,
+            gap: 6,
+          }}
+        >
           <View
-            style={[
-              styles.iconContainer,
-              isForce
-                ? styles.iconContainerDanger
-                : isWhatsNew
-                ? styles.iconContainerSuccess
-                : styles.iconContainerPrimary,
-            ]}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              backgroundColor: '#DCFCE7',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
-            {isForce ? (
-              <Feather name="alert-triangle" size={32} color="#DC2626" />
-            ) : isWhatsNew ? (
-              <Ionicons name="sparkles" size={32} color="#16A34A" />
-            ) : (
-              <Feather name="download-cloud" size={32} color="#208AEF" />
-            )}
+            <Ionicons name="checkmark-sharp" size={12} color="#16A34A" />
           </View>
-
-          {/* Title & Badge */}
-          <Text style={styles.title}>
-            {isForce
-              ? 'Update Required'
-              : isWhatsNew
-              ? 'Welcome to Anulekh 1.1! 🎉'
-              : info.title || 'New Update Available!'}
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#1E293B' }}>
+            Latest Version •{' '}
+            <Text style={{ color: '#16A34A', fontWeight: '800' }}>
+              v{result?.currentVersion || '1.0.2'}
+            </Text>
           </Text>
+        </Animated.View>
+      )}
 
-          {/* Version badge: just the new version for What's New, otherwise "current -> new" */}
-          <View style={styles.badgeRow}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {isWhatsNew
-                  ? `v${info.latest_version}`
-                  : `Current: v${result.currentVersion} → New: v${info.latest_version}`}
+      {/* Full update modal: ONLY shown when Play Store version is newer than the installed app */}
+      {visible && info && (
+        <Modal
+          visible={visible}
+          transparent
+          animationType="fade"
+          onRequestClose={isForce ? () => {} : handleDismiss}
+        >
+          <View style={styles.overlay}>
+            <View style={styles.card}>
+              {/* Header Icon */}
+              <View
+                style={[
+                  styles.iconContainer,
+                  isForce ? styles.iconContainerDanger : styles.iconContainerPrimary,
+                ]}
+              >
+                {isForce ? (
+                  <Feather name="alert-triangle" size={32} color="#DC2626" />
+                ) : (
+                  <Feather name="download-cloud" size={32} color="#208AEF" />
+                )}
+              </View>
+
+              {/* Title & Badge */}
+              <Text style={styles.title}>
+                {isForce ? 'Update Required' : info.title || 'New Update Available! 🚀'}
               </Text>
+
+              {/* Version badge: "current -> new" */}
+              <View style={styles.badgeRow}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    Current: v{result?.currentVersion} → New: v{info.latest_version}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Description */}
+              <Text style={styles.subtitle}>
+                {isForce
+                  ? 'A critical update is required to continue using Anulekh safely. Please update to the latest version from the Play Store.'
+                  : info.message ||
+                    'A new version of Anulekh is available on the Play Store with new features and fixes.'}
+              </Text>
+
+              {/* Feature List */}
+              {info.features && info.features.length > 0 && (
+                <ScrollView
+                  style={styles.featuresList}
+                  contentContainerStyle={{ paddingVertical: 4 }}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {info.features.map((feat, idx) => (
+                    <View key={idx} style={styles.featureItem}>
+                      <Feather
+                        name="check-circle"
+                        size={16}
+                        color="#208AEF"
+                        style={{ marginTop: 2, marginRight: 8 }}
+                      />
+                      <Text style={styles.featureText}>{feat}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* Action Buttons */}
+              <View style={styles.buttonRow}>
+                {isForce ? (
+                  <TouchableOpacity
+                    style={[styles.primaryButton, { backgroundColor: '#DC2626' }]}
+                    onPress={handleUpdatePress}
+                    activeOpacity={0.8}
+                  >
+                    <Feather
+                      name="download"
+                      size={18}
+                      color="#FFFFFF"
+                      style={{ marginRight: 8 }}
+                    />
+                    <Text style={styles.primaryButtonText}>Update Now</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.splitButtons}>
+                    <TouchableOpacity
+                      style={styles.secondaryButton}
+                      onPress={handleDismiss}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.secondaryButtonText}>Later</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.primaryButtonHalf}
+                      onPress={handleUpdatePress}
+                      activeOpacity={0.8}
+                    >
+                      <Feather
+                        name="arrow-up-circle"
+                        size={16}
+                        color="#FFFFFF"
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text style={styles.primaryButtonText}>Update</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
-
-          {/* Description */}
-          <Text style={styles.subtitle}>
-            {isForce
-              ? 'A critical update is required to continue using Anulekh safely. Please update to the latest version from the Play Store.'
-              : isWhatsNew
-              ? 'Here are the latest features and improvements now available:'
-              : info.message || 'A new version of Anulekh is available with new features and fixes.'}
-          </Text>
-
-          {/* Feature List */}
-          {info.features && info.features.length > 0 && (
-            <ScrollView
-              style={styles.featuresList}
-              contentContainerStyle={{ paddingVertical: 4 }}
-              showsVerticalScrollIndicator={false}
-            >
-              {info.features.map((feat, idx) => (
-                <View key={idx} style={styles.featureItem}>
-                  <Feather
-                    name="check-circle"
-                    size={16}
-                    color="#208AEF"
-                    style={{ marginTop: 2, marginRight: 8 }}
-                  />
-                  <Text style={styles.featureText}>{feat}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          )}
-
-          {/* Action Buttons */}
-          <View style={styles.buttonRow}>
-            {isForce ? (
-              <TouchableOpacity
-                style={[styles.primaryButton, { backgroundColor: '#DC2626' }]}
-                onPress={handleUpdatePress}
-                activeOpacity={0.8}
-              >
-                <Feather name="download" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.primaryButtonText}>Update Now</Text>
-              </TouchableOpacity>
-            ) : isWhatsNew ? (
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleDismiss}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.primaryButtonText}>Got it! Let's Go</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.splitButtons}>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={handleDismiss}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.secondaryButtonText}>Later</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.primaryButtonHalf}
-                  onPress={handleUpdatePress}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="arrow-up-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.primaryButtonText}>Update</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    </Modal>
+        </Modal>
+      )}
+    </>
   );
 };
 
-/** Plain StyleSheet styles (not NativeWind) for the overlay, card, badge, feature list and buttons. */
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -245,7 +290,8 @@ const styles = StyleSheet.create({
         elevation: 10,
       },
       web: {
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+        boxShadow:
+          '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
       } as any,
     }),
   },
@@ -262,9 +308,6 @@ const styles = StyleSheet.create({
   },
   iconContainerDanger: {
     backgroundColor: '#FEE2E2',
-  },
-  iconContainerSuccess: {
-    backgroundColor: '#DCFCE7',
   },
   title: {
     fontSize: 20,

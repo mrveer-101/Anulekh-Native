@@ -76,8 +76,8 @@ export const versionService = {
    * @returns `{ version, versionCode }` of the running build.
    */
   getCurrentVersion(): { version: string; versionCode: number } {
-    const version = Constants.expoConfig?.version || '1.0.2';
-    const versionCode = Constants.expoConfig?.android?.versionCode || 3;
+    const version = Constants.expoConfig?.version || '1.1.0';
+    const versionCode = Constants.expoConfig?.android?.versionCode || 6;
     return { version, versionCode };
   },
 
@@ -104,11 +104,8 @@ export const versionService = {
       }
 
       const info = res.data;
-      // Last acknowledged "What's New" version code (0 if never stored).
-      const lastSeenStr = await AsyncStorage.getItem(LAST_SEEN_VERSION_CODE_KEY);
-      const lastSeenCode = lastSeenStr ? parseInt(lastSeenStr, 10) : 0;
 
-      // 1. Force update takes highest priority
+      // 1. Force update takes highest priority (user's build is older than min supported or force_update flag is on)
       if (info.force_update || currentVersionCode < info.min_supported_version_code) {
         return {
           status: 'FORCE_UPDATE',
@@ -118,7 +115,7 @@ export const versionService = {
         };
       }
 
-      // 2. Soft update available
+      // 2. Soft update: Play Store has a newer version than the user's installed build
       if (currentVersionCode < info.latest_version_code) {
         return {
           status: 'UPDATE_AVAILABLE',
@@ -128,17 +125,7 @@ export const versionService = {
         };
       }
 
-      // 3. User just upgraded: show "What's New" if they haven't seen it for this version
-      if (currentVersionCode >= info.latest_version_code && lastSeenCode < currentVersionCode) {
-        return {
-          status: 'WHATS_NEW',
-          info,
-          currentVersion,
-          currentVersionCode,
-        };
-      }
-
-      // 4. Latest build and its notes already seen: nothing to show.
+      // 3. Installed version is up-to-date with Play Store (no blocking intro card needed)
       return {
         status: 'UP_TO_DATE',
         info,

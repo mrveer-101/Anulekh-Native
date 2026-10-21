@@ -29,6 +29,8 @@ import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 import { useDesktopColumns, useInDesktopShell } from '@/components/ui/DesktopShell';
 import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
+import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
+import { DeclarationModal } from '@/components/common/modals/DeclarationModal';
 
 /** One scribe_applications row. `type` is 'assignment' for assignment requests, otherwise an exam request. */
 interface Application {
@@ -809,56 +811,71 @@ export default function ScribeCommitmentsView() {
             the phone order — calendar first — in the code). Phones: one column, unchanged. */}
         <View style={twoColumns ? { flexDirection: 'row-reverse', gap: 24, alignItems: 'flex-start' } : undefined}>
         <View style={twoColumns ? { flex: 1 } : undefined}>
-        {/* Interactive Calendar Card (First) */}
+        {/* Interactive Calendar Card (First) - matching Student Plan calendar layout */}
         <Animated.View entering={rise(0)} style={{
           backgroundColor: '#ffffff',
-          borderRadius: 24,
-          padding: 16,
-          borderWidth: 1.5,
-          borderColor: THEME.cardBorder,
-          shadowColor: THEME.shadow,
-          shadowOffset: { width: 0, height: 6 },
-          shadowOpacity: 0.08,
-          shadowRadius: 16,
-          elevation: 4,
-          marginBottom: 16
+          paddingVertical: 12,
+          paddingHorizontal: 12,
+          borderRadius: 20,
+          borderWidth: 1,
+          borderColor: '#f1f5f9',
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
+          elevation: 2,
+          marginBottom: 12,
         }}>
           {/* Header: Month Selector with Interactive Collapse/Expand */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: isCalendarCollapsed ? 0 : 10 }}>
+            {/* Previous month */}
             <TouchableOpacity 
               onPress={() => changeMonth(-1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
+              activeOpacity={0.7}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#f0fdf4',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Feather name="chevron-left" size={18} color="#059669" />
+              <Feather name="chevron-left" size={16} color="#16a34a" />
             </TouchableOpacity>
             
+            {/* Month title button (No arrow, click to open/toggle calendar) */}
             <TouchableOpacity 
               onPress={() => setIsCalendarCollapsed(!isCalendarCollapsed)}
               activeOpacity={0.7}
               style={{
-                flexDirection: 'row',
+                paddingHorizontal: 14,
+                paddingVertical: 5,
+                backgroundColor: '#f0fdf4',
+                borderRadius: 16,
                 alignItems: 'center',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-                backgroundColor: 'rgba(5,150,105,0.06)',
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(5,150,105,0.18)'
+                justifyContent: 'center',
               }}
             >
-              <Feather name="calendar" size={14} color="#059669" />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '900', color: '#059669', letterSpacing: -0.3 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#15803d' }}>
                 {currentMonth.toLocaleDateString(lang === 'Hindi' ? 'hi-IN' : lang === 'Gujarati' ? 'gu-IN' : 'en-US', { month: 'long', year: 'numeric' })}
               </Text>
-              <Feather name={isCalendarCollapsed ? "chevron-down" : "chevron-up"} size={16} color="#059669" />
             </TouchableOpacity>
 
+            {/* Next month */}
             <TouchableOpacity 
               onPress={() => changeMonth(1)} 
-              style={{ padding: 8, backgroundColor: 'rgba(5,150,105,0.08)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', borderRadius: 12 }}
+              activeOpacity={0.7}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#f0fdf4',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
             >
-              <Feather name="chevron-right" size={18} color="#059669" />
+              <Feather name="chevron-right" size={16} color="#16a34a" />
             </TouchableOpacity>
           </View>
 
@@ -866,19 +883,19 @@ export default function ScribeCommitmentsView() {
           {!isCalendarCollapsed && (
             <>
               {/* Weekdays Row */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
                 {[t('weekday_sun'), t('weekday_mon'), t('weekday_tue'), t('weekday_wed'), t('weekday_thu'), t('weekday_fri'), t('weekday_sat')].map((day, idx) => (
-                  <View key={idx} style={{ width: '14.2%', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '900', color: '#f97316', letterSpacing: 0.5 }}>{day}</Text>
+                  <View key={idx} style={{ width: '14.28%', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b', letterSpacing: 0.2 }}>{day}</Text>
                   </View>
                 ))}
               </View>
 
               {/* Days Grid */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 5, marginHorizontal: -2 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 2 }}>
                 {getDaysInMonth(currentMonth).map((day, idx) => {
                   if (!day) {
-                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 44, padding: 2.5 }} />;
+                    return <View key={`empty-${idx}`} style={{ width: '14.28%', height: 32 }} />;
                   }
                   const dateString = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
                   const isSelected = selectedDate === dateString;
@@ -887,55 +904,37 @@ export default function ScribeCommitmentsView() {
                   const todayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
                   const isToday = dateString === todayString;
 
-                  // Day card styling: selected > has plans (emergency red, confirmed emerald, else orange) > today > default card
-                  let cellBg = '#f8fafc';
-                  let cellTextColor = '#334155';
-                  let cellBorderColor = '#e2e8f0';
-                  let cellBorderWidth = 1;
-                  let dotColor = '#94a3b8';
-                  let cellShadow: any = {};
+                  const isSolidActive = isSelected || (!selectedDate && isToday);
 
-                  if (isSelected) {
-                    cellBg = '#059669';
-                    cellTextColor = '#ffffff';
-                    cellBorderColor = '#047857';
-                    cellBorderWidth = 1.5;
-                    dotColor = '#ffffff';
-                    cellShadow = {
-                      shadowColor: '#059669',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.25,
-                      shadowRadius: 3,
-                      elevation: 3,
-                    };
+                  let circleBg = 'transparent';
+                  let numColor = '#1e293b';
+                  let dotColor = '#94a3b8';
+                  let showDot = false;
+
+                  if (isSolidActive) {
+                    circleBg = '#16a34a';
+                    numColor = '#ffffff';
                   } else if (hasPlan) {
                     const plansOnDay = getPlansOnDate(day);
                     const hasEmergency = plansOnDay.some(p => p.examDetails?.is_emergency === 'yes');
                     const hasConfirmed = plansOnDay.some(p => p.status === 'confirmed' || p.status === 'assigned');
+                    showDot = true;
                     if (hasEmergency) {
-                      cellBg = '#fee2e2';
-                      cellTextColor = '#b91c1c';
-                      cellBorderColor = '#f87171';
-                      cellBorderWidth = 1.5;
+                      circleBg = '#fee2e2';
+                      numColor = '#dc2626';
                       dotColor = '#dc2626';
                     } else if (hasConfirmed) {
-                      cellBg = '#dcfce7';
-                      cellTextColor = '#15803d';
-                      cellBorderColor = '#86efac';
-                      cellBorderWidth = 1.5;
+                      circleBg = '#dcfce7';
+                      numColor = '#16a34a';
                       dotColor = '#16a34a';
                     } else {
-                      cellBg = '#fff7ed';
-                      cellTextColor = '#c2410c';
-                      cellBorderColor = '#fed7aa';
-                      cellBorderWidth = 1.5;
-                      dotColor = '#ea580c';
+                      circleBg = '#fef3c7';
+                      numColor = '#d97706';
+                      dotColor = '#d97706';
                     }
                   } else if (isToday) {
-                    cellBg = '#ecfdf5';
-                    cellTextColor = '#059669';
-                    cellBorderColor = '#059669';
-                    cellBorderWidth = 1.5;
+                    circleBg = '#f0fdf4';
+                    numColor = '#16a34a';
                   }
 
                   return (
@@ -951,38 +950,36 @@ export default function ScribeCommitmentsView() {
                       activeOpacity={0.7}
                       style={{
                         width: '14.28%',
-                        height: 44,
-                        padding: 2.5,
+                        height: 32,
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
                     >
                       <View style={{
-                        flex: 1,
-                        borderRadius: 10,
-                        backgroundColor: cellBg,
-                        borderWidth: cellBorderWidth,
-                        borderColor: cellBorderColor,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
+                        backgroundColor: circleBg,
                         alignItems: 'center',
                         justifyContent: 'center',
-                        ...cellShadow
                       }}>
                         <Text style={{
                           fontFamily: 'Roboto',
                           fontSize: 12,
-                          fontWeight: isSelected || hasPlan || isToday ? '900' : '600',
-                          color: cellTextColor
+                          fontWeight: isSolidActive || hasPlan ? '700' : '500',
+                          color: numColor,
                         }}>
                           {day.getDate()}
                         </Text>
-                        {hasPlan ? (
+                        {showDot && !isSolidActive && (
                           <View style={{
-                            width: 4,
-                            height: 4,
-                            borderRadius: 2,
+                            width: 3,
+                            height: 3,
+                            borderRadius: 1.5,
                             backgroundColor: dotColor,
-                            marginTop: 2
+                            position: 'absolute',
+                            bottom: 2,
                           }} />
-                        ) : (
-                          <View style={{ width: 4, height: 4, marginTop: 2, opacity: 0 }} />
                         )}
                       </View>
                     </TouchableOpacity>
@@ -991,18 +988,18 @@ export default function ScribeCommitmentsView() {
               </View>
 
               {/* Status Legend */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#dcfce7', borderWidth: 1, borderColor: '#86efac' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_confirmed')}</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#86efac' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '600', color: '#64748b' }}>{t('status_confirmed')}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_applied')}</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#fed7aa' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '600', color: '#64748b' }}>{t('status_applied')}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 2.5, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#f87171' }} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>{t('status_sos')}</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#fca5a5' }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '600', color: '#64748b' }}>{t('status_sos')}</Text>
                 </View>
               </View>
             </>
@@ -1010,15 +1007,15 @@ export default function ScribeCommitmentsView() {
 
           {/* Selected Date Filter Badge / Reset */}
           {selectedDate && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Feather name="calendar" size={13} color="#059669" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                <Feather name="calendar" size={13} color="#16a34a" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#16a34a' }}>
                   Filtered by date: {selectedDate}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedDate(null)} style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#64748b' }}>Clear Date</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#64748b' }}>Clear Date</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1065,11 +1062,9 @@ export default function ScribeCommitmentsView() {
               >
                 <Text style={{
                   fontFamily: 'Roboto',
-                  fontSize: 11,
-                  fontWeight: '900',
-                  textTransform: 'uppercase',
+                  fontSize: 12,
+                  fontWeight: '700',
                   color: isActive ? '#ffffff' : '#64748b',
-                  letterSpacing: 0.5
                 }}>
                   {f.label}
                 </Text>
@@ -1099,267 +1094,24 @@ export default function ScribeCommitmentsView() {
         </View>
       </ScrollView>
 
-      {/* FORMAL SCRIBE DECLARATION MODAL */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      {/* FORMAL      {/* SCRIBE DECLARATION MODAL */}
+      <DeclarationModal
         visible={isDeclarationOpen}
-        onRequestClose={() => setIsDeclarationOpen(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 }}>
-          <View style={{ backgroundColor: '#f8fafc', width: '100%', maxWidth: 360, borderRadius: 28, overflow: 'hidden', shadowColor: '#64748b', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3, borderWidth: 1, borderColor: '#e2e8f0' }}>
-            {/* Modal Header */}
-            <View style={{ paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#0f172a', textTransform: 'uppercase' }}>{t('scribe_declaration')}</Text>
-              <TouchableOpacity onPress={() => setIsDeclarationOpen(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={18} color="#64748b" />
-              </TouchableOpacity>
-            </View>
+        onClose={() => setIsDeclarationOpen(false)}
+        exam={selectedExam}
+        studentName={selectedExam?.student_name}
+        scribeName={scribeProfile?.full_name}
+        scribeOccupation={scribeProfile?.occupation}
+        accentColor="#059669"
+      />
 
-            {/* Declaration Content */}
-            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ padding: 20, gap: 14 }}>
-              <View style={{ alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontFamily: 'Roboto', fontWeight: '900', fontSize: 20, color: '#059669', letterSpacing: -0.5 }}>Anulekh Portal</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontStyle: 'normal', color: '#64748b', textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 }}>{t('official_cert_letter')}</Text>
-              </View>
-
-              {/* 1. Exam Details */}
-              <View style={{ backgroundColor: '#f8fafc', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>{t('exam_details')}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#334155', fontWeight: '700' }}>Subject: {selectedExam?.subject}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Level: {selectedExam?.exam_type}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Date: {selectedExam?.exam_date}</Text>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#475569' }}>Venue: {selectedExam?.exam_venue}</Text>
-              </View>
-
-              {/* 2. Candidate & Scribe Details */}
-              <View style={{ gap: 10 }}>
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('candidate_student')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{selectedExam?.student_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Grade: {selectedExam?.education_grade}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>Aadhaar ID: Verified</Text>
-                </View>
-
-                <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
-
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>{t('volunteer_scribe')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#0f172a', fontWeight: '800' }}>{scribeProfile?.full_name}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b', marginTop: 1 }}>Occupation: {scribeProfile?.occupation || 'Student Volunteer Scribe'}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#64748b' }}>Education: {scribeProfile?.education_level || 'Undergraduate'}</Text>
-                </View>
-              </View>
-
-              {/* 3. Formal Declaration Text */}
-              <View style={{ backgroundColor: 'rgba(5,150,105,0.05)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.18)', padding: 12, borderRadius: 16, marginTop: 4 }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#047857', lineHeight: 16, fontStyle: 'italic', textAlign: 'center' }}>
-                  {t('declaration_agreement_text')}
-                </Text>
-              </View>
-
-              {/* 4. Verification Stamp */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, paddingVertical: 4 }}>
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('status')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, color: '#059669', fontWeight: '800', marginTop: 2 }}>✓ Verified Scribe</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 8, fontWeight: '800', color: '#64748b', textTransform: 'uppercase' }}>{t('official_stamp')}</Text>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, color: '#0f172a', fontWeight: '800', marginTop: 2 }}>ANULEKH ONLINE</Text>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* Action Buttons */}
-            <View style={{ padding: 16, backgroundColor: '#f8fafc', borderTopWidth: 1, borderTopColor: '#f1f5f9', flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity 
-                onPress={() => setIsDeclarationOpen(false)}
-                style={{ flex: 1, backgroundColor: '#e2e8f0', paddingVertical: 11, borderRadius: 12, alignItems: 'center' }}
-              >
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontWeight: '700', fontSize: 13 }}>{t('close')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => Alert.alert(t('download'), t('download_declaration'))}
-                style={{ flex: 1, backgroundColor: '#059669', paddingVertical: 11, borderRadius: 12, alignItems: 'center', shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 }}
-              >
-                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 13 }}>{t('download')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ═══════════════════════════════════════════════════
-          CALL BOTTOM SHEET MODAL
-      ═══════════════════════════════════════════════════ */}
-      <Modal
-        animationType="slide"
-        transparent
+      {/* CALL BOTTOM SHEET MODAL */}
+      <CallSheetModal
         visible={isCallOpen}
-        onRequestClose={closeCallSheet}
-      >
-        {/* Backdrop */}
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.45)' }}
-          activeOpacity={1}
-          onPress={closeCallSheet}
-        />
-
-        {/* Sheet */}
-        <View style={{
-          position: 'absolute',
-          bottom: 0, left: 0, right: 0,
-          backgroundColor: '#fff',
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
-          paddingBottom: 30,
-          paddingHorizontal: 24,
-          paddingTop: 14,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -8 },
-          shadowOpacity: 0.12,
-          shadowRadius: 24,
-          elevation: 20,
-        }}>
-          {/* Handle bar */}
-          <View style={{ alignItems: 'center', marginBottom: 10 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#e2e8f0' }} />
-          </View>
-
-          {/* Header row */}
-          <View style={{
-            flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-            paddingVertical: 14,
-            borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
-            marginBottom: 16
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={{
-                width: 38, height: 38, borderRadius: 11,
-                backgroundColor: 'rgba(5,150,105,0.09)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Feather name="phone" size={16} color="#059669" />
-              </View>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '900', color: '#0f172a' }}>{t('call_detail')}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={closeCallSheet}
-              style={{
-                width: 34, height: 34, borderRadius: 10,
-                backgroundColor: 'rgba(0,0,0,0.05)',
-                alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Feather name="x" size={16} color="#64748b" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Contact card */}
-          <View style={{
-            backgroundColor: 'rgba(5,150,105,0.09)', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
-            borderRadius: 20, padding: 20,
-          }}>
-            {/* Avatar + name */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-              <View style={{
-                width: 54, height: 54, borderRadius: 16,
-                backgroundColor: 'rgba(5,150,105,0.15)',
-                borderWidth: 2, borderColor: 'rgba(5,150,105,0.22)',
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 22, fontWeight: '900', color: '#059669' }}>
-                  {callExam?.student_name?.charAt(0)?.toUpperCase() ?? 'S'}
-                </Text>
-              </View>
-              <View>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '900', color: '#0f172a' }}>
-                  {callExam?.student_name ?? t('candidate_student')}
-                </Text>
-                <View style={{
-                  marginTop: 4, backgroundColor: 'rgba(5,150,105,0.09)',
-                  borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
-                  alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
-                }}>
-                  <Text style={{ fontFamily: 'Roboto', color: '#059669', fontSize: 10, fontWeight: '800' }}>{t('candidate_student').toUpperCase()}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Phone number display */}
-            {showMaskedNumber ? (
-              <View style={{
-                backgroundColor: '#fff',
-                borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
-                flexDirection: 'row', alignItems: 'center', gap: 12,
-                borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
-              }}>
-                <Feather name="phone" size={18} color="#059669" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: 1.5 }}>
-                  {callExam?.phone || '9876543210'}
-                </Text>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={() => setShowMaskedNumber(true)}
-                style={{
-                  backgroundColor: '#fff',
-                  borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  borderWidth: 1, borderColor: 'rgba(5,150,105,0.22)',
-                  borderStyle: 'dashed'
-                }}
-              >
-                <Feather name="eye" size={16} color="#059669" />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: '#059669' }}>{t('view_number')}</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Exam context */}
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-              {t('subject_label')} <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> {t('exam_student_suffix')}
-            </Text>
-          </View>
-
-          {/* Dial Now CTA */}
-          <TouchableOpacity
-            onPress={async () => {
-              // Open the phone dialer; show an error if the device cannot place calls.
-              const url = `tel:${callExam?.phone || '9876543210'}`;
-              try {
-                const supported = await Linking.canOpenURL(url);
-                if (supported) {
-                  await Linking.openURL(url);
-                } else {
-                  Alert.alert(t('error'), t('call_not_supported'));
-                }
-              } catch {
-                Alert.alert(t('error'), t('call_error'));
-              }
-            }}
-            style={{
-              backgroundColor: '#059669',
-              borderRadius: 18, paddingVertical: 16, marginTop: 16,
-              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-              shadowColor: '#059669', shadowOffset: { width: 0, height: 10 },
-              shadowOpacity: 0.25, shadowRadius: 20, elevation: 10,
-            }}
-            activeOpacity={0.85}
-          >
-            <Feather name="phone-call" size={20} color="#fff" />
-            <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 16, fontWeight: '900' }}>{t('dial_now')}</Text>
-          </TouchableOpacity>
-
-          {/* Cancel */}
-          <TouchableOpacity
-            onPress={closeCallSheet}
-            style={{ paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
-          >
-            <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
+        onClose={closeCallSheet}
+        exam={callExam}
+        accentColor="#059669"
+      />
 
       {/* RATE STUDENT MODAL */}
       <Modal

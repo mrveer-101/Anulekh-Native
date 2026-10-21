@@ -10,6 +10,7 @@ import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
 import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
+import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 import Animated, {
   Easing,
   FadeIn,
@@ -122,7 +123,6 @@ export default function ScribeHomeView() {
   // Calling States
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
-  const [showMaskedNumber, setShowMaskedNumber] = useState(false);
   const [agreedGuidelines, setAgreedGuidelines] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [pendingTargetAction, setPendingTargetAction] = useState<{ exam: any; isInvite: boolean } | null>(null);
@@ -148,11 +148,8 @@ export default function ScribeHomeView() {
   const openCallSheet = (exam: any) => {
     if (!exam) return;
     setCallExam(exam);
-    setShowMaskedNumber(true);
     setIsCallOpen(true);
   };
-
-  const closeCallSheet = () => setIsCallOpen(false);
 
   // Refresh whenever the console is focused *and* this tab is the visible one (switching back to the tab
   // flips isActive and triggers a quiet background refresh; hidden tabs don't fetch).
@@ -1434,89 +1431,12 @@ export default function ScribeHomeView() {
       </Animated.View>
 
       {/* Call Modal Sheet */}
-      <Modal
-        animationType="slide"
-        transparent={true}
+      <CallSheetModal
         visible={isCallOpen}
-        onRequestClose={closeCallSheet}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.6)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.1, shadowRadius: 20, elevation: 15 }}>
-            <View style={{ alignItems: 'center', marginBottom: 20 }}>
-              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: ACCENT.tint08, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                <Feather name="phone-call" size={20} color={ACCENT.main} />
-              </View>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '900', color: '#0f172a' }}>{t('call_detail')}</Text>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4 }}>Direct Contact Verification Active</Text>
-            </View>
-
-            <View style={{ gap: 14, marginBottom: 20 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: ACCENT.tint08, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 16, fontWeight: '900', color: ACCENT.main }}>
-                    {callExam?.student_name?.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a' }}>{callExam?.student_name}</Text>
-                  <View style={{ marginTop: 4, backgroundColor: ACCENT.tint08, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', borderWidth: 1, borderColor: ACCENT.tint22 }}>
-                    <Text style={{ fontFamily: 'Roboto', color: ACCENT.main, fontSize: 10, fontWeight: '800' }}>CANDIDATE STUDENT</Text>
-                  </View>
-                </View>
-              </View>
-
-              {showMaskedNumber ? (
-                <View style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: ACCENT.tint22 }}>
-                  <Feather name="phone" size={18} color={ACCENT.main} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a', letterSpacing: 1.5 }}>
-                    {callExam?.phone || '9876543210'}
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setShowMaskedNumber(true)}
-                  style={{ backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: ACCENT.tint22, borderStyle: 'dashed' }}
-                >
-                  <Feather name="eye" size={16} color={ACCENT.main} />
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '800', color: ACCENT.main }}>{t('view_number')}</Text>
-                </TouchableOpacity>
-              )}
-
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 10, textAlign: 'center' }}>
-                Subject: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{callExam?.subject}</Text> Candidate Student
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={async () => {
-                const url = `tel:${callExam?.phone || '9876543210'}`;
-                try {
-                  const supported = await Linking.canOpenURL(url);
-                  if (supported) {
-                    await Linking.openURL(url);
-                  } else {
-                    Alert.alert(t('error'), 'Calling is not supported on this device.');
-                  }
-                } catch {
-                  Alert.alert(t('error'), 'Error starting call.');
-                }
-              }}
-              style={{ backgroundColor: ACCENT.main, borderRadius: 18, paddingVertical: 16, marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: ACCENT.main, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 10 }}
-              activeOpacity={0.85}
-            >
-              <Feather name="phone-call" size={20} color="#fff" />
-              <Text style={{ fontFamily: 'Roboto', color: '#fff', fontSize: 16, fontWeight: '900' }}>{t('dial_now')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={closeCallSheet}
-              style={{ paddingVertical: 14, alignItems: 'center', marginTop: 4 }}
-            >
-              <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 14, fontWeight: '600' }}>{t('cancel')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setIsCallOpen(false)}
+        exam={callExam}
+        accentColor="#059669"
+      />
 
     </ScrollView>
       </View>

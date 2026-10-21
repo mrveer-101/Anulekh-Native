@@ -1,26 +1,14 @@
 /**
- * Sign-in screen. Route: `/auth/login` (optional `?role=student|scribe` query param).
+ * Unified Sign-in screen.
+ * Route: `/auth/login` (supports all users: students and scribes).
  *
- * Reached from the landing page "Login" button, the Register screen's "Sign In" links and
- * console screens that find no session. The `role` param only picks the accent colour (blue for
- * students, green for scribes) and is forwarded to the Register links; where the user ends up
- * after signing in is decided by the role stored on their account, not by this param.
- *
- * Flows on this screen:
- *   - Email/phone + password sign-in via `supabase.auth.signInWithPassword`. The `supabase` object
- *     is the custom shim in core/supabase.ts that talks to the Rust/Axum backend (not real
- *     Supabase): this hits POST /api/auth/signin and stores `{ user }` in AsyncStorage under
- *     'local_db_session'. The user's `profiles` row is then read (POST /api/query) to choose
- *     between the console home and that role's `complete_profile` onboarding screen.
- *   - Forgot-password modal: POST /api/auth/forgot-password (emails a 6-digit OTP), then
- *     POST /api/auth/reset-password with the OTP and the new password.
- *   - "Google" modal: asks for a phone number and role, then POSTs /api/auth/google-login with the
- *     hard-coded 'mock-google-token' (no real Google OAuth yet; the backend maps it to a fixed test
- *     account, creating it with the given role/phone if needed). Saves the session and routes by role.
- *   - Apple button: placeholder that only shows a "coming soon" alert.
- *
- * Reanimated drives the entrance, error-shake, hand-wave and button-press animations; all of
- * them are skipped when the OS "Reduce Motion" setting is on. Styling is inline `style` objects.
+ * Implements the modernized UI matching the user's reference:
+ *   - Rounded pill Back and Register navigation buttons.
+ *   - "Welcome back 👋" with ambient background styling & dot matrix accents.
+ *   - Unified EMAIL OR PHONE and PASSWORD fields.
+ *   - "Forgot Password?" flow.
+ *   - "Sign In →" pill CTA with automatic role-based dashboard redirection.
+ *   - Social logins (Google & Apple) in elegant squircle containers.
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -34,12 +22,13 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase, friendlyAuthError } from '@/core/supabase';
-import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { announceForAccessibility } from '@/core/a11y';
 import Animated, {
@@ -53,27 +42,23 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { DotCluster, GoogleGLogo, WavingHandIcon } from '@/components/auth/AuthDecorations';
 
-
-// Hides the browser's default focus ring on web inputs; the accent-coloured field border shows focus instead.
-// RN's types don't list outlineStyle 'none', but react-native-web passes it through to CSS.
 const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
 
-/** Sign-in screen component (see file header). Takes no props; reads `?role=` from the route. */
 export default function LoginScreen() {
-  // Route param and main form state. `role` has no setter: it is fixed from `?role=` for the
-  // screen's lifetime and defaults to 'student' for any other value.
   const params = useLocalSearchParams<{ role?: string }>();
-  const [role]                        = useState<'student' | 'scribe'>(params.role === 'scribe' ? 'scribe' : 'student');
   const [emailOrPhone, setEmailOrPhone] = useState('');
-  const [password, setPassword]       = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]         = useState(false);
+  const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Role-based theme: blue accent for students, green for scribes.
-  const isStudent   = role === 'student';
-  const accentColor = isStudent ? '#2563eb' : '#16a34a';
+  // Accent color is modern primary blue for the unified login
+  const accentColor = '#2563EB';
+
+  // Focused input tracking
+  const [focusedField, setFocusedField] = useState<'email' | 'password' | null>(null);
 
   // Forgot password modal state
   const [forgotModalVisible, setForgotModalVisible] = useState(false);
@@ -81,7 +66,7 @@ export default function LoginScreen() {
   const [forgotOtp, setForgotOtp] = useState('');
   const [forgotNewPass, setForgotNewPass] = useState('');
   const [forgotConfirmPass, setForgotConfirmPass] = useState('');
-  const [forgotStep, setForgotStep] = useState(1); // 1 = Email, 2 = OTP + reset passwords
+  const [forgotStep, setForgotStep] = useState(1);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState('');
   const [showForgotNewPass, setShowForgotNewPass] = useState(false);
@@ -89,17 +74,54 @@ export default function LoginScreen() {
 
   // Google sign in modal state
   const [googleModalVisible, setGoogleModalVisible] = useState(false);
-  const [googlePhone, setGooglePhone] = useState('');
   const [googleRole, setGoogleRole] = useState<'student' | 'scribe'>('student');
   const [googleError, setGoogleError] = useState('');
 
-  // Forgot Password Flow Handlers
-  /**
-   * Forgot-password step 1: checks an email was entered and asks the backend to email a reset
-   * OTP (POST /api/auth/forgot-password). Moves the modal to step 2 on success.
-   */
-  const handleForgotSendOtp = async () => {
-    // An email is required before calling the backend.
+  // ── Animations ──
+  const reduceMotion = useReducedMotion();
+  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
+
+  const errorShake = useSharedValue(0);
+  useEffect(() => {
+    if (!errorMessage) return;
+    announceForAccessibility(errorMessage);
+    if (reduceMotion) return;
+    errorShake.set(
+      withSequence(
+        withTiming(-8, { duration: 50 }),
+        withTiming(8, { duration: 50 }),
+        withTiming(-5, { duration: 50 }),
+        withTiming(5, { duration: 50 }),
+        withTiming(0, { duration: 50 })
+      )
+    );
+  }, [errorMessage, reduceMotion, errorShake]);
+  const errorShakeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: errorShake.get() }],
+  }));
+
+  const waveRotate = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    waveRotate.set(
+      withDelay(
+        400,
+        withSequence(
+          withTiming(15, { duration: 150 }),
+          withTiming(-10, { duration: 150 }),
+          withTiming(15, { duration: 150 }),
+          withTiming(-5, { duration: 150 }),
+          withTiming(0, { duration: 150 })
+        )
+      )
+    );
+  }, [reduceMotion, waveRotate]);
+  const waveStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${waveRotate.get()}deg` }],
+  }));
+
+  // Forgot password step 1
+  const handleRequestOtp = async () => {
     if (!forgotEmail.trim()) {
       setForgotError('Please enter your registered email address.');
       return;
@@ -107,58 +129,39 @@ export default function LoginScreen() {
     setForgotLoading(true);
     setForgotError('');
     try {
-      // Calls the backend directly with fetch (the shim has no password-reset helper).
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: forgotEmail.trim() }),
       });
-      
-      // Read the body as text first so a non-JSON error response still gives a readable message.
-      const resText = await res.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(resText);
-      } catch {
-        data = { error: resText };
-      }
-
-      if (!res.ok) throw new Error(data.message || data.error || 'Failed to send verification OTP.');
-      
-      // OTP sent: show the OTP + new password step.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed to send OTP.');
       setForgotStep(2);
     } catch (err: any) {
-      setForgotError(friendlyAuthError(err, 'Failed to send OTP. Please try again.'));
+      setForgotError(friendlyAuthError(err, 'Failed to send reset OTP.'));
     } finally {
       setForgotLoading(false);
     }
   };
 
-  /**
-   * Forgot-password step 2: validates the OTP and new password (at least 6 characters, both
-   * entries must match), then POSTs /api/auth/reset-password. On success it alerts and closes the
-   * modal; the user then signs in normally with the new password.
-   */
-  const handleForgotResetPassword = async () => {
-    // Client-side checks before hitting the backend.
-    if (!forgotOtp.trim()) {
-      setForgotError('Verification code (OTP) is required.');
-      return;
-    }
-    if (forgotNewPass.length < 6) {
-      setForgotError('New Password must be at least 6 characters.');
+  // Forgot password step 2
+  const handleResetPassword = async () => {
+    if (!forgotOtp.trim() || !forgotNewPass.trim() || !forgotConfirmPass.trim()) {
+      setForgotError('Please fill in all fields.');
       return;
     }
     if (forgotNewPass !== forgotConfirmPass) {
-      setForgotError('Passwords do not match.');
+      setForgotError('New passwords do not match.');
       return;
     }
-
+    if (forgotNewPass.length < 6) {
+      setForgotError('Password must be at least 6 characters.');
+      return;
+    }
     setForgotLoading(true);
     setForgotError('');
     try {
-      // Send email + OTP + new password to the backend.
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/reset-password`, {
         method: 'POST',
@@ -166,75 +169,51 @@ export default function LoginScreen() {
         body: JSON.stringify({
           email: forgotEmail.trim(),
           otp: forgotOtp.trim(),
-          new_password: forgotNewPass,
+          new_password: forgotNewPass.trim(),
         }),
       });
-      
-      const resText = await res.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(resText);
-      } catch {
-        data = { error: resText };
-      }
-
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || 'Failed to reset password.');
-
-      // Done: tell the user and close the modal (this does not sign them in).
-      Alert.alert('Success', 'Your password has been reset successfully! Please log in.');
+      Alert.alert('Success', 'Your password has been reset successfully! Please sign in.');
       setForgotModalVisible(false);
     } catch (err: any) {
-      setForgotError(friendlyAuthError(err, 'Failed to reset password. Please try again.'));
+      setForgotError(friendlyAuthError(err, 'Failed to reset password.'));
     } finally {
       setForgotLoading(false);
     }
   };
 
-  /**
-   * "Sign in with Google" (currently mocked). POSTs /api/auth/google-login with a placeholder
-   * `id_token`, plus the phone number and role the backend uses if it has to create the account.
-   * On success it saves the session itself and routes to the console of the role stored in
-   * `profiles`. Unlike handleLogin it does not check verification / redirect to complete_profile.
-   *
-   * @param phoneVal - phone number typed in the Google modal (already trimmed).
-   * @param roleVal  - 'student' or 'scribe', chosen in the Google modal.
-   */
-  const handleGoogleSignIn = async (phoneVal: string, roleVal: string) => {
+  // Google Sign-in flow (email-based only, no phone required)
+  const handleGoogleSignIn = async (roleVal: 'student' | 'scribe') => {
     setLoading(true);
     setErrorMessage('');
     try {
-      // 'mock-google-token' is a placeholder: real Google OAuth is not wired up yet.
       const apiHost = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
       const res = await fetch(`${apiHost}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           id_token: 'mock-google-token',
           role: roleVal,
-          phone: phoneVal,
         }),
       });
-
-      const resText = await res.text();
-      let data: any = {};
-      try {
-        data = JSON.parse(resText);
-      } catch {
-        data = { error: resText };
-      }
-
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || data.error || 'Google login failed');
 
-      // Signed in: read the stored role, then save `{ user }` as the session. This fetch bypasses
-      // supabase.auth, so it has to write 'local_db_session' itself before navigating.
       if (data.user) {
-        const { data: profile } = await supabase
-          .from('profiles').select('role').eq('id', data.user.id).single();
-          
-        const session = { user: data.user };
-        await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
+        // Ensure profile role matches the chosen account type
+        try {
+          await supabase
+            .from('profiles')
+            .update({ role: roleVal })
+            .eq('id', data.user.id);
+        } catch {
+          // non-critical
+        }
 
-        router.replace(profile?.role === 'scribe' ? '/console/scribe' : '/console/student');
+        data.user.role = roleVal;
+        await AsyncStorage.setItem('local_db_session', JSON.stringify({ user: data.user }));
+        router.replace(roleVal === 'scribe' ? '/console/scribe' : '/console/student');
       }
     } catch (err: any) {
       setErrorMessage(friendlyAuthError(err, 'Failed Google authentication.'));
@@ -243,59 +222,8 @@ export default function LoginScreen() {
     }
   };
 
-
-  // ── Motion & focus polish ──
-  // Honour the OS "Reduce Motion" setting: when on, content simply appears without animation.
-  const reduceMotion = useReducedMotion();
-  /** Returns the given entering animation, or undefined (no animation) when Reduce Motion is on. */
-  const enter = <T,>(animation: T) => (reduceMotion ? undefined : animation);
-
-  // Focused input gets an accent border, white background and tinted icon.
-  const [focusedField, setFocusedField] = useState<string | null>(null);
-  const fieldBorder = (field: string) => (focusedField === field ? accentColor : '#e2e8f0');
-  const fieldBg = (field: string) => (focusedField === field ? '#ffffff' : '#f8fafc');
-  const fieldIcon = (field: string) => (focusedField === field ? accentColor : '#94a3b8');
-
-  // Error banner shakes briefly and is announced to screen readers.
-  const errorShake = useSharedValue(0);
-  useEffect(() => {
-    if (!errorMessage) return;
-    announceForAccessibility(errorMessage);
-    if (reduceMotion) return;
-    errorShake.set(withSequence(
-      withTiming(-8, { duration: 50 }), withTiming(8, { duration: 50 }),
-      withTiming(-5, { duration: 50 }), withTiming(5, { duration: 50 }),
-      withTiming(0, { duration: 50 }),
-    ));
-  }, [errorMessage, reduceMotion, errorShake]);
-  const errorShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: errorShake.get() }] }));
-
-  // Primary button presses down slightly.
-  const ctaPress = useSharedValue(1);
-  const ctaPressStyle = useAnimatedStyle(() => ({ transform: [{ scale: ctaPress.get() }] }));
-  const pressIn = () => ctaPress.set(withTiming(0.97, { duration: 120 }));
-  const pressOut = () => ctaPress.set(withTiming(1, { duration: 120 }));
-
-  // Greeting hand gives a short wave once the header has appeared.
-  const waveRotate = useSharedValue(0);
-  useEffect(() => {
-    if (reduceMotion) return;
-    waveRotate.set(withDelay(550, withSequence(
-      withTiming(16, { duration: 140 }), withTiming(-10, { duration: 140 }),
-      withTiming(16, { duration: 140 }), withTiming(-4, { duration: 140 }),
-      withTiming(0, { duration: 160 }),
-    )));
-  }, [reduceMotion, waveRotate]);
-  const waveStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${waveRotate.get()}deg` }] }));
-
-  /**
-   * Main email/phone + password sign-in. Signs in through the shim (POST /api/auth/signin), then
-   * reads the user's `profiles` row to decide where to go: the role's complete_profile screen if
-   * the account is not yet approved, otherwise `/console/student` or `/console/scribe`.
-   * Errors are shown in the banner via friendlyAuthError.
-   */
+  // Main login submit
   const handleLogin = async () => {
-    // Both fields are required.
     if (!emailOrPhone.trim() || !password.trim()) {
       setErrorMessage('Please enter both email/phone and password.');
       return;
@@ -303,13 +231,11 @@ export default function LoginScreen() {
     setLoading(true);
     setErrorMessage('');
     try {
-      // Normalise the identifier: anything containing '@' is treated as an email. Otherwise keep only
-      // digits and assume a 10-digit number is Indian (+91). The raw input is also sent as
-      // `identifier` so the backend can match whichever form the user typed.
       const input = emailOrPhone.trim();
       const isEmail = input.includes('@');
       const cleanPhone = input.replace(/[^0-9]/g, '');
-      const formattedPhone = cleanPhone.length === 10 ? `+91${cleanPhone}` : cleanPhone ? `+${cleanPhone}` : input;
+      const formattedPhone =
+        cleanPhone.length === 10 ? `+91${cleanPhone}` : cleanPhone ? `+${cleanPhone}` : input;
 
       const { data, error } = await supabase.auth.signInWithPassword({
         identifier: input,
@@ -318,14 +244,12 @@ export default function LoginScreen() {
         password: password.trim(),
       });
       if (error) throw error;
+
       if (data.user) {
-        // Start with the fields returned on the user object; the profile row below overrides them.
         let userRole = (data.user as any).role;
         let verificationStatus = (data.user as any).verification_status;
         let hasIdProof = !!(data.user as any).aadhar_number;
 
-        // Best-effort profile lookup (POST /api/query). Any Aadhaar number, Aadhaar image, disability
-        // certificate or location means the user has already filled in onboarding details.
         try {
           const { data: profileData } = await supabase
             .from('profiles')
@@ -335,21 +259,28 @@ export default function LoginScreen() {
           if (profileData) {
             userRole = profileData.role || userRole;
             verificationStatus = profileData.verification_status || verificationStatus;
-            if (profileData.aadhar_number || profileData.aadhar_image_proof || profileData.disability_certificate || profileData.location) {
+            if (
+              profileData.aadhar_number ||
+              profileData.aadhar_image_proof ||
+              profileData.disability_certificate ||
+              profileData.location
+            ) {
               hasIdProof = true;
             }
           }
         } catch (e) {
-          console.log('Non-critical: could not fetch profile in login:', e);
+          console.log('Non-critical profile lookup catch:', e);
         }
 
         const isScribe = userRole === 'scribe';
-        // A user is considered approved if explicitly approved, or if an existing user already provided ID / verification details
         const isApproved = verificationStatus === 'approved' || hasIdProof;
 
-        // Unapproved users finish onboarding first; everyone else goes straight to their console.
         if (!isApproved) {
-          router.replace(isScribe ? '/console/scribe/complete_profile' as any : '/console/student/complete_profile' as any);
+          router.replace(
+            isScribe
+              ? ('/console/scribe/complete_profile' as any)
+              : ('/console/student/complete_profile' as any)
+          );
         } else {
           router.replace(isScribe ? '/console/scribe' : '/console/student');
         }
@@ -361,685 +292,867 @@ export default function LoginScreen() {
     }
   };
 
-  // Layout: decorative background orbs, then a scrollable column (top row, header, error banner,
-  // form card, Sign In button, social buttons). The two modals sit outside the ScrollView.
   return (
-    <View style={{ flex: 1, backgroundColor: '#f0f4ff' }}>
+    <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
 
-      {/* Soft background orbs */}
-      <View style={{ position: 'absolute', top: -80, right: -70, width: 260, height: 260, borderRadius: 130, backgroundColor: 'rgba(37,99,235,0.20)' }} />
-      <View style={{ position: 'absolute', bottom: 80, left: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(234,88,12,0.16)' }} />
+      {/* Decorative Background Elements */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          top: -100,
+          right: -80,
+          width: 300,
+          height: 300,
+          borderRadius: 150,
+          backgroundColor: 'rgba(219, 234, 254, 0.45)',
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          bottom: -120,
+          left: -80,
+          width: 320,
+          height: 320,
+          borderRadius: 160,
+          backgroundColor: 'rgba(224, 242, 254, 0.35)',
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          bottom: -80,
+          left: -80,
+          width: 360,
+          height: 360,
+          borderRadius: 180,
+          borderWidth: 1.5,
+          borderColor: 'rgba(191, 219, 254, 0.55)',
+        }}
+      />
+      <DotCluster
+        rows={4}
+        cols={3}
+        dotSize={4.5}
+        gap={9}
+        color="#93C5FD"
+        style={{ position: 'absolute', top: 120, left: 16 }}
+      />
+      <DotCluster
+        rows={4}
+        cols={3}
+        dotSize={4.5}
+        gap={9}
+        color="#93C5FD"
+        style={{ position: 'absolute', bottom: 40, right: 18 }}
+      />
 
-      {/* Safe area + keyboard avoidance so the form stays visible while typing */}
-      <SafeAreaView style={{ flex: 1 }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-          <ScrollView
-            contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 24, paddingBottom: 72 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Back & Top Action Row */}
-            <Animated.View entering={enter(FadeIn.duration(400))}>
-            <View style={{ paddingTop: 16, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              {/* Back button: replace (not push) so auth screens don't pile up in history */}
-              <TouchableOpacity
-                onPress={() => router.replace('/landing')}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1.5, borderColor: '#e2e8f0',
-                  borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
-                }}
-              >
-                <Feather name="arrow-left" size={14} color="#64748b" />
-                <Text style={{ color: '#64748b', fontSize: 14, fontWeight: '600' }}>Back</Text>
-              </TouchableOpacity>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Top Bar: Back & Register Pill Buttons */}
+          <Animated.View entering={enter(FadeIn.duration(300))} style={styles.topBar}>
+            <TouchableOpacity
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/landing');
+                }
+              }}
+              activeOpacity={0.75}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
+              <Feather name="arrow-left" size={17} color="#1E293B" />
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
 
-              {/* Top Register Tag Button */}
-              <TouchableOpacity
-                onPress={() => router.push(`/auth/register?role=${role}`)}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Register for a new account"
-                accessibilityHint="Navigates to the create account registration page"
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  backgroundColor: accentColor,
-                  borderWidth: 1.5, borderColor: accentColor,
-                  borderRadius: 12, paddingVertical: 8, paddingHorizontal: 14,
-                  shadowColor: accentColor, shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
-                }}
+            <TouchableOpacity
+              onPress={() => router.push('/auth/register')}
+              activeOpacity={0.8}
+              style={styles.registerPillButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go to register"
+            >
+              <Text style={styles.registerPillText}>Register</Text>
+              <Feather name="user-plus" size={15} color="#FFFFFF" />
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Heading Section: Welcome back 👋 */}
+          <Animated.View entering={enter(FadeInDown.duration(400).delay(80))} style={styles.headerSection}>
+            <View style={styles.titleRow}>
+              <Text style={styles.titleText}>Welcome back</Text>
+              <Animated.View style={waveStyle}>
+                <WavingHandIcon size={28} color="#2563EB" />
+              </Animated.View>
+            </View>
+            <Text style={styles.subtitleText}>Sign in to continue your journey</Text>
+          </Animated.View>
+
+          {/* Error Banner */}
+          {errorMessage ? (
+            <Animated.View style={[styles.errorCard, errorShakeStyle]}>
+              <Feather name="alert-circle" size={16} color="#DC2626" style={{ marginTop: 2, marginRight: 8 }} />
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </Animated.View>
+          ) : null}
+
+          {/* Main Card */}
+          <Animated.View entering={enter(FadeInDown.duration(450).delay(150))} style={styles.mainCard}>
+            {/* Field: EMAIL OR PHONE */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>EMAIL OR PHONE</Text>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === 'email' && styles.inputBoxFocused,
+                ]}
               >
-                <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '800' }}>Register</Text>
-                <Feather name="user-plus" size={13} color="#ffffff" />
-              </TouchableOpacity>
+                <Feather
+                  name="user"
+                  size={18}
+                  color={focusedField === 'email' ? accentColor : '#94A3B8'}
+                  style={{ marginRight: 8 }}
+                />
+                <TextInput
+                  style={[styles.input, WEB_NO_OUTLINE]}
+                  placeholder="email@example.com or phone"
+                  placeholderTextColor="#94A3B8"
+                  value={emailOrPhone}
+                  onChangeText={(val) => {
+                    setEmailOrPhone(val);
+                    setErrorMessage('');
+                  }}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                />
+              </View>
             </View>
 
-            </Animated.View>
-
-            {/* Header */}
-            <Animated.View entering={enter(FadeInDown.delay(60).duration(450))}>
-            <View style={{ paddingTop: 24, paddingBottom: 20 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Text style={{ fontSize: 34, fontWeight: '900', color: '#0f172a', letterSpacing: -0.8 }}>
-                  Welcome back
-                </Text>
-                {/* Waving hand: zooms in, then waveStyle rotates it. Decorative, hidden from screen readers. */}
-                <Animated.View entering={enter(FadeIn.delay(250).duration(300))}>
-                  <Animated.View style={waveStyle}>
-                    <FontAwesome5 name="hand-paper" size={26} color={accentColor} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                  </Animated.View>
-                </Animated.View>
-              </View>
-              <Text style={{ fontSize: 15, color: '#64748b', marginTop: 6, lineHeight: 22 }}>
-                Sign in to continue your journey
-              </Text>
-            </View>
-
-            </Animated.View>
-
-            {/* Error */}
-            {/* Shown only when there is an error; shakes via errorShakeStyle */}
-            {errorMessage ? (
-              <Animated.View entering={enter(FadeInDown.duration(300))}>
-              <Animated.View style={errorShakeStyle}>
-              <View style={{
-                backgroundColor: 'rgba(239,68,68,0.07)',
-                borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)',
-                borderRadius: 14, padding: 14, marginBottom: 20,
-                flexDirection: 'row', alignItems: 'center', gap: 10,
-              }}>
-                <Feather name="alert-circle" size={16} color="#dc2626" />
-                <Text style={{ color: '#dc2626', fontSize: 14, fontWeight: '600', flex: 1 }}>{errorMessage}</Text>
-              </View>
-              </Animated.View>
-              </Animated.View>
-            ) : null}
-
-            {/* Form — crisp card */}
-            <Animated.View entering={enter(FadeInDown.delay(120).duration(450))}>
-            <View style={{
-              backgroundColor: '#ffffff',
-              borderWidth: 1.5, borderColor: '#e2e8f0',
-              borderRadius: 24, padding: 20, gap: 18,
-              shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-              shadowOpacity: 0.07, shadowRadius: 20, elevation: 4,
-              marginBottom: 24,
-            }}>
-              {/* Email / Phone */}
-              <View>
-                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
-                  Email or Phone
-                </Text>
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: fieldBg('identifier'), borderWidth: 1.5,
-                  borderColor: fieldBorder('identifier'), borderRadius: 14,
-                  paddingHorizontal: 14,
-                }}>
-                  <Feather name="user" size={16} color={fieldIcon('identifier')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                  <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
-                    placeholder="email@example.com or phone"
-                    placeholderTextColor="#94a3b8"
-                    value={emailOrPhone}
-                    onChangeText={setEmailOrPhone}
-                    onFocus={() => setFocusedField('identifier')}
-                    onBlur={() => setFocusedField(null)}
-                    editable={!loading}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessible={true}
-                    accessibilityLabel="Email or Phone Number"
-                    accessibilityHint="Enter your registered email address or mobile number"
+            {/* Field: PASSWORD */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>PASSWORD</Text>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === 'password' && styles.inputBoxFocused,
+                ]}
+              >
+                <Feather
+                  name="lock"
+                  size={18}
+                  color={focusedField === 'password' ? accentColor : '#94A3B8'}
+                  style={{ marginRight: 8 }}
+                />
+                <TextInput
+                  style={[styles.input, WEB_NO_OUTLINE]}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    setErrorMessage('');
+                  }}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  activeOpacity={0.7}
+                  style={{ padding: 4 }}
+                >
+                  <Feather
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={18}
+                    color="#94A3B8"
                   />
-                </View>
+                </TouchableOpacity>
               </View>
 
-              {/* Password */}
-              <View>
-                <Text style={{ color: '#475569', fontSize: 12, fontWeight: '700', letterSpacing: 0.6, marginBottom: 10, textTransform: 'uppercase' }}>
-                  Password
-                </Text>
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: fieldBg('password'), borderWidth: 1.5,
-                  borderColor: fieldBorder('password'), borderRadius: 14,
-                  paddingHorizontal: 14,
-                }}>
-                  <Feather name="lock" size={16} color={fieldIcon('password')} style={{ marginRight: 10 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                  <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 14, ...WEB_NO_OUTLINE }}
-                    placeholder="Enter your password"
-                    placeholderTextColor="#94a3b8"
-                    value={password}
-                    onChangeText={setPassword}
-                    onFocus={() => setFocusedField('password')}
-                    onBlur={() => setFocusedField(null)}
-                    editable={!loading}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    accessible={true}
-                    accessibilityLabel="Password"
-                    accessibilityHint="Enter your account password"
-                  />
-                  {/* Show / hide password toggle */}
-                  <TouchableOpacity
-                    onPress={() => setShowPassword(v => !v)}
-                    style={{ padding: 6 }}
-                    accessible={true}
-                    accessibilityRole="button"
-                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-                    accessibilityHint="Toggles password visibility"
-                  >
-                    <Feather name={showPassword ? 'eye-off' : 'eye'} size={16} color="#94a3b8" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Forgot */}
-              <TouchableOpacity 
+              {/* Forgot Password Link */}
+              <TouchableOpacity
                 onPress={() => {
-                  // Reset the modal to a clean step 1 every time it opens.
-                  setForgotEmail('');
-                  setForgotOtp('');
-                  setForgotNewPass('');
-                  setForgotConfirmPass('');
-                  setForgotStep(1);
                   setForgotError('');
+                  setForgotStep(1);
                   setForgotModalVisible(true);
-                  announceForAccessibility('Forgot password modal opened');
                 }}
-                accessible={true}
-                accessibilityRole="link"
-                accessibilityLabel="Forgot Password? Reset here"
-                accessibilityHint="Opens password recovery form"
-                style={{ alignSelf: 'flex-end', marginTop: -6 }}
+                activeOpacity={0.7}
+                style={styles.forgotLinkContainer}
               >
-                <Text style={{ color: accentColor, fontSize: 13, fontWeight: '700' }}>Forgot Password?</Text>
+                <Text style={styles.forgotLinkText}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
 
-            </Animated.View>
-
-            {/* Login CTA */}
-            <Animated.View entering={enter(FadeInUp.delay(200).duration(450))}>
-            {/* Inner wrapper carries the press-scale animation; the outer one handles the entrance */}
-            <Animated.View style={ctaPressStyle}>
+            {/* Action CTA: Sign In → */}
             <TouchableOpacity
               onPress={handleLogin}
-              onPressIn={pressIn}
-              onPressOut={pressOut}
+              activeOpacity={0.85}
               disabled={loading}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel={loading ? "Signing in, please wait" : "Sign In button"}
-              accessibilityHint="Signs into your account and redirects to your portal"
-              accessibilityState={{ busy: loading, disabled: loading }}
-              style={{
-                backgroundColor: accentColor,
-                borderRadius: 18, paddingVertical: 18,
-                flexDirection: 'row', alignItems: 'center',
-                justifyContent: 'center', gap: 8,
-                shadowColor: accentColor,
-                shadowOffset: { width: 0, height: 10 },
-                shadowOpacity: 0.35, shadowRadius: 20, elevation: 10,
-                marginBottom: 12,
-              }}
+              style={styles.signInButton}
             >
               {loading ? (
-                <ActivityIndicator size="small" color="#fff" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: '800' }}>
-                    Sign In
-                  </Text>
-                  <Feather name="arrow-right" size={18} color="#fff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+                  <Text style={styles.signInButtonText}>Sign In</Text>
+                  <Feather name="arrow-right" size={18} color="#FFFFFF" />
                 </>
               )}
             </TouchableOpacity>
-            </Animated.View>
+          </Animated.View>
 
-            {/* Secondary link to Register (same target as the top Register button) */}
+          {/* Bottom Switcher: Don't have an account? Register here */}
+          <Animated.View entering={enter(FadeInUp.duration(400).delay(220))} style={styles.registerRow}>
+            <Text style={styles.registerPrompt}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => router.push('/auth/register')} activeOpacity={0.7}>
+              <Text style={styles.registerLink}>Register here</Text>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* Divider: or continue with */}
+          <Animated.View entering={enter(FadeInUp.duration(400).delay(260))} style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </Animated.View>
+
+          {/* Social Sign-in Buttons */}
+          <Animated.View entering={enter(FadeInUp.duration(400).delay(300))} style={styles.socialRow}>
+            {/* Google */}
             <TouchableOpacity
-              onPress={() => router.push(`/auth/register?role=${role}`)}
-              disabled={loading}
-              accessible={true}
-              accessibilityRole="link"
-              accessibilityLabel="Don't have an account? Register here"
-              accessibilityHint="Opens registration page to create a student or scribe account"
-              style={{ paddingVertical: 14, alignItems: 'center' }}
+              onPress={() => {
+                setGoogleError('');
+                setGoogleRole('student');
+                setGoogleModalVisible(true);
+              }}
+              activeOpacity={0.75}
+              style={styles.socialButton}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with Google"
             >
-              <Text style={{ color: '#64748b', fontSize: 14 }}>
-                Don't have an account?{' '}
-                <Text style={{ color: accentColor, fontWeight: '800' }}>Register here</Text>
-              </Text>
+              <GoogleGLogo size={24} />
             </TouchableOpacity>
 
-            </Animated.View>
+            {/* Apple */}
+            <TouchableOpacity
+              onPress={() => {
+                Alert.alert('Apple Sign In', 'Apple Sign In is coming soon in the next release!');
+              }}
+              activeOpacity={0.75}
+              style={styles.socialButton}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in with Apple"
+            >
+              <Ionicons name="logo-apple" size={26} color="#000000" />
+            </TouchableOpacity>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-            {/* Divider */}
-            <Animated.View entering={enter(FadeIn.delay(320).duration(450))}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 8 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
-              <Text style={{ color: '#94a3b8', fontSize: 12 }}>or continue with</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(0,0,0,0.08)' }} />
-            </View>
-
-            {/* Social */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
-              {/* Google */}
+      {/* ── FORGOT PASSWORD MODAL ── */}
+      <Modal visible={forgotModalVisible} animationType="fade" transparent onRequestClose={() => setForgotModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="key" size={18} color="#2563EB" />
+                </View>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 17, fontWeight: '800', color: '#0F172A' }}>Reset Password</Text>
+              </View>
               <TouchableOpacity
-                onPress={() => {
-                  // Open the Google details modal (phone + role) with fresh values.
-                  setGooglePhone('');
-                  setGoogleRole('student');
-                  setGoogleError('');
-                  setGoogleModalVisible(true);
-                }}
-                disabled={loading}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with Google"
-                style={{
-                  width: 58, height: 58,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1.5, borderColor: '#e2e8f0',
-                  borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-                }}
-              >
-                <FontAwesome5 name="google" size={24} color="#EA4335" />
-              </TouchableOpacity>
-
-              {/* Apple (Placeholder) */}
-              <TouchableOpacity
-                onPress={() => {
-                  if (Platform.OS === 'web') {
-                    alert(' Apple Sign-In is coming soon!\n\nPlease sign in using your Mobile Number or Email for now.');
-                  } else {
-                    Alert.alert(' Apple Sign-In', 'Apple Sign-In is coming soon! Please sign in using your Mobile Number or Email for now.');
-                  }
-                }}
+                onPress={() => setForgotModalVisible(false)}
+                style={[{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }, WEB_NO_OUTLINE]}
                 activeOpacity={0.7}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Sign in with Apple"
-                style={{
-                  width: 58, height: 58,
-                  backgroundColor: '#ffffff',
-                  borderWidth: 1.5, borderColor: '#e2e8f0',
-                  borderRadius: 18, alignItems: 'center', justifyContent: 'center',
-                  shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.07, shadowRadius: 10, elevation: 3,
-                }}
               >
-                <Ionicons name="logo-apple" size={26} color="#000000" />
-              </TouchableOpacity>
-            </View>
-            </Animated.View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-
-      {/* Forgot Password Modal */}
-      <Modal
-        visible={forgotModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setForgotModalVisible(false)}
-      >
-        {/* Dimmed backdrop with a centred card */}
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
-          <View style={{
-            backgroundColor: '#ffffff',
-            borderRadius: 28,
-            padding: 24,
-            borderWidth: 1.5,
-            borderColor: '#e2e8f0',
-            shadowColor: '#64748b',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.12,
-            shadowRadius: 20,
-            elevation: 8,
-          }}>
-            {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>
-                {forgotStep === 1 ? 'Reset Password' : 'Set New Password'}
-              </Text>
-              <TouchableOpacity onPress={() => setForgotModalVisible(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={20} color="#64748b" />
+                <Feather name="x" size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {/* Error Message */}
             {forgotError ? (
-              <View style={{
-                backgroundColor: 'rgba(239,68,68,0.05)',
-                borderWidth: 1, borderColor: 'rgba(239,68,68,0.18)',
-                borderRadius: 14, padding: 12, marginBottom: 16,
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-              }}>
-                <Feather name="alert-circle" size={14} color="#dc2626" />
-                <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '600', flex: 1 }}>{forgotError}</Text>
+              <View style={{ backgroundColor: '#FEE2E2', padding: 10, borderRadius: 10, marginBottom: 12 }}>
+                <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '600' }}>{forgotError}</Text>
               </View>
             ) : null}
 
-            {/* Step 1: email -> Send OTP. Step 2: OTP + new password + confirm -> Reset Password. */}
             {forgotStep === 1 ? (
-              <View style={{ gap: 16 }}>
-                <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
-                  Enter your registered email address below. We'll send you a 6-digit OTP code to verify your identity.
+              <View style={{ gap: 14 }}>
+                <Text style={{ fontSize: 13, color: '#475569', lineHeight: 18 }}>
+                  Enter your registered email address. We'll send a 6-digit OTP code to verify your identity.
                 </Text>
-                
-                {/* Email field */}
-                <View>
-                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                    Email Address
-                  </Text>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name="mail" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
-                      placeholder="email@example.com"
-                      placeholderTextColor="#94a3b8"
-                      value={forgotEmail}
-                      onChangeText={setForgotEmail}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
+                <View style={[styles.inputBox, { height: 48 }]}>
+                  <Feather name="mail" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.input, WEB_NO_OUTLINE]}
+                    placeholder="Enter your email"
+                    placeholderTextColor="#94A3B8"
+                    value={forgotEmail}
+                    onChangeText={setForgotEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
                 </View>
-
-                {/* Send OTP button */}
                 <TouchableOpacity
-                  onPress={handleForgotSendOtp}
+                  onPress={handleRequestOtp}
                   disabled={forgotLoading}
-                  style={{
-                    backgroundColor: '#2563eb',
-                    borderRadius: 16, paddingVertical: 14,
-                    alignItems: 'center', justifyContent: 'center',
-                    shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
-                    marginTop: 8
-                  }}
+                  style={[styles.signInButton, { height: 46 }]}
                 >
                   {forgotLoading ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Send OTP</Text>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Send OTP</Text>
                   )}
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={{ gap: 14 }}>
-                <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
-                  We have sent an email with a 6-digit verification code to <Text style={{ fontWeight: '700', color: '#0f172a' }}>{forgotEmail}</Text>.
+              <View style={{ gap: 12 }}>
+                <Text style={{ fontSize: 12.5, color: '#475569' }}>
+                  OTP sent to <Text style={{ fontWeight: '700', color: '#0F172A' }}>{forgotEmail}</Text>
                 </Text>
-
-                {/* OTP field */}
-                <View>
-                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                    Verification Code (OTP)
-                  </Text>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name="key" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
-                      placeholder="Enter 6-digit code"
-                      placeholderTextColor="#94a3b8"
-                      value={forgotOtp}
-                      onChangeText={setForgotOtp}
-                      keyboardType="number-pad"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
+                <View style={[styles.inputBox, { height: 48 }]}>
+                  <Feather name="shield" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.input, WEB_NO_OUTLINE]}
+                    placeholder="6-digit OTP code"
+                    placeholderTextColor="#94A3B8"
+                    value={forgotOtp}
+                    onChangeText={setForgotOtp}
+                    keyboardType="number-pad"
+                  />
                 </View>
 
-                {/* New password field with show/hide toggle */}
-                <View>
-                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                    New Password
-                  </Text>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
-                      placeholder="Minimum 6 characters"
-                      placeholderTextColor="#94a3b8"
-                      value={forgotNewPass}
-                      onChangeText={setForgotNewPass}
-                      secureTextEntry={!showForgotNewPass}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity onPress={() => setShowForgotNewPass(v => !v)} style={{ padding: 4 }}>
-                      <Feather name={showForgotNewPass ? 'eye-off' : 'eye'} size={15} color="#94a3b8" />
-                    </TouchableOpacity>
-                  </View>
+                <View style={[styles.inputBox, { height: 48 }]}>
+                  <Feather name="lock" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.input, WEB_NO_OUTLINE]}
+                    placeholder="New password (min 6 chars)"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showForgotNewPass}
+                    value={forgotNewPass}
+                    onChangeText={setForgotNewPass}
+                  />
+                  <TouchableOpacity onPress={() => setShowForgotNewPass(!showForgotNewPass)}>
+                    <Feather name={showForgotNewPass ? 'eye-off' : 'eye'} size={16} color="#94A3B8" />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Confirm password field with show/hide toggle */}
-                <View>
-                  <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                    Confirm Password
-                  </Text>
-                  <View style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    backgroundColor: '#f8faff', borderWidth: 1.5,
-                    borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                    paddingHorizontal: 14,
-                  }}>
-                    <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
-                      placeholder="Confirm new password"
-                      placeholderTextColor="#94a3b8"
-                      value={forgotConfirmPass}
-                      onChangeText={setForgotConfirmPass}
-                      secureTextEntry={!showForgotConfirmPass}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity onPress={() => setShowForgotConfirmPass(v => !v)} style={{ padding: 4 }}>
-                      <Feather name={showForgotConfirmPass ? 'eye-off' : 'eye'} size={15} color="#94a3b8" />
-                    </TouchableOpacity>
-                  </View>
+                <View style={[styles.inputBox, { height: 48 }]}>
+                  <Feather name="lock" size={17} color="#94A3B8" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.input, WEB_NO_OUTLINE]}
+                    placeholder="Confirm new password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showForgotConfirmPass}
+                    value={forgotConfirmPass}
+                    onChangeText={setForgotConfirmPass}
+                  />
+                  <TouchableOpacity onPress={() => setShowForgotConfirmPass(!showForgotConfirmPass)}>
+                    <Feather name={showForgotConfirmPass ? 'eye-off' : 'eye'} size={16} color="#94A3B8" />
+                  </TouchableOpacity>
                 </View>
 
-                {/* Reset Password button */}
                 <TouchableOpacity
-                  onPress={handleForgotResetPassword}
+                  onPress={handleResetPassword}
                   disabled={forgotLoading}
-                  style={{
-                    backgroundColor: '#2563eb',
-                    borderRadius: 16, paddingVertical: 14,
-                    alignItems: 'center', justifyContent: 'center',
-                    shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                    shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
-                    marginTop: 10
-                  }}
+                  style={[styles.signInButton, { height: 46 }]}
                 >
                   {forgotLoading ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Reset Password</Text>
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>Reset Password</Text>
                   )}
                 </TouchableOpacity>
               </View>
             )}
-
           </View>
         </View>
       </Modal>
 
-      {/* Google Details Modal */}
-      <Modal
-        visible={googleModalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setGoogleModalVisible(false)}
-      >
-        {/* Dimmed backdrop with a centred card */}
-        <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.3)', justifyContent: 'center', padding: 24 }}>
-          <View style={{
-            backgroundColor: '#ffffff',
-            borderRadius: 28,
-            padding: 24,
-            borderWidth: 1.5,
-            borderColor: '#e2e8f0',
-            shadowColor: '#64748b',
-            shadowOffset: { width: 0, height: 10 },
-            shadowOpacity: 0.12,
-            shadowRadius: 20,
-            elevation: 8,
-          }}>
+      {/* ── GOOGLE SIGN-IN MODAL (Role selection only, email-based, no phone required) ── */}
+      <Modal visible={googleModalVisible} animationType="fade" transparent onRequestClose={() => setGoogleModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
             {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-              <Text style={{ fontFamily: 'Roboto', fontSize: 20, fontWeight: '900', color: '#0f172a' }}>
-                Google Sign-In Setup
-              </Text>
-              <TouchableOpacity onPress={() => setGoogleModalVisible(false)} style={{ padding: 4 }}>
-                <Feather name="x" size={20} color="#64748b" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <GoogleGLogo size={22} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 18, fontWeight: '800', color: '#0F172A' }}>Google Sign-In</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setGoogleModalVisible(false)}
+                style={[{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' }, WEB_NO_OUTLINE]}
+                activeOpacity={0.7}
+              >
+                <Feather name="x" size={18} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            {/* Error Message */}
             {googleError ? (
-              <View style={{
-                backgroundColor: 'rgba(239,68,68,0.05)',
-                borderWidth: 1, borderColor: 'rgba(239,68,68,0.18)',
-                borderRadius: 14, padding: 12, marginBottom: 16,
-                flexDirection: 'row', alignItems: 'center', gap: 8,
-              }}>
-                <Feather name="alert-circle" size={14} color="#dc2626" />
-                <Text style={{ color: '#dc2626', fontSize: 13, fontWeight: '600', flex: 1 }}>{googleError}</Text>
+              <View style={{ backgroundColor: '#FEE2E2', padding: 10, borderRadius: 10, marginBottom: 12 }}>
+                <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '600' }}>{googleError}</Text>
               </View>
             ) : null}
 
-            <View style={{ gap: 16 }}>
-              <Text style={{ fontSize: 13, color: '#64748b', lineHeight: 18 }}>
-                Provide your mobile phone number and choose your role to register or sign in with your Google account.
-              </Text>
+            <Text style={{ fontSize: 13, color: '#475569', lineHeight: 18, marginBottom: 14 }}>
+              Choose what type of account you want to create with your Google email:
+            </Text>
 
-              {/* Account Type Selection */}
-              <View>
-                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                  Choose Account Type
-                </Text>
-                <View style={{
-                  backgroundColor: '#f8faff',
-                  borderWidth: 1.5, borderColor: 'rgba(0,0,0,0.08)',
-                  borderRadius: 14, padding: 4,
+            {/* Option 1: Student Account Card */}
+            <TouchableOpacity
+              onPress={() => setGoogleRole('student')}
+              activeOpacity={0.8}
+              style={[
+                {
                   flexDirection: 'row',
-                }}>
-                  {/* Segmented control: one option per role, tinted in that role's colour when active */}
-                  {(['student', 'scribe'] as const).map((r) => {
-                    const active = googleRole === r;
-                    const color = r === 'student' ? '#2563eb' : '#16a34a';
-                    const bg = r === 'student' ? 'rgba(37,99,235,0.08)' : 'rgba(22,163,74,0.08)';
-                    const border = r === 'student' ? 'rgba(37,99,235,0.22)' : 'rgba(22,163,74,0.22)';
-                    return (
-                      <TouchableOpacity
-                        key={r}
-                        onPress={() => setGoogleRole(r)}
-                        style={{
-                          flex: 1, paddingVertical: 12, borderRadius: 10,
-                          alignItems: 'center',
-                          backgroundColor: active ? bg : 'transparent',
-                          borderWidth: active ? 1 : 0,
-                          borderColor: active ? border : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: active ? color : '#94a3b8' }}>
-                          {r === 'student' ? '🎓 Student' : '✍️ Scribe'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-              
-              {/* Phone Number Input */}
-              <View>
-                <Text style={{ color: '#475569', fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8, textTransform: 'uppercase' }}>
-                  Mobile Phone Number
-                </Text>
-                <View style={{
-                  flexDirection: 'row', alignItems: 'center',
-                  backgroundColor: '#f8faff', borderWidth: 1.5,
-                  borderColor: 'rgba(0,0,0,0.08)', borderRadius: 14,
-                  paddingHorizontal: 14,
-                }}>
-                  <Feather name="phone" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
-                  <TextInput
-                    style={{ flex: 1, color: '#0f172a', fontSize: 15, paddingVertical: 12 }}
-                    placeholder="Enter 10-digit number"
-                    placeholderTextColor="#94a3b8"
-                    value={googlePhone}
-                    onChangeText={setGooglePhone}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
-                </View>
-              </View>
-
-              {/* Continue: requires at least 10 characters of phone, closes the modal, then runs handleGoogleSignIn */}
-              <TouchableOpacity
-                onPress={async () => {
-                  if (!googlePhone.trim() || googlePhone.trim().length < 10) {
-                    setGoogleError('Please enter a valid 10-digit phone number.');
-                    return;
-                  }
-                  setGoogleModalVisible(false);
-                  await handleGoogleSignIn(googlePhone.trim(), googleRole);
-                }}
+                  alignItems: 'center',
+                  padding: 12,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: googleRole === 'student' ? '#2563EB' : '#E2E8F0',
+                  backgroundColor: googleRole === 'student' ? '#EFF6FF' : '#F8FAFC',
+                  marginBottom: 10,
+                },
+                WEB_NO_OUTLINE,
+              ]}
+            >
+              <View
                 style={{
-                  backgroundColor: '#2563eb',
-                  borderRadius: 16, paddingVertical: 14,
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  shadowColor: '#2563eb', shadowOffset: { width: 0, height: 6 },
-                  shadowOpacity: 0.2, shadowRadius: 10, elevation: 4,
-                  marginTop: 8
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: googleRole === 'student' ? '#2563EB' : '#E2E8F0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 10,
                 }}
               >
-                <Text style={{ color: '#fff', fontSize: 15, fontWeight: '800' }}>Continue with Google</Text>
-                <Feather name="arrow-right" size={16} color="#fff" />
-              </TouchableOpacity>
+                <Ionicons
+                  name="school"
+                  size={20}
+                  color={googleRole === 'student' ? '#FFFFFF' : '#64748B'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: googleRole === 'student' ? '#1D4ED8' : '#0F172A',
+                    marginBottom: 2,
+                  }}
+                >
+                  Student Account
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  I need a verified scribe for my exams
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: googleRole === 'student' ? '#2563EB' : '#CBD5E1',
+                  backgroundColor: googleRole === 'student' ? '#2563EB' : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {googleRole === 'student' && (
+                  <Feather name="check" size={12} color="#FFFFFF" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Option 2: Scribe Account Card */}
+            <TouchableOpacity
+              onPress={() => setGoogleRole('scribe')}
+              activeOpacity={0.8}
+              style={[
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  padding: 12,
+                  borderRadius: 14,
+                  borderWidth: 1.5,
+                  borderColor: googleRole === 'scribe' ? '#16A34A' : '#E2E8F0',
+                  backgroundColor: googleRole === 'scribe' ? '#DCFCE7' : '#F8FAFC',
+                  marginBottom: 14,
+                },
+                WEB_NO_OUTLINE,
+              ]}
+            >
+              <View
+                style={{
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  backgroundColor: googleRole === 'scribe' ? '#16A34A' : '#E2E8F0',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginRight: 10,
+                }}
+              >
+                <Ionicons
+                  name="pencil"
+                  size={18}
+                  color={googleRole === 'scribe' ? '#FFFFFF' : '#64748B'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: 'Roboto',
+                    fontSize: 14,
+                    fontWeight: '800',
+                    color: googleRole === 'scribe' ? '#15803D' : '#0F172A',
+                    marginBottom: 2,
+                  }}
+                >
+                  Scribe Account
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Volunteer to write exams for students
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 10,
+                  borderWidth: 2,
+                  borderColor: googleRole === 'scribe' ? '#16A34A' : '#CBD5E1',
+                  backgroundColor: googleRole === 'scribe' ? '#16A34A' : 'transparent',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {googleRole === 'scribe' && (
+                  <Feather name="check" size={12} color="#FFFFFF" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Google Email notice */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                marginBottom: 14,
+              }}
+            >
+              <Feather name="shield" size={13} color="#94A3B8" />
+              <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                Created via Google Email • No phone required
+              </Text>
             </View>
 
+            {/* Action CTA Button */}
+            <TouchableOpacity
+              onPress={() => {
+                setGoogleModalVisible(false);
+                handleGoogleSignIn(googleRole);
+              }}
+              activeOpacity={0.85}
+              style={[
+                styles.signInButton,
+                {
+                  height: 46,
+                  backgroundColor: googleRole === 'student' ? '#2563EB' : '#16A34A',
+                  shadowColor: googleRole === 'student' ? '#2563EB' : '#16A34A',
+                },
+              ]}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
+                Continue as {googleRole === 'student' ? 'Student' : 'Scribe'} →
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scrollContent: {
+    paddingBottom: 36,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 6,
+  },
+  backButtonText: {
+    fontFamily: 'Roboto',
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  registerPillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+    gap: 6,
+  },
+  registerPillText: {
+    fontFamily: 'Roboto',
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerSection: {
+    paddingHorizontal: 20,
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  titleText: {
+    fontFamily: 'Roboto',
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.6,
+  },
+  waveEmoji: {
+    fontSize: 30,
+  },
+  subtitleText: {
+    fontFamily: 'Roboto',
+    fontSize: 15.5,
+    color: '#475569',
+    fontWeight: '500',
+    marginTop: 6,
+  },
+  errorCard: {
+    marginHorizontal: 20,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: 'Roboto',
+    color: '#DC2626',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  mainCard: {
+    marginHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 26,
+    padding: 22,
+    borderWidth: 1.5,
+    borderColor: '#F1F5F9',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 22,
+    elevation: 4,
+    gap: 18,
+  },
+  fieldGroup: {
+    gap: 6,
+  },
+  fieldLabel: {
+    fontFamily: 'Roboto',
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  inputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  inputBoxFocused: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#2563EB',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  input: {
+    flex: 1,
+    fontFamily: 'Roboto',
+    fontSize: 14.5,
+    color: '#0F172A',
+  },
+  forgotLinkContainer: {
+    alignSelf: 'flex-end',
+    marginTop: 6,
+  },
+  forgotLinkText: {
+    fontFamily: 'Roboto',
+    color: '#2563EB',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  signInButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 26,
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  signInButtonText: {
+    fontFamily: 'Roboto',
+    color: '#FFFFFF',
+    fontSize: 15.5,
+    fontWeight: '800',
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 22,
+    alignItems: 'center',
+  },
+  registerPrompt: {
+    fontFamily: 'Roboto',
+    color: '#64748B',
+    fontSize: 13.5,
+    fontWeight: '500',
+  },
+  registerLink: {
+    fontFamily: 'Roboto',
+    color: '#2563EB',
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 24,
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    fontFamily: 'Roboto',
+    color: '#64748B',
+    fontSize: 12.5,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  socialButton: {
+    width: 64,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+});
