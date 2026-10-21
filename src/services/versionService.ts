@@ -77,7 +77,7 @@ export const versionService = {
    */
   getCurrentVersion(): { version: string; versionCode: number } {
     const version = Constants.expoConfig?.version || '1.1.0';
-    const versionCode = Constants.expoConfig?.android?.versionCode || 6;
+    const versionCode = Constants.expoConfig?.android?.versionCode || 7;
     return { version, versionCode };
   },
 

@@ -53,6 +53,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const passwordInputRef = React.useRef<TextInput>(null);
 
   // Accent color is modern primary blue for the unified login
   const accentColor = '#2563EB';
@@ -224,6 +225,7 @@ export default function LoginScreen() {
 
   // Main login submit
   const handleLogin = async () => {
+    if (loading) return;
     if (!emailOrPhone.trim() || !password.trim()) {
       setErrorMessage('Please enter both email/phone and password.');
       return;
@@ -441,6 +443,9 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="email-address"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
                 />
               </View>
             </View>
@@ -461,6 +466,7 @@ export default function LoginScreen() {
                   style={{ marginRight: 8 }}
                 />
                 <TextInput
+                  ref={passwordInputRef}
                   style={[styles.input, WEB_NO_OUTLINE]}
                   placeholder="Enter your password"
                   placeholderTextColor="#94A3B8"
@@ -473,6 +479,8 @@ export default function LoginScreen() {
                   onFocus={() => setFocusedField('password')}
                   onBlur={() => setFocusedField(null)}
                   autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
@@ -1037,10 +1045,6 @@ const styles = StyleSheet.create({
   inputBoxFocused: {
     backgroundColor: '#FFFFFF',
     borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
   },
   input: {
     flex: 1,

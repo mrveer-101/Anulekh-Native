@@ -22,7 +22,7 @@ export const DotCluster: React.FC<{
   style,
 }) => {
   return (
-    <View style={[{ pointerEvents: 'none' }, style]}>
+    <View pointerEvents="none" style={style}>
       {Array.from({ length: rows }).map((_, r) => (
         <View key={r} style={{ flexDirection: 'row', marginVertical: gap / 2 }}>
           {Array.from({ length: cols }).map((_, c) => (
