@@ -42,26 +42,78 @@ import { useLanguage } from '@/core/translation';
 /** Base URL of the Rust/Axum backend; used here only for the hall-ticket AI parser endpoint. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
 
-/** Exam categories shown in the segmented "Exam Type" control. */
-const EXAM_TYPES = ['School', 'University', 'Competitive', 'Government'];
+/** Exam categories shown in the "Exam Category" dropdown. */
+const EXAM_CATEGORIES = ['College Exam', 'Government Exam', 'Competitive Exam', 'School Exam'];
 /** Languages the student can pick (multi-select); saved comma-joined in `exam_language`. */
 const EXAM_LANGUAGES = ['English', 'Hindi', 'Gujarati'];
 
-// Sub-topics database based on Exam Type
-/** Suggested sub-topics per exam type for the searchable dropdown; a custom typed value is also allowed. */
-const SUB_TOPICS: { [key: string]: string[] } = {
-  School: ['Class 10 Board Exam', 'Class 12 Board Exam', 'Half Yearly Exam', 'Final Term Exam', 'Unit Test / Monthly Assessment'],
-  University: ['Semester End Exam', 'Mid-Term Assessment', 'Practical Lab Exam', 'Backlog / KT Exam', 'Viva Voce'],
-  Competitive: ['UPSC Civil Services', 'JEE Main & Advanced', 'NEET UG Exam', 'IBPS PO / Clerk', 'SSC CGL', 'CAT Admission Exam'],
-  Government: ['GPSC (Gujarat Public Service Commission)', 'State PSC', 'Recruitment Board Exam', 'Departmental Exam', 'Other Government Exam'],
+// Exam Types database based on Exam Category
+/** Suggested exam types per exam category for the searchable dropdown; custom typed values are also accepted. */
+const EXAM_TYPE_OPTIONS: { [key: string]: string[] } = {
+  'College Exam': [
+    'Semester End Exam',
+    'Mid-Term Assessment',
+    'Practical Lab Exam',
+    'Backlog / KT Exam',
+    'Viva Voce / Oral Exam',
+    'Final Year Degree Exam',
+    'Diploma / Polytechnic Exam',
+    'Internal Unit Assessment',
+  ],
+  'Government Exam': [
+    'GPSC (Gujarat Public Service Commission)',
+    'UPSC Civil Services / IAS / IPS',
+    'State PSC (Public Service Commission)',
+    'Staff Selection Commission (SSC)',
+    'Railway Recruitment Board (RRB)',
+    'Banking / IBPS / SBI Recruitment',
+    'Police / Defense Recruitment',
+    'Departmental Promotion Exam',
+    'Other Government Exam',
+  ],
+  'Competitive Exam': [
+    'JEE Main & Advanced (Engineering)',
+    'NEET UG / PG (Medical)',
+    'UPSC Civil Services',
+    'CAT / MBA Entrance Exam',
+    'GATE / PSU Entrance',
+    'IBPS PO / Clerk / Banking Exam',
+    'SSC CGL / CHSL',
+    'CLAT (Law Entrance)',
+    'UGC NET / CSIR NET',
+    'Other Competitive Exam',
+  ],
+  'School Exam': [
+    'Class 10 Board Exam (CBSE / State)',
+    'Class 12 Board Exam (CBSE / State)',
+    'Class 9 / 11 Annual Exam',
+    'Half Yearly / Mid-Term Exam',
+    'Final Term Exam',
+    'Unit Test / Monthly Assessment',
+    'Pre-Board Exam',
+  ],
 };
 
-// Old requests stored "College" before it was renamed to "University" — treat them as equivalent everywhere.
+// Aliases for legacy data
+EXAM_TYPE_OPTIONS['University'] = EXAM_TYPE_OPTIONS['College Exam'];
+EXAM_TYPE_OPTIONS['College'] = EXAM_TYPE_OPTIONS['College Exam'];
+EXAM_TYPE_OPTIONS['Government'] = EXAM_TYPE_OPTIONS['Government Exam'];
+EXAM_TYPE_OPTIONS['Govt'] = EXAM_TYPE_OPTIONS['Government Exam'];
+EXAM_TYPE_OPTIONS['Competitive'] = EXAM_TYPE_OPTIONS['Competitive Exam'];
+EXAM_TYPE_OPTIONS['School'] = EXAM_TYPE_OPTIONS['School Exam'];
+
 /**
- * @param type Exam type label as stored or parsed.
- * @returns "University" for the legacy "College" label, otherwise `type` unchanged.
+ * Normalizes category label to one of the 4 standard categories.
  */
-const normalizeExamTypeLabel = (type: string) => (type === 'College' ? 'University' : type);
+const normalizeExamCategory = (type: string) => {
+  const clean = (type || '').trim();
+  const lower = clean.toLowerCase();
+  if (lower.startsWith('college') || lower.startsWith('university')) return 'College Exam';
+  if (lower.startsWith('government') || lower.startsWith('govt')) return 'Government Exam';
+  if (lower.startsWith('competitive')) return 'Competitive Exam';
+  if (lower.startsWith('school')) return 'School Exam';
+  return 'College Exam';
+};
 
 /** Month names and two-letter weekday headers for the custom calendar modal. */
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -110,16 +162,13 @@ export default function ScribeRequestForm() {
 
   // Form State
   const [subject, setSubject] = useState('');
-  const [examType, setExamType] = useState('University');
-  const [subTopic, setSubTopic] = useState('');
-  // searchQuery is the sub-topic text box; subTopic is set once a suggestion or custom value is chosen.
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSubTopicOpen, setIsSubTopicOpen] = useState(false);
+  const [examCategory, setExamCategory] = useState('College Exam');
+  const [examType, setExamType] = useState(''); // Specific exam type (optional)
   const [examLanguages, setExamLanguages] = useState<string[]>(['English']);
 
-  // Floating dropdown modal picker state for Exam Classification ('type' | 'subTopic' | 'language' | null)
-  const [activePicker, setActivePicker] = useState<null | 'type' | 'subTopic' | 'language'>(null);
-  const [subTopicSearch, setSubTopicSearch] = useState('');
+  // Floating dropdown modal picker state for Exam Classification ('category' | 'type' | 'language' | null)
+  const [activePicker, setActivePicker] = useState<null | 'category' | 'type' | 'language'>(null);
+  const [examTypeSearch, setExamTypeSearch] = useState('');
   // Admit card reference saved with the request, the file name shown in the UI, and the AI-parse overlay flag.
   const [admitCardImage, setAdmitCardImage] = useState<string | null>(null);
   const [admitCardFileName, setAdmitCardFileName] = useState<string | null>(null);
@@ -146,9 +195,6 @@ export default function ScribeRequestForm() {
   const [extraSubjects, setExtraSubjects] = useState<{ subject: string; examDate: string; examVenue: string }[]>([]);
   // Tracks which extra-subject row the Date/Map pickers are editing (-1 = the primary subject above)
   const [activeExtraIndex, setActiveExtraIndex] = useState(-1);
-
-  // Pre-Booking: reserve a scribe before the official hall ticket is published.
-  const [isPreBooking, setIsPreBooking] = useState(false);
 
   // Fetch student profile + existing request if editing
   useEffect(() => {
@@ -180,18 +226,19 @@ export default function ScribeRequestForm() {
             setSubject(examData.subject || '');
             setExamDate(examData.exam_date || '');
             setExamVenue(examData.exam_venue || '');
-            setAdmitCardImage(examData.admit_card_proof || null);
-            setIsPreBooking(examData.is_prebooking === 'yes');
-
-            // Parse Exam Type and Subtopic
-            const fullType = examData.exam_type || 'University';
+            // Parse Exam Category and specific Exam Type
+            const fullType = examData.exam_type || 'College Exam';
             const match = fullType.match(/^([^(]+)(?:\(([^)]+)\))?/);
             if (match) {
-              const type = normalizeExamTypeLabel(match[1].trim());
-              const sub = match[2] ? match[2].trim() : '';
+              const cat = normalizeExamCategory(match[1].trim());
+              const type = match[2] ? match[2].trim() : '';
+              setExamCategory(cat);
               setExamType(type);
-              setSubTopic(sub);
-              setSearchQuery(sub);
+              setExamTypeSearch(type);
+            } else {
+              setExamCategory(normalizeExamCategory(fullType));
+              setExamType('');
+              setExamTypeSearch('');
             }
 
             if (examData.exam_language) {
@@ -367,11 +414,11 @@ export default function ScribeRequestForm() {
     return totalSlots;
   };
 
-  // Filter sub-topics based on search query
-  /** @returns Sub-topics of the current exam type containing the search text (case-insensitive), or all of them. */
-  const getFilteredSubTopics = () => {
-    const list = SUB_TOPICS[examType] || [];
-    const query = subTopicSearch.trim() || searchQuery.trim();
+  // Filter specific exam types based on examCategory and search query
+  /** @returns Exam types of the current exam category matching search text, or all of them. */
+  const getFilteredExamTypes = () => {
+    const list = EXAM_TYPE_OPTIONS[examCategory] || EXAM_TYPE_OPTIONS[normalizeExamCategory(examCategory)] || [];
+    const query = examTypeSearch.trim();
     if (!query) return list;
     return list.filter(item => item.toLowerCase().includes(query.toLowerCase()));
   };
@@ -431,11 +478,11 @@ export default function ScribeRequestForm() {
       setAdmitCardImage(fileName);
       setAdmitCardFileName(fileName);
 
-      // Parsed values; an unknown exam type keeps the current selection and a missing time defaults to 10:00 AM.
+      // Parsed values; an unknown category keeps the current selection and a missing time defaults to 10:00 AM.
       const filledSubject = result.subject || '';
       const filledVenue = result.exam_venue || '';
-      const filledType = (result.exam_type && EXAM_TYPES.includes(result.exam_type)) ? result.exam_type : examType;
-      const filledSubTopic = result.exam_sub_topic || '';
+      const filledCategory = result.exam_type ? normalizeExamCategory(result.exam_type) : examCategory;
+      const filledExamType = result.exam_sub_topic || '';
       const filledDate = result.exam_date
         ? `${result.exam_date} | ${result.exam_time ? result.exam_time : '10:00 AM'}`
         : '';
@@ -443,16 +490,15 @@ export default function ScribeRequestForm() {
       // Copy whatever was read into the form.
       if (filledSubject) setSubject(filledSubject);
       if (filledVenue) setExamVenue(filledVenue);
-      setExamType(filledType);
-      if (filledSubTopic) {
-        setSubTopic(filledSubTopic);
-        setSearchQuery(filledSubTopic);
+      setExamCategory(filledCategory);
+      if (filledExamType) {
+        setExamType(filledExamType);
+        setExamTypeSearch(filledExamType);
       }
       if (filledDate) setExamDate(filledDate);
 
-      // Not everything could be read confidently — fall back to manual review instead of
-      // submitting an incomplete request.
-      if (!filledSubject || !filledVenue || !filledSubTopic || !filledDate) {
+      // Exam type is optional. Subject, venue, and date are required for confident auto-submit.
+      if (!filledSubject || !filledVenue || !filledDate) {
         Alert.alert('Hall Ticket Partially Read', 'We couldn\'t confidently read every field. Please review and complete the form before submitting.');
         return;
       }
@@ -461,8 +507,8 @@ export default function ScribeRequestForm() {
       await handleSubmit({
         subject: filledSubject,
         examVenue: filledVenue,
-        examType: filledType,
-        subTopic: filledSubTopic,
+        examCategory: filledCategory,
+        examType: filledExamType,
         examDate: filledDate,
         admitCardImage: fileName,
       });
@@ -548,8 +594,8 @@ export default function ScribeRequestForm() {
   const handleSubmit = async (overrides?: {
     subject: string;
     examVenue: string;
-    examType: string;
-    subTopic: string;
+    examCategory?: string;
+    examType?: string;
     examDate: string;
     admitCardImage: string;
   }) => {
@@ -559,11 +605,11 @@ export default function ScribeRequestForm() {
       return;
     }
 
-    // Use each override when given, otherwise the form state (a typed but unselected sub-topic counts too).
+    // Use each override when given, otherwise the form state (typed custom exam type counts too).
     const finalSubject = overrides?.subject ?? subject;
     const finalVenue = overrides?.examVenue ?? examVenue;
-    const finalExamType = overrides?.examType ?? examType;
-    const finalSubTopic = overrides?.subTopic ?? (subTopic || searchQuery);
+    const finalExamCategory = overrides?.examCategory ?? examCategory;
+    const finalExamType = overrides?.examType !== undefined ? overrides.examType : (examType || examTypeSearch);
     const finalExamDate = overrides?.examDate ?? examDate;
     const finalAdmitCard = overrides?.admitCardImage ?? admitCardImage;
 
@@ -576,11 +622,11 @@ export default function ScribeRequestForm() {
       return;
     }
 
-    // Every primary field and at least one language are required.
-    if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || examLanguages.length === 0) {
+    // Required fields: subject, exam date, venue, and at least one language. Specific exam type is optional!
+    if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || examLanguages.length === 0) {
       Alert.alert(
         'Missing Fields',
-        'Please fill in all exam fields and select at least one language.'
+        'Please fill in all required exam fields and select at least one language.'
       );
       return;
     }
@@ -606,6 +652,12 @@ export default function ScribeRequestForm() {
         throw new Error("You must be logged in to create a request.");
       }
 
+      // If specific exam type is provided (or typed custom), store as: "Category (Exam Type)".
+      // If omitted, store simply as "Category" (e.g. "College Exam", "Government Exam", "Competitive Exam").
+      const formattedExamType = finalExamType?.trim()
+        ? `${finalExamCategory} (${finalExamType.trim()})`
+        : finalExamCategory;
+
       // Fields shared by every exam in this submission.
       const sharedPayload = {
         student_id: session.user.id,
@@ -613,11 +665,10 @@ export default function ScribeRequestForm() {
         dob: profile.dob,
         phone: profile.phone,
         emergency_phone: profile.emergency_phone,
-        exam_type: `${finalExamType} (${finalSubTopic})`,
+        exam_type: formattedExamType,
         exam_language: examLanguages.join(', '),
         id_proof: profile.aadhar_number || 'Aadhar Verified',
         admit_card_proof: finalAdmitCard,
-        is_prebooking: isPreBooking ? 'yes' : 'no',
         status: 'pending'
       };
 
@@ -737,22 +788,22 @@ export default function ScribeRequestForm() {
           <FormSection icon="layers" title={t('exam_classification')}>
 
             <View style={{ gap: 12 }}>
-              {/* 1. Exam Type Dropdown Field Box */}
+              {/* 1. Exam Category Dropdown Field Box */}
               <View>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 6, marginLeft: 2 }}>
-                  {t('exam_type')} *
+                  {t('exam_category')} *
                 </Text>
                 <TouchableOpacity
-                  testID="field-exam-type"
+                  testID="field-exam-category"
                   activeOpacity={0.7}
-                  onPress={() => setActivePicker('type')}
+                  onPress={() => setActivePicker('category')}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     backgroundColor: '#f8fafc',
                     borderWidth: 1.5,
-                    borderColor: examType ? '#2563eb' : '#e2e8f0',
+                    borderColor: examCategory ? '#2563eb' : '#e2e8f0',
                     borderRadius: 14,
                     paddingHorizontal: 14,
                     height: 48,
@@ -771,25 +822,25 @@ export default function ScribeRequestForm() {
                     >
                       <Feather name="book-open" size={15} color="#2563eb" />
                     </View>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: examType ? '700' : '500', color: examType ? '#0f172a' : '#94a3b8' }}>
-                      {examType || 'Select Exam Type'}
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: examCategory ? '700' : '500', color: examCategory ? '#0f172a' : '#94a3b8' }}>
+                      {examCategory || 'Select Exam Category'}
                     </Text>
                   </View>
                   <Feather name="chevron-down" size={16} color="#64748b" />
                 </TouchableOpacity>
               </View>
 
-              {/* 2. Exam Sub-topic Dropdown Field Box */}
+              {/* 2. Exam Type (Specific / Optional) Dropdown Field Box */}
               <View>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 6, marginLeft: 2 }}>
-                  {t('exam_subtopic')} *
+                  {t('exam_type')} (Optional)
                 </Text>
                 <TouchableOpacity
-                  testID="field-exam-subtopic"
+                  testID="field-exam-type"
                   activeOpacity={0.7}
                   onPress={() => {
-                    setSubTopicSearch('');
-                    setActivePicker('subTopic');
+                    setExamTypeSearch(examType);
+                    setActivePicker('type');
                   }}
                   style={{
                     flexDirection: 'row',
@@ -797,7 +848,7 @@ export default function ScribeRequestForm() {
                     justifyContent: 'space-between',
                     backgroundColor: '#f8fafc',
                     borderWidth: 1.5,
-                    borderColor: subTopic ? '#2563eb' : '#e2e8f0',
+                    borderColor: examType ? '#2563eb' : '#e2e8f0',
                     borderRadius: 14,
                     paddingHorizontal: 14,
                     height: 48,
@@ -821,12 +872,12 @@ export default function ScribeRequestForm() {
                       style={{
                         fontFamily: 'Roboto',
                         fontSize: 13.5,
-                        fontWeight: subTopic ? '700' : '500',
-                        color: subTopic ? '#0f172a' : '#94a3b8',
+                        fontWeight: examType ? '700' : '500',
+                        color: examType ? '#0f172a' : '#94a3b8',
                         flex: 1,
                       }}
                     >
-                      {subTopic || `Select or type sub-topic (e.g. ${SUB_TOPICS[examType]?.[0] || 'Semester'})`}
+                      {examType || `Select or type exam (e.g. ${EXAM_TYPE_OPTIONS[examCategory]?.[0] || 'Optional'})`}
                     </Text>
                   </View>
                   <Feather name="chevron-down" size={16} color="#64748b" />
@@ -888,28 +939,6 @@ export default function ScribeRequestForm() {
 
           {/* Section: Exam Details — includes Admit Card Upload */}
           <FormSection icon="file-text" title={t('exam_details')}>
-
-            {/* Pre-Booking toggle (create mode only) */}
-            {!isEditing && (
-              <TouchableOpacity
-                onPress={() => setIsPreBooking(!isPreBooking)}
-                activeOpacity={0.8}
-                className={`flex-row items-center justify-between px-3 py-2.5 mb-3 rounded-xl border ${
-                  isPreBooking ? 'bg-blue-50 border-blue-500' : 'bg-slate-50 border-slate-200'
-                }`}
-              >
-                <View className="flex-row items-center flex-1 pr-3">
-                  <Feather name="clock" size={16} color={isPreBooking ? '#2563eb' : '#94a3b8'} />
-                  <View className="ml-2.5 flex-1">
-                    <Text className={`text-xs font-bold ${isPreBooking ? 'text-blue-700' : 'text-slate-700'}`}>{t('prebook_scribe')}</Text>
-                    <Text className="text-[9px] text-slate-400 mt-0.5">{t('prebook_desc')}</Text>
-                  </View>
-                </View>
-                <View className={`w-9 h-5 rounded-full justify-center px-0.5 ${isPreBooking ? 'bg-blue-500 items-end' : 'bg-slate-300 items-start'}`}>
-                  <View className="w-4 h-4 rounded-full bg-white" />
-                </View>
-              </TouchableOpacity>
-            )}
 
             <View className="space-y-3">
               {/* Subject / paper name */}
@@ -1414,9 +1443,9 @@ export default function ScribeRequestForm() {
                 >
                   <Feather
                     name={
-                      activePicker === 'type'
+                      activePicker === 'category'
                         ? 'book-open'
-                        : activePicker === 'subTopic'
+                        : activePicker === 'type'
                         ? 'layers'
                         : 'globe'
                     }
@@ -1426,17 +1455,17 @@ export default function ScribeRequestForm() {
                 </View>
                 <View>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
-                    {activePicker === 'type'
-                      ? t('exam_type')
-                      : activePicker === 'subTopic'
-                      ? t('exam_subtopic')
+                    {activePicker === 'category'
+                      ? t('exam_category')
+                      : activePicker === 'type'
+                      ? `${t('exam_type')} (Optional)`
                       : t('exam_language_req')}
                   </Text>
                   <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500' }}>
-                    {activePicker === 'type'
-                      ? 'Choose level of examination'
-                      : activePicker === 'subTopic'
-                      ? `Select category for ${examType}`
+                    {activePicker === 'category'
+                      ? 'Choose broad category (College, Govt, etc.)'
+                      : activePicker === 'type'
+                      ? `Select or type your specific ${examCategory} name`
                       : `${examLanguages.length} selected`}
                   </Text>
                 </View>
@@ -1459,21 +1488,27 @@ export default function ScribeRequestForm() {
               </TouchableOpacity>
             </View>
 
-            {/* Picker Body: Exam Type */}
-            {activePicker === 'type' && (
+            {/* Picker Body: Exam Category */}
+            {activePicker === 'category' && (
               <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
                 <View style={{ gap: 8 }}>
-                  {EXAM_TYPES.map((type) => {
-                    const isSelected = examType === type;
+                  {EXAM_CATEGORIES.map((cat) => {
+                    const isSelected = examCategory === cat;
+                    const subtitles: { [k: string]: string } = {
+                      'College Exam': 'Degree, Semester, KT, Diploma, University exams',
+                      'Government Exam': 'GPSC, State PSC, SSC, UPSC, Departmental exams',
+                      'Competitive Exam': 'JEE, NEET, CAT, Banking, Entrance tests',
+                      'School Exam': '10th/12th Board, Term Exam, School tests',
+                    };
                     return (
                       <TouchableOpacity
-                        key={type}
-                        testID={`picker-option-type-${type.toLowerCase()}`}
+                        key={cat}
+                        testID={`picker-option-category-${cat.toLowerCase().replace(/\s+/g, '-')}`}
                         activeOpacity={0.7}
                         onPress={() => {
-                          setExamType(type);
-                          setSubTopic('');
-                          setSearchQuery('');
+                          setExamCategory(cat);
+                          setExamType('');
+                          setExamTypeSearch('');
                           setActivePicker(null);
                         }}
                         style={{
@@ -1488,7 +1523,7 @@ export default function ScribeRequestForm() {
                           borderColor: isSelected ? '#2563eb' : '#e2e8f0',
                         }}
                       >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
                           <View
                             style={{
                               width: 18,
@@ -1512,16 +1547,21 @@ export default function ScribeRequestForm() {
                               />
                             )}
                           </View>
-                          <Text
-                            style={{
-                              fontFamily: 'Roboto',
-                              fontSize: 13.5,
-                              fontWeight: isSelected ? '700' : '500',
-                              color: isSelected ? '#1d4ed8' : '#334155',
-                            }}
-                          >
-                            {type}
-                          </Text>
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={{
+                                fontFamily: 'Roboto',
+                                fontSize: 13.5,
+                                fontWeight: isSelected ? '700' : '600',
+                                color: isSelected ? '#1d4ed8' : '#334155',
+                              }}
+                            >
+                              {cat}
+                            </Text>
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 10.5, color: '#64748b', marginTop: 1 }}>
+                              {subtitles[cat] || ''}
+                            </Text>
+                          </View>
                         </View>
                         {isSelected && <Feather name="check" size={16} color="#2563eb" />}
                       </TouchableOpacity>
@@ -1531,102 +1571,145 @@ export default function ScribeRequestForm() {
               </ScrollView>
             )}
 
-            {/* Picker Body: Exam Sub-topic */}
-            {activePicker === 'subTopic' && (
+            {/* Picker Body: Specific Exam Type */}
+            {activePicker === 'type' && (
               <View>
-                {/* Search Bar */}
+                {/* Search / Type Custom Input */}
                 <View
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     backgroundColor: '#f8fafc',
-                    borderWidth: 1,
-                    borderColor: '#e2e8f0',
+                    borderWidth: 1.5,
+                    borderColor: '#2563eb',
                     borderRadius: 12,
                     paddingHorizontal: 10,
                     marginBottom: 10,
-                    height: 40,
+                    height: 42,
                   }}
                 >
-                  <Feather name="search" size={14} color="#94a3b8" />
+                  <Feather name="edit-3" size={15} color="#2563eb" />
                   <TextInput
-                    testID="input-subtopic-search"
-                    value={subTopicSearch}
-                    onChangeText={setSubTopicSearch}
-                    placeholder={`Search or type custom...`}
+                    testID="input-exam-type-search"
+                    value={examTypeSearch}
+                    onChangeText={setExamTypeSearch}
+                    placeholder={`Type custom exam name or search...`}
                     placeholderTextColor="#94a3b8"
+                    returnKeyType="done"
+                    onSubmitEditing={() => {
+                      const val = examTypeSearch.trim();
+                      if (val) {
+                        setExamType(val);
+                        setActivePicker(null);
+                      }
+                    }}
                     style={{
                       flex: 1,
                       marginLeft: 8,
                       fontSize: 13,
+                      fontWeight: '600',
                       color: '#0f172a',
                       paddingVertical: 0,
                     }}
                   />
-                  {subTopicSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setSubTopicSearch('')}>
-                      <Feather name="x-circle" size={14} color="#94a3b8" />
+                  {examTypeSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setExamTypeSearch('')}>
+                      <Feather name="x-circle" size={15} color="#94a3b8" />
                     </TouchableOpacity>
                   )}
                 </View>
 
-                {/* Sub-topics list */}
+                {/* Specific exams list */}
                 <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
                   <View style={{ gap: 6 }}>
-                    {/* Custom Typed Option Button if query is not in list */}
-                    {subTopicSearch.trim().length > 0 &&
-                      !getFilteredSubTopics().some(
-                        (item) => item.toLowerCase() === subTopicSearch.trim().toLowerCase()
-                      ) && (
-                        <TouchableOpacity
-                          testID="picker-option-subtopic-custom"
-                          activeOpacity={0.7}
-                          onPress={() => {
-                            const customVal = subTopicSearch.trim();
-                            setSubTopic(customVal);
-                            setSearchQuery(customVal);
-                            setActivePicker(null);
-                          }}
+                    {/* 1. Custom Typed Option Button if text entered */}
+                    {examTypeSearch.trim().length > 0 && (
+                      <TouchableOpacity
+                        testID="picker-option-type-custom"
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          const customVal = examTypeSearch.trim();
+                          setExamType(customVal);
+                          setActivePicker(null);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 8,
+                          paddingHorizontal: 12,
+                          paddingVertical: 10,
+                          borderRadius: 12,
+                          backgroundColor: '#eff6ff',
+                          borderWidth: 1.5,
+                          borderColor: '#3b82f6',
+                          borderStyle: 'dashed',
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Feather name="plus-circle" size={15} color="#2563eb" />
+                        <Text
                           style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            gap: 8,
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            borderRadius: 12,
-                            backgroundColor: '#eff6ff',
-                            borderWidth: 1.5,
-                            borderColor: '#3b82f6',
-                            borderStyle: 'dashed',
-                            marginBottom: 4,
+                            fontFamily: 'Roboto',
+                            fontSize: 13,
+                            fontWeight: '700',
+                            color: '#1d4ed8',
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          Use typed name: "{examTypeSearch.trim()}"
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* 2. Clear / None Option (Leave as Just Category) */}
+                    <TouchableOpacity
+                      testID="picker-option-type-none"
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setExamType('');
+                        setExamTypeSearch('');
+                        setActivePicker(null);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        backgroundColor: !examType ? '#eff6ff' : '#f8fafc',
+                        borderWidth: 1.5,
+                        borderColor: !examType ? '#2563eb' : '#e2e8f0',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Feather name="check-circle" size={14} color={!examType ? '#2563eb' : '#94a3b8'} />
+                        <Text
+                          style={{
+                            fontFamily: 'Roboto',
+                            fontSize: 13,
+                            fontWeight: !examType ? '700' : '500',
+                            color: !examType ? '#1d4ed8' : '#64748b',
                           }}
                         >
-                          <Feather name="plus-circle" size={15} color="#2563eb" />
-                          <Text
-                            style={{
-                              fontFamily: 'Roboto',
-                              fontSize: 13,
-                              fontWeight: '700',
-                              color: '#1d4ed8',
-                              flex: 1,
-                            }}
-                            numberOfLines={1}
-                          >
-                            Use custom: "{subTopicSearch.trim()}"
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                          None (Just {examCategory})
+                        </Text>
+                      </View>
+                      {!examType && <Feather name="check" size={15} color="#2563eb" />}
+                    </TouchableOpacity>
 
-                    {getFilteredSubTopics().map((item) => {
-                      const isSelected = subTopic === item;
+                    {/* 3. Category Specific Exam Types */}
+                    {getFilteredExamTypes().map((item) => {
+                      const isSelected = examType === item;
                       return (
                         <TouchableOpacity
                           key={item}
-                          testID={`picker-option-subtopic-${item.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`}
+                          testID={`picker-option-type-${item.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`}
                           activeOpacity={0.7}
                           onPress={() => {
-                            setSubTopic(item);
-                            setSearchQuery(item);
+                            setExamType(item);
+                            setExamTypeSearch(item);
                             setActivePicker(null);
                           }}
                           style={{
@@ -1658,9 +1741,9 @@ export default function ScribeRequestForm() {
                       );
                     })}
 
-                    {getFilteredSubTopics().length === 0 && subTopicSearch.trim().length === 0 && (
+                    {getFilteredExamTypes().length === 0 && examTypeSearch.trim().length === 0 && (
                       <View style={{ paddingVertical: 16, alignItems: 'center' }}>
-                        <Text style={{ fontSize: 12, color: '#94a3b8' }}>No sub-topics available.</Text>
+                        <Text style={{ fontSize: 12, color: '#94a3b8' }}>No options listed for this category. Type any name above.</Text>
                       </View>
                     )}
                   </View>
