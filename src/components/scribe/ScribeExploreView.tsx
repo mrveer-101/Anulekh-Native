@@ -696,7 +696,7 @@ export default function ScribeExploreView() {
               if (examStatus === 'pending') {
                 return (
                   <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_applied').toUpperCase()}</Text>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_pending').toUpperCase()}</Text>
                   </View>
                 );
               }
@@ -707,11 +707,7 @@ export default function ScribeExploreView() {
                   </View>
                 );
               }
-              return (
-                <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}>
-                  <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', letterSpacing: 0.4 }}>{t('status_pending').toUpperCase()}</Text>
-                </View>
-              );
+              return null;
             })()}
 
             {/* Circular Chevron Button */}
@@ -864,17 +860,12 @@ export default function ScribeExploreView() {
           <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
             {assignStatus === 'pending' && (
               <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_applied').toUpperCase()}</Text>
+                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#d97706', letterSpacing: 0.4 }}>{t('status_pending').toUpperCase()}</Text>
               </View>
             )}
             {assignStatus === 'invited' && (
               <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#fdf2f8', borderWidth: 1, borderColor: '#fbcfe8' }}>
                 <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#db2777', letterSpacing: 0.4 }}>{t('status_invited').toUpperCase()}</Text>
-              </View>
-            )}
-            {!assignStatus && (
-              <View style={{ paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999, backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0' }}>
-                <Text style={{ fontFamily: 'Roboto', fontSize: 9, fontWeight: '800', color: '#16a34a', letterSpacing: 0.4 }}>{t('status_open').toUpperCase()}</Text>
               </View>
             )}
 

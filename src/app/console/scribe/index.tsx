@@ -311,7 +311,7 @@ export default function ScribeDashboard() {
               >
                 <View
                   style={{
-                    backgroundColor: active ? '#FFF4ED' : 'transparent',
+                    backgroundColor: active ? '#f0fdf4' : 'transparent',
                     borderRadius: 22,
                     paddingVertical: 7,
                     paddingHorizontal: 16,
@@ -323,7 +323,7 @@ export default function ScribeDashboard() {
                   <Ionicons
                     name={(active ? tab.iconActive : tab.iconInactive) as any}
                     size={24}
-                    color={active ? '#EA580C' : '#64748B'}
+                    color={active ? '#16a34a' : '#64748B'}
                     importantForAccessibility="no"
                     accessibilityElementsHidden={true}
                   />
@@ -335,7 +335,7 @@ export default function ScribeDashboard() {
                       fontFamily: 'Roboto',
                       fontSize: 11.5,
                       fontWeight: active ? '800' : '500',
-                      color: active ? '#EA580C' : '#64748B',
+                      color: active ? '#16a34a' : '#64748B',
                       letterSpacing: -0.1,
                       marginTop: 3,
                     }}
@@ -349,7 +349,7 @@ export default function ScribeDashboard() {
                       width: 18,
                       height: 3,
                       borderRadius: 1.5,
-                      backgroundColor: active ? '#EA580C' : 'transparent',
+                      backgroundColor: active ? '#16a34a' : 'transparent',
                       marginTop: 4,
                     }}
                   />
