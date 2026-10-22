@@ -1047,11 +1047,27 @@ export default function ScribeExploreView() {
       </Animated.View>
 
       {/* Search Header Bar */}
+      {/* Search Header Bar — Unified Search Input and Filter Button */}
       <Animated.View entering={rise(1)} style={{ paddingHorizontal: inShell ? 0 : 24, paddingTop: 14, paddingBottom: 10, gap: 10 }}>
         
-        {/* Search Input */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, borderWidth: 1.5, borderColor: searchFocused ? THEME.primary : THEME.cardBorder, paddingHorizontal: 14, height: 48, shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: searchFocused ? 0.14 : 0.06, shadowRadius: 10, elevation: 2 }}>
-          <Feather name="search" size={17} color={searchFocused ? THEME.accentText : '#94a3b8'} style={{ marginRight: 8 }} />
+        {/* Unified Search & Filter Bar */}
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: '#fff',
+          borderRadius: 16,
+          borderWidth: 1.5,
+          borderColor: searchFocused ? THEME.primary : THEME.cardBorder,
+          paddingLeft: 14,
+          paddingRight: 8,
+          height: 48,
+          shadowColor: THEME.shadow,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.06,
+          shadowRadius: 10,
+          elevation: 2,
+        }}>
+          {/* 1. Left: Search Box Input */}
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -1060,13 +1076,82 @@ export default function ScribeExploreView() {
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
             accessibilityLabel={activeSegment === 'exams' ? 'Search exams by subject or venue' : 'Search assignments by subject or title'}
-            style={{ flex: 1, fontSize: 13.5, color: '#0f172a', fontWeight: '600', ...WEB_NO_OUTLINE }}
+            style={{ flex: 1, fontSize: 13.5, color: '#0f172a', fontWeight: '600', paddingVertical: 0, ...WEB_NO_OUTLINE }}
           />
+
+          {/* Clear 'x' button if query is typed */}
           {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ padding: 4, marginRight: 2 }}
+              accessibilityLabel="Clear search"
+            >
               <Feather name="x" size={16} color="#94a3b8" />
             </TouchableOpacity>
           ) : null}
+
+          {/* 2. Magnifying glass icon */}
+          <View style={{ paddingHorizontal: 4, justifyContent: 'center', alignItems: 'center' }}>
+            <Feather
+              name="search"
+              size={17}
+              color={searchFocused ? THEME.accentText : '#94a3b8'}
+            />
+          </View>
+
+          {/* 3. Vertical Separator */}
+          <View
+            style={{
+              width: 1.5,
+              height: 22,
+              backgroundColor: '#e2e8f0',
+              marginHorizontal: 8,
+            }}
+          />
+
+          {/* 4. Right: Filter Icon Button */}
+          <TouchableOpacity
+            testID="filters-toggle-button"
+            activeOpacity={0.7}
+            onPress={() => setShowFilters(!showFilters)}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle filter options"
+            accessibilityState={{ expanded: showFilters }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingVertical: 6,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              backgroundColor: showFilters ? THEME.soft : 'transparent',
+            }}
+          >
+            <Feather
+              name="sliders"
+              size={17}
+              color={showFilters ? THEME.accentText : (activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 ? THEME.solid : '#64748b'}
+            />
+            {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
+              <View
+                style={{
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: THEME.solid,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingHorizontal: 4,
+                  marginLeft: 5,
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>
+                  {activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </Animated.View>
 
@@ -1078,39 +1163,47 @@ export default function ScribeExploreView() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
         }
       >
-        {/* Collapsible Filter Block */}
-        <View style={{ backgroundColor: '#fff', borderRadius: 18, borderWidth: 1.5, borderColor: THEME.cardBorder, overflow: 'hidden', marginBottom: 14 }}>
-          {/* Toggle bar */}
-          <TouchableOpacity
-            testID="filters-toggle-button"
-            activeOpacity={0.7}
-            onPress={() => setShowFilters(!showFilters)}
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12 }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
-                <Feather name="sliders" size={14} color={THEME.accentText} />
-              </View>
-              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>{t('filters')}</Text>
-              {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
-                <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: THEME.solid, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
-                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}</Text>
+        {/* Expandable Filter Block (Shown when opened via filter button in search bar) */}
+        {showFilters && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 18, borderWidth: 1.5, borderColor: THEME.cardBorder, overflow: 'hidden', marginBottom: 14 }}>
+            {/* Filter Header with count, Clear All and collapse icon */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: '#f1f5f9',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="sliders" size={14} color={THEME.accentText} />
                 </View>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
-                <TouchableOpacity onPress={activeSegment === 'exams' ? clearFilters : clearAssignmentFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>{t('clear_all')}</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0f172a' }}>{t('filters')}</Text>
+                {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
+                  <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: THEME.solid, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#fff' }}>{activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {(activeSegment === 'exams' ? activeFilterCount : activeAssignmentFilterCount) > 0 && (
+                  <TouchableOpacity onPress={activeSegment === 'exams' ? clearFilters : clearAssignmentFilters} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>{t('clear_all')}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => setShowFilters(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name="chevron-up" size={18} color="#64748b" />
                 </TouchableOpacity>
-              )}
-              <Feather name={showFilters ? 'chevron-up' : 'chevron-down'} size={18} color="#64748b" />
+              </View>
             </View>
-          </TouchableOpacity>
 
-          {/* Expandable sections */}
-          {showFilters && activeSegment === 'exams' && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 12 }}>
+            {/* Expandable sections */}
+            {activeSegment === 'exams' && (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, gap: 12 }}>
               {/* SOS Scribe Only Row */}
               <View style={{
                 backgroundColor: sosOnly ? '#fef2f2' : '#f8fafc',
@@ -1277,8 +1370,8 @@ export default function ScribeExploreView() {
             </View>
           )}
 
-          {showFilters && activeSegment === 'assignments' && (
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9', gap: 10 }}>
+          {activeSegment === 'assignments' && (
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, paddingTop: 10, gap: 10 }}>
               <View style={{ backgroundColor: '#ffffff', borderRadius: 14, borderWidth: 1.5, borderColor: '#f1f5f9', paddingHorizontal: 12 }}>
                 {renderDropdownRow(t('filter_academic_level'), 'award', ASSIGNMENT_LEVEL_OPTIONS, selectedAssignmentLevels, setSelectedAssignmentLevels)}
                 <View style={{ height: 1, backgroundColor: '#f1f5f9' }} />
@@ -1360,6 +1453,7 @@ export default function ScribeExploreView() {
             </View>
           )}
         </View>
+        )}
         
         {/* Scribe's Preferred Availability Windows */}
         {activeSegment === 'exams' && scribeProfile?.availability_slots ? (
