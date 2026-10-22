@@ -300,7 +300,6 @@ export default function StudentProfilePCView({
                 </Text>
               </View>
             </View>
-            <Text style={{ fontSize: 14, color: '#64748b' }}>{email}</Text>
           </View>
         </View>
 

@@ -30,7 +30,8 @@ import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
-import { DeclarationModal } from '@/components/common/modals/DeclarationModal';
+import { RatingModal } from '@/components/common/modals/RatingModal';
+import { StudentRequestCard } from '@/components/student/StudentRequestCard';
 
 /**
  * Returns the capitalised first word of a full name, for the greeting.
@@ -239,6 +240,89 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
     setCallExam(exam);
     setIsCallOpen(true);
+  };
+
+  // Rating Modal State
+  const [ratingExam, setRatingExam] = useState<any>(null);
+  const [isRatingOpen, setIsRatingOpen] = useState(false);
+
+  const openRatingModal = (exam: any) => {
+    setRatingExam(exam);
+    setIsRatingOpen(true);
+  };
+
+  const handleUnmatchScribe = (item: any) => {
+    const isAssignment = item.requestType === 'assignment';
+    Alert.alert(
+      'Change Scribe',
+      `Are you sure you want to change ${item.scribeProfile?.full_name || 'this helper'}? The request will return to pending status so other helpers can apply.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change Scribe',
+          style: 'destructive',
+          onPress: async () => {
+            const oldScribeId = item.scribe_id;
+            const table = isAssignment ? 'assignment_requests' : 'exam_requests';
+            await supabase
+              .from(table)
+              .update({ status: 'pending', scribe_id: null })
+              .eq('id', item.id);
+
+            if (oldScribeId) {
+              if (!isAssignment) {
+                await supabase
+                  .from('scribe_applications')
+                  .update({ status: 'rejected' })
+                  .eq('request_id', item.id)
+                  .eq('scribe_id', oldScribeId);
+              }
+
+              await supabase.from('notifications').insert({
+                user_id: oldScribeId,
+                title: 'Match Cancelled',
+                message: `The student has changed the scribe for "${item.subject || item.exam_type}". The request is now open for new applications.`,
+                is_read: 0,
+                created_at: new Date().toISOString()
+              });
+            }
+            Alert.alert('Scribe Changed', 'The request has been reset to pending.');
+            fetchSession();
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDelete = (item: any) => {
+    const isAssignment = item.requestType === 'assignment';
+    Alert.alert(
+      'Cancel & Delete Request',
+      'Are you sure you want to cancel and delete this request? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Request', style: 'destructive',
+          onPress: async () => {
+            if (item.scribe_id) {
+              await supabase.from('notifications').insert({
+                user_id: item.scribe_id,
+                title: 'Request Cancelled',
+                message: `The student has cancelled their request for "${item.subject || item.exam_type}".`,
+                is_read: 0,
+                created_at: new Date().toISOString()
+              });
+            }
+            const table = isAssignment ? 'assignment_requests' : 'exam_requests';
+            await supabase.from(table).delete().eq('id', item.id);
+            if (!isAssignment) {
+              await supabase.from('scribe_applications').delete().eq('request_id', item.id);
+            }
+            fetchSession();
+          }
+        }
+      ]
+    );
   };
 
   // SOS Emergency Scribe Broadcast
@@ -671,275 +755,23 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
           </View>
         ) : (
           <DesktopGrid>{confirmedPlans.map((exam, index) => {
-            // SOS cards (pending + is_emergency) get red styling and have no scribe details yet.
-            const isEmergency = exam.is_emergency === 'yes';
+            const itemKey = `${exam.requestType || 'exam'}-${exam.id}`;
             const isExpanded = expandedExamIds.has(exam.id);
 
             return (
-              <Animated.View
-                key={exam.id}
-                entering={rise(index + 4)}
-                style={{
-                  backgroundColor: isEmergency ? '#fffdfd' : '#ffffff',
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderColor: isEmergency ? '#fca5a5' : '#e2e8f0',
-                  shadowColor: '#0f172a',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.05,
-                  shadowRadius: 12,
-                  elevation: 2,
-                  marginBottom: 12,
-                  overflow: 'hidden',
-                }}
-              >
-                {/* ── Collapsed Header Row (Icon + Subject + Status + Chevron) ── */}
-                <TouchableOpacity
-                  onPress={() => {
-                    toggleExamCard(exam.id);
-                    announceForAccessibility(isExpanded ? 'Exam details collapsed' : 'Exam details expanded');
-                  }}
-                  activeOpacity={0.8}
-                  accessible={true}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${exam.subject || t('exam_fallback')}, on ${exam.exam_date || 'scheduled date'}, status: ${isEmergency ? 'Emergency SOS' : 'Confirmed'}. Double tap to ${isExpanded ? 'collapse' : 'expand'} details`}
-                  style={{
-                    flexDirection: 'row', alignItems: 'center',
-                    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-                  }}
-                >
-                  {/* Subject/Alert icon */}
-                  <View style={{
-                    width: 42, height: 42, borderRadius: 13,
-                    backgroundColor: isEmergency ? '#fef2f2' : '#eff6ff',
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: isEmergency ? '#fee2e2' : 'rgba(37,99,235,0.15)',
-                  }}>
-                    <Feather
-                      name={isEmergency ? 'alert-triangle' : 'book-open'}
-                      size={17}
-                      color={isEmergency ? '#dc2626' : BLUE}
-                      importantForAccessibility="no"
-                      accessibilityElementsHidden={true}
-                    />
-                  </View>
-
-                  {/* Subject Name */}
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: TEXT, letterSpacing: -0.2 }} numberOfLines={1}>
-                      {exam.subject || t('exam_fallback')}
-                    </Text>
-                  </View>
-
-                  {/* Status pill */}
-                  <View style={{
-                    paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
-                    backgroundColor: isEmergency ? '#fef2f2' : '#f0fdf4',
-                    borderWidth: 1,
-                    borderColor: isEmergency ? '#fca5a5' : '#bbf7d0',
-                  }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <Feather name={isEmergency ? 'alert-triangle' : 'check-circle'} size={9} color={isEmergency ? '#dc2626' : GREEN} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                      <Text style={{
-                        fontFamily: 'Roboto', fontSize: 9, fontWeight: '800',
-                        color: isEmergency ? '#dc2626' : GREEN,
-                        letterSpacing: 0.4,
-                      }}>
-                        {isEmergency ? 'SOS' : 'Confirmed'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Circular Chevron Button */}
-                  <View style={{
-                    width: 28, height: 28, borderRadius: 14,
-                    backgroundColor: '#f8fafc',
-                    alignItems: 'center', justifyContent: 'center',
-                    borderWidth: 1, borderColor: '#f1f5f9',
-                    marginLeft: 2,
-                  }}>
-                    <Feather
-                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                      size={15} color={MUTED}
-                      importantForAccessibility="no" accessibilityElementsHidden={true}
-                    />
-                  </View>
-                </TouchableOpacity>
-
-                {/* ── Expanded Detail Panel ── */}
-                {isExpanded && (
-                  <View style={{ borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 10 }}>
-
-                    {/* SOS warning banner */}
-                    {isEmergency && (
-                      <View
-                        accessible={true}
-                        accessibilityLabel="Alert: Scribe cancelled. Re-broadcasting emergency SOS to all available scribes."
-                        style={{
-                          backgroundColor: '#fef2f2', padding: 10, borderRadius: 12,
-                          borderWidth: 1, borderColor: '#fca5a5',
-                          flexDirection: 'row', alignItems: 'center', gap: 8,
-                        }}
-                      >
-                        <Feather name="alert-triangle" size={13} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
-                          Scribe cancelled! Re-broadcasting emergency SOS to all available scribes.
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* All details stacked inside expanded card */}
-                    <View style={{ gap: 6 }}>
-                      {/* 1. Level of exam */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="award" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                          Level: {exam.exam_type}
-                        </Text>
-                      </View>
-
-                      {/* 2. Date and time */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="calendar" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }}>
-                          Date & Time: {exam.exam_date || t('date_not_specified')}
-                        </Text>
-                      </View>
-
-                      {/* 3. Location */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                          Location: {exam.exam_venue || t('venue_not_specified')}
-                        </Text>
-                      </View>
-
-                      {/* Matched scribe's name (SOS requests have no scribe yet) */}
-                      {!isEmergency && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Feather name="user" size={12} color={BLUE} style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                          <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
-                            {t('volunteer_scribe')}: {exam.scribeProfile?.full_name || t('volunteer_scribe')}
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Exam language */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="globe" size={12} color={MUTED} style={{ width: 14 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                        <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12, fontWeight: '600' }}>
-                          {t('exam_language')}: {exam.exam_language}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Action Buttons */}
-                    <View style={{ gap: 8, marginTop: 2 }}>
-                      {/* SOS cards link to the applications list; confirmed cards get Call / Chat and Declaration
-                          (plus the SOS button close to exam time) */}
-                      {isEmergency ? (
-                        <TouchableOpacity
-                          onPress={() => router.push(`/console/student/view_applications?id=${exam.id}` as any)}
-                          accessible={true}
-                          accessibilityRole="button"
-                          accessibilityLabel="Tracking Emergency SOS Applications"
-                          accessibilityHint="Opens applications list to accept a volunteer scribe"
-                          style={{
-                            width: '100%', backgroundColor: '#dc2626',
-                            paddingVertical: 11, borderRadius: 12,
-                            alignItems: 'center', justifyContent: 'center',
-                            flexDirection: 'row', gap: 6,
-                          }}
-                        >
-                          <ActivityIndicator size="small" color="white" />
-                          <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>Tracking SOS Applications...</Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <>
-                          {/* Call (unlocks on exam day, see openCallSheet) and chat with the scribe */}
-                          <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity
-                              onPress={() => openCallSheet(exam)}
-                              accessible={true}
-                              accessibilityRole="button"
-                              accessibilityLabel="Call Volunteer Scribe"
-                              accessibilityHint="Opens call bottom sheet to dial assigned scribe"
-                              style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                            >
-                              <Feather name="phone" size={13} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                              <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                              accessible={true}
-                              accessibilityRole="button"
-                              accessibilityLabel="Chat with Volunteer Scribe"
-                              accessibilityHint="Opens messaging screen with your scribe"
-                              style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                            >
-                              <Feather name="message-square" size={13} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-                              <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                            </TouchableOpacity>
-                          </View>
-
-                          {/* The SOS button is offered only from 24 h before the exam until 6 h after it starts;
-                              otherwise the declaration button takes the full width */}
-                          {(() => {
-                            const hrs = hoursUntilExam(exam.exam_date);
-                            const showSos = hrs !== null && hrs <= 24 && hrs > -6;
-                            const sending = sosSendingId === exam.id;
-                            if (showSos) {
-                              return (
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                  <TouchableOpacity
-                                    onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
-                                    accessible={true}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="View Scribe Declaration Certificate"
-                                    accessibilityHint="Opens formal certification letter modal"
-                                    style={{ flex: 1, backgroundColor: BLUE, ...gradient(THEME.buttonGradient), paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
-                                  >
-                                    <Feather name="file-text" size={12} color="white" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                                    <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
-                                    onPress={() => handleSosBroadcast(exam)}
-                                    disabled={sending}
-                                    accessible={true}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Emergency SOS: Scribe Cancelled? Tap to broadcast immediately"
-                                    accessibilityHint="Broadcasts an urgent high-priority alert to all approved scribes in your area"
-                                    style={{ flex: 1, backgroundColor: '#fef2f2', borderWidth: 1.5, borderColor: '#fecaca', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                                  >
-                                    {sending
-                                      ? <ActivityIndicator size="small" color="#dc2626" />
-                                      : <><Feather name="alert-triangle" size={12} color="#dc2626" importantForAccessibility="no" accessibilityElementsHidden={true} /><Text style={{ fontFamily: 'Roboto', color: '#dc2626', fontWeight: '800', fontSize: 11 }}>SOS - Cancelled?</Text></>
-                                    }
-                                  </TouchableOpacity>
-                                </View>
-                              );
-                            }
-                            return (
-                              <TouchableOpacity
-                                onPress={() => { setSelectedExam(exam); setIsDeclarationOpen(true); }}
-                                accessible={true}
-                                accessibilityRole="button"
-                                accessibilityLabel="View Scribe Declaration Certificate"
-                                accessibilityHint="Opens formal certification letter modal"
-                                style={{ width: '100%', backgroundColor: BLUE, ...gradient(THEME.buttonGradient), paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6, shadowColor: BLUE, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}
-                              >
-                                <Feather name="file-text" size={12} color="white" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                                <Text style={{ fontFamily: 'Roboto', color: 'white', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                              </TouchableOpacity>
-                            );
-                          })()}
-                        </>
-                      )}
-                    </View>
-                  </View>
-                )}
-              </Animated.View>
+              <StudentRequestCard
+                key={itemKey}
+                item={exam}
+                index={index}
+                isExpanded={isExpanded}
+                onToggleExpand={() => toggleExamCard(exam.id)}
+                onCall={openCallSheet}
+                onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}
+                onMarkCompleted={openRatingModal}
+                onChangeScribe={handleUnmatchScribe}
+                onCancelRequest={handleDelete}
+                onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
+              />
             );
           })}</DesktopGrid>
         )}
@@ -1071,15 +903,12 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
       </Animated.View>
 
-      {/* SCRIBE DECLARATION MODAL */}
-      <DeclarationModal
-        visible={isDeclarationOpen}
-        onClose={() => setIsDeclarationOpen(false)}
-        exam={selectedExam}
-        studentName={profile?.full_name}
-        scribeName={selectedExam?.scribeProfile?.full_name}
-        scribeOccupation={selectedExam?.scribeProfile?.occupation}
-        accentColor={BLUE}
+      {/* RATING & COMPLETION MODAL */}
+      <RatingModal
+        visible={isRatingOpen}
+        onClose={() => setIsRatingOpen(false)}
+        exam={ratingExam}
+        onSuccess={fetchSession}
       />
 
       {/* CALL BOTTOM SHEET MODAL */}

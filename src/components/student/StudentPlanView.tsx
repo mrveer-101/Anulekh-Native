@@ -27,7 +27,8 @@ import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
-import { DeclarationModal } from '@/components/common/modals/DeclarationModal';
+import { RatingModal } from '@/components/common/modals/RatingModal';
+import { StudentRequestCard } from '@/components/student/StudentRequestCard';
 
 /**
  * One plan row: an `exam_requests` or `assignment_requests` row, tagged with `requestType` (which table
@@ -90,9 +91,9 @@ export default function StudentPlanView() {
   // Expanded cards are keyed "<requestType>-<id>" because exam and assignment ids can collide.
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
 
-  // Declaration Modal State
-  const [selectedExam, setSelectedExam] = useState<any>(null);
-  const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
+  // Rating Modal State
+  const [ratingExam, setRatingExam] = useState<any>(null);
+  const [isRatingOpen, setIsRatingOpen] = useState(false);
 
   // Call Modal State
   const [callExam, setCallExam] = useState<any>(null);
@@ -586,19 +587,96 @@ export default function StudentPlanView() {
     </View>
   );
 
+  /** Opens the rating & review modal to mark a plan complete. */
+  const openRatingModal = (exam: any) => {
+    setRatingExam(exam);
+    setIsRatingOpen(true);
+  };
+
+
+  /** Allows changing the scribe/helper on a matched request. */
+  const handleUnmatchScribe = (item: any) => {
+    const isAssignment = item.requestType === 'assignment';
+    Alert.alert(
+      'Change Scribe',
+      `Are you sure you want to change ${item.scribeProfile?.full_name || 'this helper'}? The request will return to pending status so other helpers can apply.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Change Scribe',
+          style: 'destructive',
+          onPress: async () => {
+            const oldScribeId = item.scribe_id;
+            const table = isAssignment ? 'assignment_requests' : 'exam_requests';
+            await supabase
+              .from(table)
+              .update({ status: 'pending', scribe_id: null })
+              .eq('id', item.id);
+
+            if (oldScribeId) {
+              if (!isAssignment) {
+                await supabase
+                  .from('scribe_applications')
+                  .update({ status: 'rejected' })
+                  .eq('request_id', item.id)
+                  .eq('scribe_id', oldScribeId);
+              }
+
+              await supabase.from('notifications').insert({
+                user_id: oldScribeId,
+                title: 'Match Cancelled',
+                message: `The student has changed the scribe for "${item.subject || item.exam_type}". The request is now open for new applications.`,
+                is_read: 0,
+                created_at: new Date().toISOString()
+              });
+            }
+            Alert.alert('Scribe Changed', 'The request has been reset to pending.');
+            fetchPlans();
+          }
+        }
+      ]
+    );
+  };
+
+  /** Deletes/cancels a request. */
+  const handleDelete = (item: any) => {
+    const isAssignment = item.requestType === 'assignment';
+    Alert.alert(
+      'Cancel & Delete Request',
+      'Are you sure you want to cancel and delete this request? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Request', style: 'destructive',
+          onPress: async () => {
+            if (item.scribe_id) {
+              await supabase.from('notifications').insert({
+                user_id: item.scribe_id,
+                title: 'Request Cancelled',
+                message: `The student has cancelled their request for "${item.subject || item.exam_type}".`,
+                is_read: 0,
+                created_at: new Date().toISOString()
+              });
+            }
+            const table = isAssignment ? 'assignment_requests' : 'exam_requests';
+            await supabase.from(table).delete().eq('id', item.id);
+            if (!isAssignment) {
+              await supabase.from('scribe_applications').delete().eq('request_id', item.id);
+            }
+            fetchPlans();
+          }
+        }
+      ]
+    );
+  };
+
   /**
-   * One plan card: header with subject and status pill, a summary bar (scribe, exam date, Details
-   * button) and, when expanded, the full details and actions.
-   * @param item  The plan (exam or assignment request).
-   * @param index Position in the list, used to stagger the rise-in animation.
+   * One plan card: uses the unified StudentRequestCard component.
    */
   const renderPlanCard = (item: ExamRequest, index = 0) => {
     const itemKey = `${item.requestType || 'exam'}-${item.id}`;
-    const isEmergency = item.is_emergency === 'yes';
-    const isConfirmed = item.status === 'matched' || !!item.scribe_id;
     const isExpanded = expandedPlanIds.has(itemKey);
 
-    // Expand / collapse this card (state lives in expandedPlanIds, keyed by itemKey).
     const toggleExpand = () => {
       setExpandedPlanIds(prev => {
         const next = new Set(prev);
@@ -608,239 +686,20 @@ export default function StudentPlanView() {
       });
     };
 
-    // Clean modern borders and subtle elevation
-    let borderColor = isEmergency ? '#fca5a5' : isConfirmed ? '#a7f3d0' : '#e2e8f0';
-
     return (
-      <Animated.View key={itemKey} entering={rise(index + 2)} style={{
-        backgroundColor: isEmergency ? '#fffdfd' : '#ffffff',
-        padding: 16,
-        borderRadius: 20,
-        borderWidth: 1.5,
-        borderColor,
-        shadowColor: '#0f172a',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
-        elevation: 2,
-        marginBottom: 12
-      }}>
-        {/* Card Header */}
-        <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            {/* Subject, falling back to "પરીક્ષા" (Gujarati for "exam") */}
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }}>{item.subject || t('exams')}</Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 2 }}>
-              Level: {item.exam_type} | Confirmed {formatDate(item.created_at)}
-            </Text>
-          </View>
-          
-          {/* Status pill */}
-          <View style={{
-            paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
-            backgroundColor: isEmergency ? '#fef2f2' : '#f0fdf4',
-            borderWidth: 1,
-            borderColor: isEmergency ? '#fca5a5' : '#bbf7d0'
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Feather name={isEmergency ? 'alert-triangle' : 'check-circle'} size={10} color={isEmergency ? '#dc2626' : '#16a34a'} />
-              <Text style={{ fontFamily: 'Roboto', color: isEmergency ? '#dc2626' : '#16a34a', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 }}>
-                {isEmergency ? 'EMERGENCY SOS' : t('status_matched')}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Collapsed Preview Summary Bar */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
-            {/* Scribe name (not shown for SOS requests) */}
-            {!isEmergency && item.scribeProfile?.full_name && (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="user" size={12} color="#059669" style={{ marginRight: 5 }} />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#0f172a' }}>
-                  {item.scribeProfile.full_name}
-                </Text>
-              </View>
-            )}
-            {/* Exam date: only the first space-separated part of exam_date */}
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Feather name="calendar" size={12} color="#f97316" style={{ marginRight: 5 }} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, color: '#475569', fontWeight: '600' }}>
-                {item.exam_date ? item.exam_date.split(' ')[0] : 'Scheduled'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Details Expand/Collapse Button */}
-          <TouchableOpacity
-            onPress={toggleExpand}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: isExpanded ? 'rgba(37,99,235,0.08)' : '#f8fafc',
-              borderWidth: 1,
-              borderColor: isExpanded ? 'rgba(37,99,235,0.2)' : '#e2e8f0',
-              paddingHorizontal: 10,
-              paddingVertical: 4,
-              borderRadius: 10,
-              gap: 4
-            }}
-          >
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '800', color: isExpanded ? '#2563eb' : '#64748b' }}>
-              {isExpanded ? 'Collapse' : 'Details'}
-            </Text>
-            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color={isExpanded ? "#2563eb" : "#64748b"} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Expanded Detailed View */}
-        {isExpanded && (
-          <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-            {/* SOS warning banner */}
-            {isEmergency && (
-              <View style={{ 
-                backgroundColor: '#fef2f2', 
-                padding: 12, borderRadius: 14, 
-                borderWidth: 1, borderColor: '#fca5a5', 
-                flexDirection: 'row', alignItems: 'center', 
-                gap: 8, marginBottom: 12 
-              }}>
-                <Feather name="alert-triangle" size={14} color="#dc2626" />
-                <Text style={{ fontFamily: 'Roboto', color: '#b91c1c', fontSize: 11, fontWeight: '800', flex: 1 }}>
-                  Scribe cancelled! Re-broadcasting emergency SOS.
-                </Text>
-              </View>
-            )}
-
-            {/* Detail rows: scribe, date, venue, language */}
-            <View style={{ gap: 8, marginBottom: 14 }}>
-              {!isEmergency && (
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name="user" size={13} color="#059669" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                    {t('volunteer_scribe')}: <Text style={{ fontWeight: '700', color: '#0f172a' }}>{item.scribeProfile?.full_name}</Text>
-                  </Text>
-                </View>
-              )}
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                  {t('exam_date')}: {item.exam_date || t('date_not_specified')}
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="map-pin" size={13} color="#2563eb" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                  {t('exam_venue')}: {item.exam_venue || t('venue_not_specified')}
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Feather name="globe" size={13} color="#64748b" style={{ marginRight: 8 }} />
-                <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }}>
-                  {t('exam_language')}: {item.exam_language}
-                </Text>
-              </View>
-            </View>
-
-            {/* Controls */}
-            <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-              {/* SOS plans link to the applications list; others get Call / Chat and the declaration */}
-              {isEmergency ? (
-                <TouchableOpacity
-                  onPress={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
-                  style={{ 
-                    width: '100%', 
-                    backgroundColor: '#dc2626', 
-                    paddingVertical: 12, 
-                    borderRadius: 14, 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    flexDirection: 'row',
-                    gap: 6
-                  }}
-                >
-                  <Feather name="users" size={14} color="#ffffff" />
-                  <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>View SOS Applications</Text>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {/* Call (unlocks on exam day, see openCallSheet) */}
-                    <TouchableOpacity
-                      onPress={() => openCallSheet(item)}
-                      style={{ 
-                        flex: 1, 
-                        backgroundColor: 'rgba(5,150,105,0.08)', 
-                        borderWidth: 1, 
-                        borderColor: 'rgba(5,150,105,0.2)', 
-                        paddingVertical: 10, 
-                        borderRadius: 14, 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        flexDirection: 'row', 
-                        gap: 6 
-                      }}
-                    >
-                      <Feather name="phone" size={14} color="#059669" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#059669', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                    </TouchableOpacity>
-
-                    {/* Chat with the scribe (the chat route is always opened with type=exam) */}
-                    <TouchableOpacity
-                      onPress={() => {
-                        router.push(`/console/common/chat?requestId=${item.id}&type=exam` as any);
-                      }}
-                      style={{ 
-                        flex: 1, 
-                        backgroundColor: 'rgba(37,99,235,0.08)', 
-                        borderWidth: 1, 
-                        borderColor: 'rgba(37,99,235,0.2)', 
-                        paddingVertical: 10, 
-                        borderRadius: 14, 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        flexDirection: 'row', 
-                        gap: 6 
-                      }}
-                    >
-                      <Feather name="message-square" size={14} color="#2563eb" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Opens the declaration certificate modal for this plan */}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSelectedExam(item);
-                      setIsDeclarationOpen(true);
-                    }}
-                    style={{
-                      width: '100%',
-                      backgroundColor: '#2563eb',
-                      ...gradient(THEME.buttonGradient),
-                      paddingVertical: 12,
-                      borderRadius: 14,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'row',
-                      gap: 6,
-                      shadowColor: '#2563eb',
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.15,
-                      shadowRadius: 8,
-                      elevation: 2
-                    }}
-                  >
-                    <Feather name="file-text" size={14} color="#ffffff" />
-                    <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('view_declaration')}</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </View>
-        )}
-      </Animated.View>
+      <StudentRequestCard
+        key={itemKey}
+        item={item}
+        index={index}
+        isExpanded={isExpanded}
+        onToggleExpand={toggleExpand}
+        onCall={openCallSheet}
+        onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}
+        onMarkCompleted={openRatingModal}
+        onChangeScribe={handleUnmatchScribe}
+        onCancelRequest={handleDelete}
+        onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
+      />
     );
   };
 
@@ -900,15 +759,12 @@ export default function StudentPlanView() {
         />
       )}
 
-      {/* SCRIBE DECLARATION MODAL */}
-      <DeclarationModal
-        visible={isDeclarationOpen}
-        onClose={() => setIsDeclarationOpen(false)}
-        exam={selectedExam}
-        studentName={studentProfile?.full_name}
-        scribeName={selectedExam?.scribeProfile?.full_name}
-        scribeOccupation={selectedExam?.scribeProfile?.occupation}
-        accentColor="#2563eb"
+      {/* RATING & COMPLETION MODAL */}
+      <RatingModal
+        visible={isRatingOpen}
+        onClose={() => setIsRatingOpen(false)}
+        exam={ratingExam}
+        onSuccess={fetchPlans}
       />
 
       {/* CALL BOTTOM SHEET MODAL */}

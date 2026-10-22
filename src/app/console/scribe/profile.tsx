@@ -188,7 +188,6 @@ export default function VolunteerProfile() {
             </Text>
           </View>
           <Text className="text-base font-bold text-slate-800">{fullName || 'Volunteer'}</Text>
-          <Text className="text-slate-400 text-[10px] mt-0.5">{email}</Text>
           
           <View className="mt-2 py-0.5 px-2.5 rounded-full border bg-emerald-50 border-emerald-200">
             <Text className="text-[9px] font-bold uppercase tracking-wider text-emerald-600">Scribe</Text>

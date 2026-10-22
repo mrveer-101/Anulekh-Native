@@ -132,7 +132,7 @@ export function SubmitButton({
 const TABS = [
   { id: 'home', iconActive: 'home', iconInactive: 'home-outline', label: 'Home' },
   { id: 'requests', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
-  { id: 'plan', iconActive: 'calendar', iconInactive: 'calendar-outline', label: 'Plan' },
+  { id: 'plan', iconActive: 'calendar', iconInactive: 'calendar-outline', label: 'Schedule' },
   { id: 'settings', iconActive: 'person', iconInactive: 'person-outline', label: 'Account' },
 ] as const;
 

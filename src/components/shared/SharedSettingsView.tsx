@@ -760,13 +760,10 @@ export default function SharedSettingsView() {
           <Text style={{ fontSize: 18, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }} numberOfLines={1}>
             {fullName || 'User'}
           </Text>
-          <Text style={{ fontSize: 12, fontWeight: '500', color: '#475569', marginTop: 3 }} numberOfLines={1}>
-            {email}
-          </Text>
           {!!role && (
             <View style={{
               flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-              marginTop: 8, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
+              marginTop: 6, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999,
               backgroundColor: '#ffffff', borderWidth: 1, borderColor: theme.softBorder,
             }}>
               <FontAwesome5 name={theme.roleIcon} size={10} color={theme.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />

@@ -291,9 +291,6 @@ export default function ScribeProfileView() {
           <Text style={{ fontSize: 17, fontWeight: '900', color: '#0f172a', letterSpacing: -0.3 }} numberOfLines={1}>
             {fullName || 'Volunteer'}
           </Text>
-          <Text style={{ fontSize: 11.5, fontWeight: '500', color: '#64748b', marginTop: 4 }} numberOfLines={1}>
-            {email}
-          </Text>
         </View>
 
         {/* Upload Photo Button (Right Corner) */}

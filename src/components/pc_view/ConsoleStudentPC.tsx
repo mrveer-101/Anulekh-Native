@@ -232,7 +232,7 @@ export default function ConsoleStudentPC({
             <Text style={{ fontSize: 13, fontWeight: '700', color: textSecondary }}>
               {activeTab === 'home' && 'Dashboard Overview'}
               {activeTab === 'requests' && 'My Requests & Scribes'}
-              {activeTab === 'plan' && 'Plan & Schedule'}
+              {activeTab === 'plan' && 'Exam Schedule'}
               {activeTab === 'profile' && 'My Account & Verification'}
               {activeTab === 'settings' && 'Account Settings'}
               {activeTab === 'notifications' && 'Notifications & Alerts'}
