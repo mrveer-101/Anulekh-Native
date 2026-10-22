@@ -195,16 +195,17 @@ export default function ScribeHomeView() {
       }
 
       // 1. Profile (+ locally stored photo) — gates access to the dashboard
-      const [localPhoto, { data: profileData }] = await Promise.all([
+      const [localPhoto, { data: profileData }, skippedFlag] = await Promise.all([
         AsyncStorage.getItem(`profile_photo_${userId}`),
         supabase.from('profiles').select('*').eq('id', userId).single(),
+        AsyncStorage.getItem(`onboarding_skipped_${userId}`).catch(() => null),
       ]);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
 
       const hasIdProof = !!(profileData?.aadhar_number || profileData?.aadhar_image_proof || profileData?.location);
-      const isApproved = profileData?.verification_status === 'approved' || hasIdProof;
+      const isApproved = profileData?.verification_status === 'approved' || hasIdProof || skippedFlag === 'true';
 
       if (profileData && !isApproved) {
         router.replace('/console/scribe/complete_profile' as any);

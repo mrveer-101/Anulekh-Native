@@ -132,19 +132,19 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
       }
 
       // 1. Profile (+ locally stored photo) — gates access to the dashboard
-      const [localPhoto, { data: profileData }] = await Promise.all([
+      const [localPhoto, { data: profileData }, skippedFlag] = await Promise.all([
         AsyncStorage.getItem(`profile_photo_${userId}`),
         supabase.from('profiles').select('*').eq('id', userId).single(),
+        AsyncStorage.getItem(`onboarding_skipped_${userId}`).catch(() => null),
       ]);
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
 
-      // A student counts as approved if an admin approved them or they have uploaded any ID proof
-      // (Aadhaar number/image, disability certificate or location). Anyone else must finish the profile
-      // first; the profile is fetched before everything else precisely so this redirect happens early.
+      // A student counts as approved if an admin approved them, they skipped onboarding,
+      // or they have uploaded any ID proof (Aadhaar number/image, disability certificate or location).
       const hasIdProof = !!(profileData?.aadhar_number || profileData?.aadhar_image_proof || profileData?.disability_certificate || profileData?.location);
-      const isApproved = profileData?.verification_status === 'approved' || hasIdProof;
+      const isApproved = profileData?.verification_status === 'approved' || hasIdProof || skippedFlag === 'true';
 
       if (profileData && !isApproved) {
         router.replace('/console/student/complete_profile' as any);

@@ -29,6 +29,7 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { storageService } from '@/services/storageService';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Year choices for the DOB calendar's year dropdown: 35 years starting 30 years ago
@@ -266,9 +267,37 @@ export default function CompleteProfileForm() {
   };
 
   /**
+   * Skips Step 2 (Aadhaar verification documents) and proceeds directly to preferences.
+   */
+  const handleSkipStep2 = () => {
+    setCurrentStep(3);
+  };
+
+  /**
+   * Skips the entire verification wizard and takes the scribe directly to dashboard.
+   */
+  const handleQuickSkip = async () => {
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await AsyncStorage.setItem(`onboarding_skipped_${session.user.id}`, 'true');
+        await supabase.from('profiles').update({
+          verification_status: 'approved',
+        }).eq('id', session.user.id);
+      }
+      router.replace('/console/scribe' as any);
+    } catch {
+      router.replace('/console/scribe' as any);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
    * Validates the current step before advancing.
    * Step 1: name, DOB, occupation and location required.
-   * Step 2: Aadhaar number (exactly 12 digits) and Aadhaar image required.
+   * Step 2: Aadhaar number & image are OPTIONAL. Format checked only if entered.
    */
   const handleNextStep = () => {
     if (currentStep === 1) {
@@ -277,12 +306,9 @@ export default function CompleteProfileForm() {
         return;
       }
     } else if (currentStep === 2) {
-      if (!aadharNumber.trim() || !aadharImage) {
-        Alert.alert('Missing Fields', 'Please enter your Aadhar number and upload Aadhar image.');
-        return;
-      }
-      if (aadharNumber.trim().length !== 12 || isNaN(Number(aadharNumber.trim()))) {
-        Alert.alert('Invalid ID', 'Please enter a valid 12-digit Aadhar Card number.');
+      const trimmed = aadharNumber.trim();
+      if (trimmed.length > 0 && (trimmed.length !== 12 || isNaN(Number(trimmed)))) {
+        Alert.alert('Invalid ID', 'Please enter a valid 12-digit Aadhar Card number, or leave it blank to skip.');
         return;
       }
     }
@@ -398,8 +424,22 @@ export default function CompleteProfileForm() {
           <Text className="text-xl font-black text-slate-800">Verify Scribe Profile</Text>
         </View>
 
-        {/* Step counter (right side of the header). */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Step counter and Skip button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleQuickSkip}
+            disabled={loading}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 12,
+              backgroundColor: '#f1f5f9',
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>Skip</Text>
+          </TouchableOpacity>
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#16a34a' }}>
             Step {currentStep} of 3
           </Text>
@@ -505,20 +545,20 @@ export default function CompleteProfileForm() {
               <View className="space-y-3.5">
                 {/* Aadhar Input */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Aadhar Card Number *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Aadhar Card Number (Optional)</Text>
                   <TextInput 
                     value={aadharNumber}
                     onChangeText={setAadharNumber}
                     keyboardType="numeric"
                     maxLength={12}
-                    placeholder="12-digit Aadhar Number"
+                    placeholder="12-digit Aadhar Number (optional)"
                     className="w-full bg-white border border-slate-200 shadow-sm rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-500 transition-all"
                   />
                 </View>
 
                 {/* Aadhar Upload */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload Aadhar Card Image (Optional)</Text>
                   <TouchableOpacity 
                     onPress={() => uploadProof('aadhar')}
                     className={`w-full border-2 border-dashed shadow-sm rounded-xl p-4 items-center justify-center ${
@@ -742,6 +782,15 @@ export default function CompleteProfileForm() {
                 className="flex-1 bg-slate-100 py-2.5 rounded-xl items-center justify-center border border-slate-200"
               >
                 <Text className="text-slate-700 font-bold text-sm">Back</Text>
+              </TouchableOpacity>
+            )}
+
+            {currentStep === 2 && (
+              <TouchableOpacity 
+                onPress={handleSkipStep2}
+                className="flex-1 bg-emerald-50 py-2.5 rounded-xl items-center justify-center border border-emerald-200 active:bg-emerald-100"
+              >
+                <Text className="text-emerald-700 font-bold text-sm">Skip</Text>
               </TouchableOpacity>
             )}
 

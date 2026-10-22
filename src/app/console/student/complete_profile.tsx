@@ -27,6 +27,7 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { announceForAccessibility } from '@/core/a11y';
 import { storageService } from '@/services/storageService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Official ID document choices for step 1. The chosen name is what gets saved in
@@ -96,57 +97,105 @@ export default function StudentCompleteProfileForm() {
     announceForAccessibility(`${res.name} uploaded`);
   };
 
-  /** Validates step 1 (document image chosen, emergency phone filled) and moves to step 2. */
-  const handleNextStep = () => {
-    if (currentStep === 1) {
-      if (!docImage) {
-        Alert.alert('Missing Document', `Please upload an image of your ${docType}.`);
-        return;
+  /**
+   * Skips the entire onboarding verification and navigates to the student dashboard.
+   */
+  const handleQuickSkip = async () => {
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await AsyncStorage.setItem(`onboarding_skipped_${session.user.id}`, 'true');
+        await supabase.from('profiles').update({
+          verification_status: 'approved',
+        }).eq('id', session.user.id);
       }
-      if (!emergencyPhone.trim()) {
-        Alert.alert('Missing Contact', 'Please enter your Emergency Contact Phone Number.');
-        return;
-      }
+      router.replace('/console/student' as any);
+    } catch {
+      router.replace('/console/student' as any);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  /**
+   * Submits whatever profile fields have been filled (or empty) and proceeds to dashboard.
+   */
+  const handleSkipSubmit = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session found.");
+
+      await AsyncStorage.setItem(`onboarding_skipped_${session.user.id}`, 'true');
+
+      const profilePayload = {
+        aadhar_number: docImage ? docType : '',
+        aadhar_image_proof: docImage || null,
+        emergency_phone: emergencyPhone.trim() || null,
+        disability_type: disabilityType === 'Select Disability Type' ? 'Other' : disabilityType,
+        disability_certificate: disabilityCertificate || null,
+        verification_status: 'approved',
+      };
+
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', session.user.id)
+        .single();
+
+      if (!existingProfile) {
+        const defaultName = (session.user.email && !session.user.email.endsWith('@anulekh.app') && !session.user.email.startsWith('phone_'))
+          ? session.user.email.split('@')[0]
+          : 'Student';
+        await supabase.from('profiles').insert({
+          id: session.user.id,
+          role: 'student',
+          full_name: defaultName,
+          ...profilePayload,
+        });
+      } else {
+        await supabase
+          .from('profiles')
+          .update(profilePayload)
+          .eq('id', session.user.id);
+      }
+
+      router.replace('/console/student' as any);
+    } catch {
+      router.replace('/console/student' as any);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Advances from Step 1 to Step 2 (all fields are optional for now). */
+  const handleNextStep = () => {
     setCurrentStep(2);
   };
 
   /**
-   * Validates step 2, then saves the profile: inserts a `profiles` row if none exists for the
-   * session user, otherwise updates it. On success shows the overlay and redirects to
-   * `/console/student` after 3 seconds; errors are shown in an alert.
+   * Saves student profile: all proofs are optional for now.
+   * On success shows the overlay and redirects to `/console/student`.
    */
   const handleSubmit = async () => {
-    // Step 2 validation: a real disability type (not the placeholder text) and a certificate.
-    if (disabilityType === 'Select Disability Type') {
-      Alert.alert('Missing Disability Type', 'Please select your Disability Type from the options.');
-      return;
-    }
-    if (!disabilityCertificate) {
-      Alert.alert('Missing Certificate', 'Please upload a valid Disability Certificate.');
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // The signed-in user comes from the locally stored session.
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session found.");
 
-      // Fields to save. aadhar_number receives the chosen document TYPE (e.g. "Aadhar Card"), not a
-      // number; the form never asks for one. verification_status is set to 'approved' straight away
-      // (no manual review), so app/index.tsx, login and StudentHomeView skip this screen next time.
+      await AsyncStorage.setItem(`onboarding_skipped_${session.user.id}`, 'true');
+
       const profilePayload = {
-        aadhar_number: docType,
-        aadhar_image_proof: docImage,
-        emergency_phone: emergencyPhone.trim(),
-        disability_type: disabilityType,
-        disability_certificate: disabilityCertificate,
+        aadhar_number: docImage ? docType : '',
+        aadhar_image_proof: docImage || null,
+        emergency_phone: emergencyPhone.trim() || null,
+        disability_type: disabilityType === 'Select Disability Type' ? 'Other' : disabilityType,
+        disability_certificate: disabilityCertificate || null,
         verification_status: 'approved',
       };
 
-      // Check if profile exists, if not insert, else update
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('id')
@@ -219,8 +268,22 @@ export default function StudentCompleteProfileForm() {
           <Text className="text-xl font-black text-slate-800">Verification Form</Text>
         </View>
 
-        {/* Step counter */}
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Step counter and Skip button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            onPress={handleQuickSkip}
+            disabled={loading}
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 5,
+              borderRadius: 12,
+              backgroundColor: '#f1f5f9',
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>Skip</Text>
+          </TouchableOpacity>
           <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563eb' }}>
             Step {currentStep} of 2
           </Text>
@@ -255,7 +318,7 @@ export default function StudentCompleteProfileForm() {
 
                 {/* 1. Official Document Type Dropdown */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Document Type *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Official Document Type (Optional)</Text>
                   <TouchableOpacity 
                     onPress={() => {
                       setIsDocDropdownOpen(!isDocDropdownOpen);
@@ -330,7 +393,7 @@ export default function StudentCompleteProfileForm() {
 
                 {/* 2. Upload Image of Official Document */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload {docType} Image *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Upload {docType} Image (Optional)</Text>
                   <TouchableOpacity 
                     onPress={() => uploadProof('doc')}
                     accessible={true}
@@ -360,7 +423,7 @@ export default function StudentCompleteProfileForm() {
 
                 {/* 3. Emergency Contact Number */}
                 <View>
-                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Emergency Phone Number *</Text>
+                  <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Emergency Phone Number (Optional)</Text>
                   <TextInput 
                     value={emergencyPhone}
                     onChangeText={setEmergencyPhone}
@@ -384,7 +447,7 @@ export default function StudentCompleteProfileForm() {
               
               {/* Custom Dropdown Trigger */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Disability Type *</Text>
+                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Disability Category (Optional)</Text>
                 <TouchableOpacity 
                   onPress={() => {
                     setIsDisabilityDropdownOpen(!isDisabilityDropdownOpen);
@@ -467,7 +530,7 @@ export default function StudentCompleteProfileForm() {
 
               {/* Disability Certificate Upload Card */}
               <View style={{ marginTop: 8 }}>
-                <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate *</Text>
+                <Text className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Disability Certificate (Optional)</Text>
                 
                 {/* Opens the file picker and uploads the certificate to private storage (uploadProof) */}
                 <TouchableOpacity 
@@ -525,7 +588,7 @@ export default function StudentCompleteProfileForm() {
               >
                 <Feather name="info" size={14} color="#64748b" style={{ marginRight: 8, marginTop: 1 }} importantForAccessibility="no" accessibilityElementsHidden={true} />
                 <Text style={{ fontSize: 10.5, color: '#475569', flex: 1, lineHeight: 15, fontWeight: '600' }}>
-                  This document is required to match you with the most suitable scribe based on your specific requirements and government norms.
+                  This document is optional and can be submitted later in your profile settings.
                 </Text>
               </View>
 
@@ -549,8 +612,35 @@ export default function StudentCompleteProfileForm() {
                 <Text className="text-slate-700 font-bold text-sm">Back</Text>
               </TouchableOpacity>
             )}
+
+            {/* Step 1: Skip to Step 2. Step 2: Skip and Complete. */}
+            {currentStep === 1 ? (
+              <TouchableOpacity 
+                onPress={() => {
+                  setCurrentStep(2);
+                  announceForAccessibility('Skipped Step 1, proceeding to Step 2: Disability Details');
+                }}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Skip Step 1"
+                className="flex-1 bg-blue-50 py-3 rounded-xl items-center justify-center border border-blue-200 active:bg-blue-100"
+              >
+                <Text className="text-blue-700 font-bold text-sm">Skip</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                onPress={handleSkipSubmit}
+                disabled={loading}
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel="Skip and continue to dashboard"
+                className="flex-1 bg-blue-50 py-3 rounded-xl items-center justify-center border border-blue-200 active:bg-blue-100"
+              >
+                <Text className="text-blue-700 font-bold text-sm">Skip</Text>
+              </TouchableOpacity>
+            )}
             
-            {/* Step 1: Next (validates first). Step 2: Submit Profile. */}
+            {/* Step 1: Next. Step 2: Submit Profile. */}
             {currentStep < 2 ? (
               <TouchableOpacity 
                 onPress={() => {

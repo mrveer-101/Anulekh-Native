@@ -40,7 +40,7 @@ export const DEFAULT_STUDENT_TABS: PillTabItem[] = [
 export const DEFAULT_SCRIBE_TABS: PillTabItem[] = [
   { id: 'home', label: 'Home', iconActive: 'home', iconInactive: 'home-outline' },
   { id: 'explore', label: 'Search', iconActive: 'search', iconInactive: 'search-outline' },
-  { id: 'commitments', label: 'Applied', iconActive: 'document-text', iconInactive: 'document-text-outline' },
+  { id: 'commitments', label: 'Schedule', iconActive: 'calendar', iconInactive: 'calendar-outline' },
   { id: 'settings', label: 'Account', iconActive: 'person', iconInactive: 'person-outline' },
 ];
 

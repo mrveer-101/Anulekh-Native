@@ -1079,11 +1079,11 @@ export default function ScribeCommitmentsView() {
               <Feather name="inbox" size={26} color={THEME.accentText} />
             </View>
             <Text style={{ fontFamily: 'Roboto', fontSize: 14, fontWeight: '900', color: '#0f172a', marginTop: 10 }}>
-              {selectedFilter === 'All' ? 'No applications yet' : `No ${selectedFilter.toLowerCase()} applications`}
+              {selectedFilter === 'All' ? 'No scheduled exams yet' : `No ${selectedFilter.toLowerCase()} applications`}
             </Text>
             <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 4, textAlign: 'center', lineHeight: 16 }}>
               {selectedFilter === 'All'
-                ? 'Apply to exams from the Search tab to see them here.'
+                ? 'Apply to exams from the Search tab to build your schedule here.'
                 : 'Try selecting a different filter above.'}
             </Text>
           </Animated.View>

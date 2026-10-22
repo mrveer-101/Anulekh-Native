@@ -69,7 +69,7 @@ type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notificat
 const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { id: 'home',        iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
   { id: 'explore',     iconActive: 'search',        iconInactive: 'search-outline',        label: 'Search' },
-  { id: 'commitments', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Applied' },
+  { id: 'commitments', iconActive: 'calendar',      iconInactive: 'calendar-outline',      label: 'Schedule' },
   { id: 'settings',    iconActive: 'person',        iconInactive: 'person-outline',        label: 'Account' },
 ];
 

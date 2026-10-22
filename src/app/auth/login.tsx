@@ -273,6 +273,11 @@ export default function LoginScreen() {
         let userRole = (data.user as any).role;
         let verificationStatus = (data.user as any).verification_status;
         let hasIdProof = !!(data.user as any).aadhar_number;
+        let skippedFlag = false;
+        try {
+          const s = await AsyncStorage.getItem(`onboarding_skipped_${data.user.id}`);
+          if (s === 'true') skippedFlag = true;
+        } catch {}
 
         try {
           const { data: profileData } = await supabase
@@ -297,7 +302,7 @@ export default function LoginScreen() {
         }
 
         const isScribe = userRole === 'scribe';
-        const isApproved = verificationStatus === 'approved' || hasIdProof;
+        const isApproved = verificationStatus === 'approved' || hasIdProof || skippedFlag;
 
         if (!isApproved) {
           router.replace(

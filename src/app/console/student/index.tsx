@@ -320,42 +320,53 @@ export default function StudentDashboard() {
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingVertical: 3,
                 }}
               >
-                <Ionicons
-                  name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={24}
-                  color={active ? '#1D4ED8' : '#94A3B8'}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden={true}
-                />
-
-                <Text
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden={true}
-                  style={{
-                    fontFamily: 'Roboto',
-                    fontSize: 11,
-                    fontWeight: active ? '800' : '500',
-                    color: active ? '#1D4ED8' : '#64748B',
-                    letterSpacing: -0.1,
-                    marginTop: 3,
-                  }}
-                >
-                  {translatedLabel}
-                </Text>
-
-                {/* Micro indicator dot below label */}
                 <View
                   style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: active ? '#1D4ED8' : 'transparent',
-                    marginTop: 3,
+                    backgroundColor: active ? '#eff6ff' : 'transparent',
+                    borderRadius: 22,
+                    paddingVertical: 7,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 76,
                   }}
-                />
+                >
+                  <Ionicons
+                    name={(active ? tab.iconActive : tab.iconInactive) as any}
+                    size={24}
+                    color={active ? '#2563eb' : '#64748B'}
+                    importantForAccessibility="no"
+                    accessibilityElementsHidden={true}
+                  />
+
+                  <Text
+                    importantForAccessibility="no"
+                    accessibilityElementsHidden={true}
+                    style={{
+                      fontFamily: 'Roboto',
+                      fontSize: 11.5,
+                      fontWeight: active ? '800' : '500',
+                      color: active ? '#2563eb' : '#64748B',
+                      letterSpacing: -0.1,
+                      marginTop: 3,
+                    }}
+                  >
+                    {translatedLabel}
+                  </Text>
+
+                  {/* Horizontal pill indicator line below label */}
+                  <View
+                    style={{
+                      width: 18,
+                      height: 3,
+                      borderRadius: 1.5,
+                      backgroundColor: active ? '#2563eb' : 'transparent',
+                      marginTop: 4,
+                    }}
+                  />
+                </View>
               </TouchableOpacity>
             );
           })}

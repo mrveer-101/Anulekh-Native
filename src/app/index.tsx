@@ -18,6 +18,7 @@ import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Redirect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/core/supabase';
 import { SPLASH_PAPER, SplashBackground, SplashLogo, SplashTitle } from '@/components/ui/BrandSplash';
 
@@ -48,18 +49,20 @@ export default function AppEntry() {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // Fetch only the fields needed to decide role and verification state.
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, verification_status, aadhar_number, aadhar_image_proof, disability_certificate, location')
-          .eq('id', session.user.id)
-          .single();
+        const [{ data: profile }, skippedFlag] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('role, verification_status, aadhar_number, aadhar_image_proof, disability_certificate, location')
+            .eq('id', session.user.id)
+            .single(),
+          AsyncStorage.getItem(`onboarding_skipped_${session.user.id}`).catch(() => null),
+        ]);
 
-        // A user counts as "approved" if the backend says so OR they have already submitted any
-        // ID/profile detail (Aadhaar number/image, disability certificate or location). Anyone else
-        // must finish onboarding on the complete_profile screen for their role.
+        // A user counts as "approved" if the backend says so, OR they skipped onboarding,
+        // OR they have already submitted any ID/profile detail.
         const isScribe = profile?.role === 'scribe';
         const hasIdProof = !!(profile?.aadhar_number || profile?.aadhar_image_proof || profile?.disability_certificate || profile?.location);
-        const isApproved = profile?.verification_status === 'approved' || hasIdProof;
+        const isApproved = profile?.verification_status === 'approved' || hasIdProof || skippedFlag === 'true';
 
         if (!isApproved) {
           setDestination(isScribe ? '/console/scribe/complete_profile' : '/console/student/complete_profile');

@@ -93,12 +93,14 @@ export default function ScribeRequestForm() {
   // Entry choice: ask the student whether to fill manually, auto-fill from an admit card, or use voice.
   // Editing an existing request skips straight to the form.
   const [entryMode, setEntryMode] = useState<'choice' | 'form' | 'voice'>(
-    isEditing ? 'form' : (params.mode === 'voice' ? 'voice' : 'choice')
+    isEditing ? 'form' : (params.mode === 'voice' ? 'voice' : (params.mode === 'form' ? 'form' : 'choice'))
   );
 
   useEffect(() => {
     if (params.mode === 'voice') {
       setEntryMode('voice');
+    } else if (params.mode === 'form') {
+      setEntryMode('form');
     }
   }, [params.mode]);
 
@@ -114,6 +116,10 @@ export default function ScribeRequestForm() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubTopicOpen, setIsSubTopicOpen] = useState(false);
   const [examLanguages, setExamLanguages] = useState<string[]>(['English']);
+
+  // Floating dropdown modal picker state for Exam Classification ('type' | 'subTopic' | 'language' | null)
+  const [activePicker, setActivePicker] = useState<null | 'type' | 'subTopic' | 'language'>(null);
+  const [subTopicSearch, setSubTopicSearch] = useState('');
   // Admit card reference saved with the request, the file name shown in the UI, and the AI-parse overlay flag.
   const [admitCardImage, setAdmitCardImage] = useState<string | null>(null);
   const [admitCardFileName, setAdmitCardFileName] = useState<string | null>(null);
@@ -365,8 +371,9 @@ export default function ScribeRequestForm() {
   /** @returns Sub-topics of the current exam type containing the search text (case-insensitive), or all of them. */
   const getFilteredSubTopics = () => {
     const list = SUB_TOPICS[examType] || [];
-    if (!searchQuery.trim()) return list;
-    return list.filter(item => item.toLowerCase().includes(searchQuery.toLowerCase()));
+    const query = subTopicSearch.trim() || searchQuery.trim();
+    if (!query) return list;
+    return list.filter(item => item.toLowerCase().includes(query.toLowerCase()));
   };
 
   // Reads a picked file's URI into a base64 string, on both web and native.
@@ -560,7 +567,14 @@ export default function ScribeRequestForm() {
     const finalExamDate = overrides?.examDate ?? examDate;
     const finalAdmitCard = overrides?.admitCardImage ?? admitCardImage;
 
-    // Admit card upload is optional
+    // Hall ticket / admit card is compulsory
+    if (!finalAdmitCard || !finalAdmitCard.trim()) {
+      Alert.alert(
+        'Hall Ticket Required',
+        'Please upload your admit card or hall ticket to submit your exam request.'
+      );
+      return;
+    }
 
     // Every primary field and at least one language are required.
     if (!finalSubject.trim() || !finalExamDate.trim() || !finalVenue.trim() || !finalSubTopic.trim() || examLanguages.length === 0) {
@@ -722,129 +736,152 @@ export default function ScribeRequestForm() {
           {/* Section: Exam Classification */}
           <FormSection icon="layers" title={t('exam_classification')}>
 
-            <View className="space-y-3">
-              {/* 1. Exam Type Segments */}
+            <View style={{ gap: 12 }}>
+              {/* 1. Exam Type Dropdown Field Box */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">{t('exam_type')} *</Text>
-                <View className="flex-row bg-slate-100 p-1 rounded-xl">
-                  {EXAM_TYPES.map((type) => {
-                    const isSelected = examType === type;
-                    return (
-                      <TouchableOpacity
-                        key={type}
-                        onPress={() => {
-                          setExamType(type);
-                          setSubTopic('');
-                          setSearchQuery('');
-                        }}
-                        className={`flex-1 py-2 rounded-lg items-center ${
-                          isSelected ? 'bg-white shadow-sm' : ''
-                        }`}
-                      >
-                        <Text className={`text-xs font-semibold ${isSelected ? 'text-blue-600' : 'text-slate-600'}`}>
-                          {type}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* 2. Searchable Sub-topic Dropdown */}
-              <View className="z-50">
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">{t('exam_subtopic')} *</Text>
-                <View className="w-full relative">
-                  <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1 flex-row items-center justify-between">
-                    <TextInput
-                      value={searchQuery}
-                      onChangeText={(text) => {
-                        setSearchQuery(text);
-                        setSubTopic('');
-                        setIsSubTopicOpen(true);
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 6, marginLeft: 2 }}>
+                  {t('exam_type')} *
+                </Text>
+                <TouchableOpacity
+                  testID="field-exam-type"
+                  activeOpacity={0.7}
+                  onPress={() => setActivePicker('type')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: examType ? '#2563eb' : '#e2e8f0',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    height: 48,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}
-                      onFocus={() => setIsSubTopicOpen(true)}
-                      placeholder={`Search or type a sub-topic (e.g. ${SUB_TOPICS[examType][0]})`}
-                      className="flex-1 text-sm text-slate-800 py-1.5"
-                    />
-                    <TouchableOpacity onPress={() => setIsSubTopicOpen(!isSubTopicOpen)}>
-                      <Feather name={isSubTopicOpen ? "chevron-up" : "chevron-down"} size={16} color="#64748b" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Dropdown suggestions */}
-                  {isSubTopicOpen && (
-                    <View className="mt-1.5 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                      {getFilteredSubTopics().length === 0 ? (
-                        <TouchableOpacity
-                          onPress={() => {
-                            if (searchQuery.trim()) {
-                              setSubTopic(searchQuery);
-                              setIsSubTopicOpen(false);
-                            }
-                          }}
-                          className="p-3 bg-slate-50"
-                        >
-                          <Text className="text-xs text-slate-500 italic">
-                            {searchQuery.trim() ? `No matches. Tap to use "${searchQuery}"` : 'Type to search...'}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        getFilteredSubTopics().map((item) => (
-                          <TouchableOpacity
-                            key={item}
-                            onPress={() => {
-                              setSubTopic(item);
-                              setSearchQuery(item);
-                              setIsSubTopicOpen(false);
-                            }}
-                            className={`p-3 border-b border-slate-100 active:bg-slate-555 active:bg-slate-50 ${
-                              subTopic === item ? 'bg-blue-50' : ''
-                            }`}
-                          >
-                            <View className="flex-row items-center justify-between">
-                              <Text className={`text-xs font-semibold ${subTopic === item ? 'text-blue-600' : 'text-slate-700'}`}>
-                                {item}
-                              </Text>
-                              {subTopic === item && <Feather name="check" size={12} color="#2563eb" />}
-                            </View>
-                          </TouchableOpacity>
-                        ))
-                      )}
+                    >
+                      <Feather name="book-open" size={15} color="#2563eb" />
                     </View>
-                  )}
-                </View>
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: examType ? '700' : '500', color: examType ? '#0f172a' : '#94a3b8' }}>
+                      {examType || 'Select Exam Type'}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-down" size={16} color="#64748b" />
+                </TouchableOpacity>
               </View>
 
-              {/* Language Selection */}
+              {/* 2. Exam Sub-topic Dropdown Field Box */}
               <View>
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1.5 ml-1">{t('exam_language_req')} *</Text>
-                <View className="flex-row flex-wrap gap-1.5">
-                  {EXAM_LANGUAGES.map((lang) => {
-                    const isSelected = examLanguages.includes(lang);
-                    return (
-                      <TouchableOpacity
-                        key={lang}
-                        onPress={() => {
-                          if (isSelected) {
-                            setExamLanguages(examLanguages.filter(l => l !== lang));
-                          } else {
-                            setExamLanguages([...examLanguages, lang]);
-                          }
-                        }}
-                        className={`px-3.5 py-1.5 rounded-full border flex-row items-center ${
-                          isSelected
-                            ? 'bg-blue-500 border-blue-500 shadow-sm shadow-blue-500/30'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}
-                      >
-                        <Text className={`font-semibold text-xs ${isSelected ? 'text-white' : 'text-slate-600'}`}>
-                          {lang}
-                        </Text>
-                        {isSelected && <Feather name="check" size={12} color="white" className="ml-1" />}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 6, marginLeft: 2 }}>
+                  {t('exam_subtopic')} *
+                </Text>
+                <TouchableOpacity
+                  testID="field-exam-subtopic"
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    setSubTopicSearch('');
+                    setActivePicker('subTopic');
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: subTopic ? '#2563eb' : '#e2e8f0',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    height: 48,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Feather name="layers" size={15} color="#2563eb" />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontFamily: 'Roboto',
+                        fontSize: 13.5,
+                        fontWeight: subTopic ? '700' : '500',
+                        color: subTopic ? '#0f172a' : '#94a3b8',
+                        flex: 1,
+                      }}
+                    >
+                      {subTopic || `Select or type sub-topic (e.g. ${SUB_TOPICS[examType]?.[0] || 'Semester'})`}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-down" size={16} color="#64748b" />
+                </TouchableOpacity>
+              </View>
+
+              {/* 3. Language Selection Dropdown Field Box */}
+              <View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 6, marginLeft: 2 }}>
+                  {t('exam_language_req')} *
+                </Text>
+                <TouchableOpacity
+                  testID="field-exam-language"
+                  activeOpacity={0.7}
+                  onPress={() => setActivePicker('language')}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1.5,
+                    borderColor: examLanguages.length > 0 ? '#2563eb' : '#e2e8f0',
+                    borderRadius: 14,
+                    paddingHorizontal: 14,
+                    height: 48,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 }}>
+                    <View
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        backgroundColor: '#eff6ff',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Feather name="globe" size={15} color="#2563eb" />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontFamily: 'Roboto',
+                        fontSize: 13.5,
+                        fontWeight: examLanguages.length > 0 ? '700' : '500',
+                        color: examLanguages.length > 0 ? '#0f172a' : '#94a3b8',
+                        flex: 1,
+                      }}
+                    >
+                      {examLanguages.length > 0 ? examLanguages.join(', ') : 'Select Language(s)'}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-down" size={16} color="#64748b" />
+                </TouchableOpacity>
               </View>
             </View>
           </FormSection>
@@ -957,15 +994,21 @@ export default function ScribeRequestForm() {
 
               {/* Admit Card Upload + AI Auto-Fill */}
               <View className="pt-1">
-                <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">
-                  {t('upload_admit_card_optional')}
-                </Text>
+                <View className="flex-row items-center justify-between mb-1 ml-1">
+                  <Text className="text-[10px] font-semibold text-slate-500">
+                    {t('upload_admit_card_optional')}
+                  </Text>
+                  <View className="bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    <Text className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">Compulsory</Text>
+                  </View>
+                </View>
                 <TouchableOpacity
+                  testID="btn-upload-hall-ticket"
                   onPress={handlePickAdmitCard}
                   disabled={isParsingHallTicket}
                   accessible={true}
                   accessibilityRole="button"
-                  accessibilityLabel={admitCardFileName ? `Hall Ticket uploaded: ${admitCardFileName}` : "Upload Admit Card or Hall Ticket"}
+                  accessibilityLabel={admitCardFileName ? `Hall Ticket uploaded: ${admitCardFileName}` : "Upload Admit Card or Hall Ticket (Compulsory)"}
                   accessibilityHint="Select a photo or PDF of your hall ticket"
                   className={`w-full border-2 border-dashed rounded-xl p-4 items-center justify-center ${
                     admitCardImage
@@ -1310,6 +1353,453 @@ export default function ScribeRequestForm() {
             We're extracting the subject, date, venue and classification automatically. This usually takes a few seconds.
           </Text>
         </View>
+      </Modal>
+
+      {/* 4. Dropdown Picker Modal for Exam Classification (Type, Sub-topic, Language) */}
+      <Modal
+        animationType="fade"
+        transparent
+        visible={activePicker !== null}
+        onRequestClose={() => setActivePicker(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => setActivePicker(null)}
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(15,23,42,0.45)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {}}
+            style={{
+              width: '100%',
+              maxWidth: 360,
+              backgroundColor: '#ffffff',
+              borderRadius: 22,
+              padding: 18,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.15,
+              shadowRadius: 24,
+              elevation: 8,
+            }}
+          >
+            {/* Header */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingBottom: 12,
+                borderBottomWidth: 1,
+                borderBottomColor: '#f1f5f9',
+                marginBottom: 12,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    backgroundColor: '#eff6ff',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Feather
+                    name={
+                      activePicker === 'type'
+                        ? 'book-open'
+                        : activePicker === 'subTopic'
+                        ? 'layers'
+                        : 'globe'
+                    }
+                    size={16}
+                    color="#2563eb"
+                  />
+                </View>
+                <View>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 15, fontWeight: '800', color: '#0f172a' }}>
+                    {activePicker === 'type'
+                      ? t('exam_type')
+                      : activePicker === 'subTopic'
+                      ? t('exam_subtopic')
+                      : t('exam_language_req')}
+                  </Text>
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', fontWeight: '500' }}>
+                    {activePicker === 'type'
+                      ? 'Choose level of examination'
+                      : activePicker === 'subTopic'
+                      ? `Select category for ${examType}`
+                      : `${examLanguages.length} selected`}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                testID="btn-close-picker-modal"
+                onPress={() => setActivePicker(null)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  backgroundColor: '#f1f5f9',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="x" size={15} color="#64748b" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Picker Body: Exam Type */}
+            {activePicker === 'type' && (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                <View style={{ gap: 8 }}>
+                  {EXAM_TYPES.map((type) => {
+                    const isSelected = examType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        testID={`picker-option-type-${type.toLowerCase()}`}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setExamType(type);
+                          setSubTopic('');
+                          setSearchQuery('');
+                          setActivePicker(null);
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingHorizontal: 14,
+                          paddingVertical: 12,
+                          borderRadius: 14,
+                          backgroundColor: isSelected ? '#eff6ff' : '#f8fafc',
+                          borderWidth: 1.5,
+                          borderColor: isSelected ? '#2563eb' : '#e2e8f0',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                          <View
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 9,
+                              borderWidth: 2,
+                              borderColor: isSelected ? '#2563eb' : '#cbd5e1',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              backgroundColor: '#ffffff',
+                            }}
+                          >
+                            {isSelected && (
+                              <View
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: 4,
+                                  backgroundColor: '#2563eb',
+                                }}
+                              />
+                            )}
+                          </View>
+                          <Text
+                            style={{
+                              fontFamily: 'Roboto',
+                              fontSize: 13.5,
+                              fontWeight: isSelected ? '700' : '500',
+                              color: isSelected ? '#1d4ed8' : '#334155',
+                            }}
+                          >
+                            {type}
+                          </Text>
+                        </View>
+                        {isSelected && <Feather name="check" size={16} color="#2563eb" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+
+            {/* Picker Body: Exam Sub-topic */}
+            {activePicker === 'subTopic' && (
+              <View>
+                {/* Search Bar */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#f8fafc',
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    borderRadius: 12,
+                    paddingHorizontal: 10,
+                    marginBottom: 10,
+                    height: 40,
+                  }}
+                >
+                  <Feather name="search" size={14} color="#94a3b8" />
+                  <TextInput
+                    testID="input-subtopic-search"
+                    value={subTopicSearch}
+                    onChangeText={setSubTopicSearch}
+                    placeholder={`Search or type custom...`}
+                    placeholderTextColor="#94a3b8"
+                    style={{
+                      flex: 1,
+                      marginLeft: 8,
+                      fontSize: 13,
+                      color: '#0f172a',
+                      paddingVertical: 0,
+                    }}
+                  />
+                  {subTopicSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setSubTopicSearch('')}>
+                      <Feather name="x-circle" size={14} color="#94a3b8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Sub-topics list */}
+                <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                  <View style={{ gap: 6 }}>
+                    {/* Custom Typed Option Button if query is not in list */}
+                    {subTopicSearch.trim().length > 0 &&
+                      !getFilteredSubTopics().some(
+                        (item) => item.toLowerCase() === subTopicSearch.trim().toLowerCase()
+                      ) && (
+                        <TouchableOpacity
+                          testID="picker-option-subtopic-custom"
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            const customVal = subTopicSearch.trim();
+                            setSubTopic(customVal);
+                            setSearchQuery(customVal);
+                            setActivePicker(null);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            backgroundColor: '#eff6ff',
+                            borderWidth: 1.5,
+                            borderColor: '#3b82f6',
+                            borderStyle: 'dashed',
+                            marginBottom: 4,
+                          }}
+                        >
+                          <Feather name="plus-circle" size={15} color="#2563eb" />
+                          <Text
+                            style={{
+                              fontFamily: 'Roboto',
+                              fontSize: 13,
+                              fontWeight: '700',
+                              color: '#1d4ed8',
+                              flex: 1,
+                            }}
+                            numberOfLines={1}
+                          >
+                            Use custom: "{subTopicSearch.trim()}"
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+
+                    {getFilteredSubTopics().map((item) => {
+                      const isSelected = subTopic === item;
+                      return (
+                        <TouchableOpacity
+                          key={item}
+                          testID={`picker-option-subtopic-${item.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}`}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setSubTopic(item);
+                            setSearchQuery(item);
+                            setActivePicker(null);
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            borderRadius: 12,
+                            backgroundColor: isSelected ? '#eff6ff' : '#f8fafc',
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? '#2563eb' : '#e2e8f0',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontFamily: 'Roboto',
+                              fontSize: 13,
+                              fontWeight: isSelected ? '700' : '500',
+                              color: isSelected ? '#1d4ed8' : '#334155',
+                              flex: 1,
+                              marginRight: 8,
+                            }}
+                          >
+                            {item}
+                          </Text>
+                          {isSelected && <Feather name="check" size={15} color="#2563eb" />}
+                        </TouchableOpacity>
+                      );
+                    })}
+
+                    {getFilteredSubTopics().length === 0 && subTopicSearch.trim().length === 0 && (
+                      <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, color: '#94a3b8' }}>No sub-topics available.</Text>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Picker Body: Exam Language (Multi-Select) */}
+            {activePicker === 'language' && (
+              <View>
+                <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                  <View style={{ gap: 8 }}>
+                    {EXAM_LANGUAGES.map((lang) => {
+                      const isChecked = examLanguages.includes(lang);
+                      return (
+                        <TouchableOpacity
+                          key={lang}
+                          testID={`picker-option-language-${lang.toLowerCase()}`}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (isChecked) {
+                              if (examLanguages.length > 1) {
+                                setExamLanguages(examLanguages.filter((l) => l !== lang));
+                              } else {
+                                Alert.alert('Required', 'Please keep at least one language selected.');
+                              }
+                            } else {
+                              setExamLanguages([...examLanguages, lang]);
+                            }
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            paddingHorizontal: 14,
+                            paddingVertical: 12,
+                            borderRadius: 14,
+                            backgroundColor: isChecked ? '#eff6ff' : '#ffffff',
+                            borderWidth: 1.5,
+                            borderColor: isChecked ? '#2563eb' : '#e2e8f0',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: 6,
+                                borderWidth: 1.5,
+                                borderColor: isChecked ? '#2563eb' : '#cbd5e1',
+                                backgroundColor: isChecked ? '#2563eb' : '#ffffff',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              {isChecked && <Feather name="check" size={13} color="#ffffff" />}
+                            </View>
+                            <Text
+                              style={{
+                                fontFamily: 'Roboto',
+                                fontSize: 13.5,
+                                fontWeight: isChecked ? '700' : '500',
+                                color: isChecked ? '#0f172a' : '#475569',
+                              }}
+                            >
+                              {lang}
+                            </Text>
+                          </View>
+                          {isChecked && (
+                            <View
+                              style={{
+                                backgroundColor: '#dbeafe',
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#1d4ed8' }}>
+                                Selected
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+
+                {/* Footer Buttons for Language */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    gap: 10,
+                    marginTop: 14,
+                    paddingTop: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: '#f1f5f9',
+                  }}
+                >
+                  <TouchableOpacity
+                    testID="picker-language-reset"
+                    activeOpacity={0.7}
+                    onPress={() => setExamLanguages(['English'])}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      backgroundColor: '#f1f5f9',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '600', color: '#475569' }}>
+                      Reset
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    testID="picker-language-done"
+                    activeOpacity={0.7}
+                    onPress={() => setActivePicker(null)}
+                    style={{
+                      flex: 1.5,
+                      paddingVertical: 10,
+                      borderRadius: 12,
+                      backgroundColor: '#2563eb',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '700', color: '#ffffff' }}>
+                      Done
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Student console tab bar (phones; hidden in the desktop frame) */}
