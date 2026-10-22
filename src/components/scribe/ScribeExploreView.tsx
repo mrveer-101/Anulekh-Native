@@ -1454,21 +1454,6 @@ export default function ScribeExploreView() {
           )}
         </View>
         )}
-        
-        {/* Scribe's Preferred Availability Windows */}
-        {activeSegment === 'exams' && scribeProfile?.availability_slots ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, backgroundColor: THEME.soft, borderRadius: 16, borderWidth: 1, borderColor: THEME.softBorder, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14 }}>
-            <Feather name="clock" size={13} color={THEME.accentText} style={{ marginRight: 2 }} />
-            <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.3, marginRight: 4 }}>
-              {t('your_slots')}
-            </Text>
-            {String(scribeProfile.availability_slots).split(',').map((slot: string) => slot.trim()).filter(Boolean).map((slot: string) => (
-              <View key={slot} style={{ paddingVertical: 3, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#ffffff', borderWidth: 1, borderColor: THEME.softBorder }}>
-                <Text style={{ fontSize: 10.5, fontWeight: '700', color: THEME.accentText }}>{slot}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
 
         {activeSegment === 'exams' ? (
           <>

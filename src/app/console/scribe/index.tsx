@@ -69,7 +69,7 @@ type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notificat
 const TABS: { id: Tab; iconActive: keyof typeof Ionicons.glyphMap; iconInactive: keyof typeof Ionicons.glyphMap; label: string }[] = [
   { id: 'home',        iconActive: 'home',          iconInactive: 'home-outline',          label: 'Home' },
   { id: 'explore',     iconActive: 'search',        iconInactive: 'search-outline',        label: 'Search' },
-  { id: 'commitments', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Requests' },
+  { id: 'commitments', iconActive: 'document-text', iconInactive: 'document-text-outline', label: 'Applied' },
   { id: 'settings',    iconActive: 'person',        iconInactive: 'person-outline',        label: 'Account' },
 ];
 
@@ -280,7 +280,7 @@ export default function ScribeDashboard() {
           paddingTop: 8,
           paddingBottom: Math.max(insets.bottom > 0 ? 6 : 10, 6),
         }}>
-          {/* One button per tab; icon and text are hidden from screen readers because the button carries the label */}
+          {/* One button per tab; styled with soft peach squircle pill and orange indicator dash when active */}
           {TABS.map((tab) => {
             const active = activeTab === tab.id;
             // Map tab id -> translation key ('commitments' uses nav_applied, i.e. "Applied").
@@ -307,42 +307,53 @@ export default function ScribeDashboard() {
                   flex: 1,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  paddingVertical: 3,
                 }}
               >
-                <Ionicons
-                  name={(active ? tab.iconActive : tab.iconInactive) as any}
-                  size={24}
-                  color={active ? '#059669' : '#94A3B8'}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden={true}
-                />
-
-                <Text
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden={true}
-                  style={{
-                    fontFamily: 'Roboto',
-                    fontSize: 11,
-                    fontWeight: active ? '800' : '500',
-                    color: active ? '#059669' : '#64748B',
-                    letterSpacing: -0.1,
-                    marginTop: 3,
-                  }}
-                >
-                  {translatedLabel}
-                </Text>
-
-                {/* Micro indicator dot below label */}
                 <View
                   style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: 2,
-                    backgroundColor: active ? '#059669' : 'transparent',
-                    marginTop: 3,
+                    backgroundColor: active ? '#FFF4ED' : 'transparent',
+                    borderRadius: 22,
+                    paddingVertical: 7,
+                    paddingHorizontal: 16,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 76,
                   }}
-                />
+                >
+                  <Ionicons
+                    name={(active ? tab.iconActive : tab.iconInactive) as any}
+                    size={24}
+                    color={active ? '#EA580C' : '#64748B'}
+                    importantForAccessibility="no"
+                    accessibilityElementsHidden={true}
+                  />
+
+                  <Text
+                    importantForAccessibility="no"
+                    accessibilityElementsHidden={true}
+                    style={{
+                      fontFamily: 'Roboto',
+                      fontSize: 11.5,
+                      fontWeight: active ? '800' : '500',
+                      color: active ? '#EA580C' : '#64748B',
+                      letterSpacing: -0.1,
+                      marginTop: 3,
+                    }}
+                  >
+                    {translatedLabel}
+                  </Text>
+
+                  {/* Horizontal pill indicator line below label */}
+                  <View
+                    style={{
+                      width: 18,
+                      height: 3,
+                      borderRadius: 1.5,
+                      backgroundColor: active ? '#EA580C' : 'transparent',
+                      marginTop: 4,
+                    }}
+                  />
+                </View>
               </TouchableOpacity>
             );
           })}
