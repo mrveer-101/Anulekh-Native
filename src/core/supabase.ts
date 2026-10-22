@@ -258,8 +258,13 @@ const mockAuth = {
       } catch {
         data = { error: resText };
       }
-      if (!res.ok) throw new Error(data.error || data.message || 'Signup failed');
-      
+      if (data.user?.email) {
+        const lower = String(data.user.email).toLowerCase();
+        if (lower.endsWith('@anulekh.app') || lower.endsWith('@anulekh.internal') || lower.startsWith('phone_') || lower.startsWith('user_')) {
+          data.user.email = '';
+        }
+      }
+
       const session = { user: data.user };
       await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
       return { data: { user: data.user }, error: null };
@@ -300,6 +305,13 @@ const mockAuth = {
       }
       if (!res.ok) throw new Error(data.error || data.message || 'Signin failed');
 
+      if (data.user?.email) {
+        const lower = String(data.user.email).toLowerCase();
+        if (lower.endsWith('@anulekh.app') || lower.endsWith('@anulekh.internal') || lower.startsWith('phone_') || lower.startsWith('user_')) {
+          data.user.email = '';
+        }
+      }
+
       const session = { user: data.user };
       await AsyncStorage.setItem('local_db_session', JSON.stringify(session));
       return { data: session, error: null };
@@ -316,6 +328,12 @@ const mockAuth = {
     try {
       const val = await AsyncStorage.getItem('local_db_session');
       const session = val ? JSON.parse(val) : null;
+      if (session?.user?.email) {
+        const lower = String(session.user.email).toLowerCase();
+        if (lower.endsWith('@anulekh.app') || lower.endsWith('@anulekh.internal') || lower.startsWith('phone_') || lower.startsWith('user_')) {
+          session.user.email = '';
+        }
+      }
       return { data: { session }, error: null };
     } catch (err: any) {
       return { data: { session: null }, error: err.message || err };

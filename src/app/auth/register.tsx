@@ -121,10 +121,8 @@ export default function RegisterScreen() {
 
     setPhone(formattedPhone);
     setLoading(true);
-    setErrorMessage('');
-
-    const finalEmail =
-      email.trim() || `${formattedPhone.replace(/[^0-9]/g, '')}@anulekh.app`;
+    const cleanEmail = email.trim().toLowerCase();
+    const finalEmail = cleanEmail.length > 0 ? cleanEmail : undefined;
 
     try {
       const res = await fetch(`${API_URL}/api/auth/verify-otp-signup`, {
@@ -410,24 +408,9 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Field: PHONE with "+ Add Email ID" */}
+            {/* Field: PHONE */}
             <View style={styles.fieldGroup}>
-              <View style={styles.phoneLabelRow}>
-                <Text style={styles.fieldLabel}>PHONE</Text>
-                <TouchableOpacity
-                  onPress={() => setShowEmailField(!showEmailField)}
-                  activeOpacity={0.7}
-                  style={[
-                    styles.addEmailPill,
-                    { backgroundColor: isScribe ? '#DCFCE7' : '#EFF6FF' },
-                  ]}
-                >
-                  <Text style={[styles.addEmailPillText, { color: accentColor }]}>
-                    {showEmailField ? '- Hide Email' : '+ Add Email ID'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
+              <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
               <View
                 style={[
                   styles.inputBox,
@@ -459,42 +442,40 @@ export default function RegisterScreen() {
               </View>
             </View>
 
-            {/* Optional Field: EMAIL */}
-            {showEmailField && (
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>EMAIL ADDRESS (OPTIONAL)</Text>
-                <View
-                  style={[
-                    styles.inputBox,
-                    focusedField === 'email' && {
-                      borderColor: accentColor,
-                      backgroundColor: '#FFFFFF',
-                    },
-                  ]}
-                >
-                  <Feather
-                    name="mail"
-                    size={18}
-                    color={focusedField === 'email' ? accentColor : '#94A3B8'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <TextInput
-                    style={[styles.input, WEB_NO_OUTLINE]}
-                    placeholder="Enter your email address"
-                    placeholderTextColor="#94A3B8"
-                    value={email}
-                    onChangeText={(val) => {
-                      setEmail(val);
-                      setErrorMessage('');
-                    }}
-                    onFocus={() => setFocusedField('email')}
-                    onBlur={() => setFocusedField(null)}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                </View>
+            {/* Field: EMAIL (OPTIONAL) */}
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>EMAIL ADDRESS (OPTIONAL)</Text>
+              <View
+                style={[
+                  styles.inputBox,
+                  focusedField === 'email' && {
+                    borderColor: accentColor,
+                    backgroundColor: '#FFFFFF',
+                  },
+                ]}
+              >
+                <Feather
+                  name="mail"
+                  size={18}
+                  color={focusedField === 'email' ? accentColor : '#94A3B8'}
+                  style={{ marginRight: 8 }}
+                />
+                <TextInput
+                  style={[styles.input, WEB_NO_OUTLINE]}
+                  placeholder="Enter your email address (optional)"
+                  placeholderTextColor="#94A3B8"
+                  value={email}
+                  onChangeText={(val) => {
+                    setEmail(val);
+                    setErrorMessage('');
+                  }}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
               </View>
-            )}
+            </View>
 
             {/* Field: PASSWORD */}
             <View style={styles.fieldGroup}>

@@ -154,11 +154,13 @@ export default function StudentCompleteProfileForm() {
         .single();
 
       if (!existingProfile) {
-        // New row: also set the role and a default name (email prefix, or "Student").
+        const defaultName = (session.user.email && !session.user.email.endsWith('@anulekh.app') && !session.user.email.startsWith('phone_'))
+          ? session.user.email.split('@')[0]
+          : 'Student';
         await supabase.from('profiles').insert({
           id: session.user.id,
           role: 'student',
-          full_name: session.user.email ? session.user.email.split('@')[0] : 'Student',
+          full_name: defaultName,
           ...profilePayload,
         });
       } else {

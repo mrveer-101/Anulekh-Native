@@ -267,7 +267,13 @@ export default function SharedSettingsView() {
         return;
       }
       setUser(session.user);
-      setEmail(session.user.email || '');
+      const rawEmail = session.user.email || '';
+      const isSynthetic =
+        rawEmail.toLowerCase().includes('@anulekh.app') ||
+        rawEmail.toLowerCase().includes('@anulekh.internal') ||
+        rawEmail.toLowerCase().startsWith('phone_') ||
+        rawEmail.toLowerCase().startsWith('user_');
+      setEmail(isSynthetic ? '' : rawEmail);
 
       // Check any active 7-day deletion hold for this account
       checkDeletionHold(session.user.id);
@@ -908,9 +914,11 @@ export default function SharedSettingsView() {
                   </View>
                 </View>
                 <TextInput
-                  value={email.endsWith('@anulekh.app') ? `${phone || user?.phone || 'Mobile'} (Phone Account)` : email}
+                  value={email}
+                  placeholder="Not provided"
+                  placeholderTextColor="#94a3b8"
                   editable={false}
-                  style={[inputStyle(false, false), { backgroundColor: '#f1f5f9', color: '#64748b' }]}
+                  style={[inputStyle(false, false), { backgroundColor: '#f1f5f9', color: email ? '#0f172a' : '#64748b' }]}
                 />
               </View>
 

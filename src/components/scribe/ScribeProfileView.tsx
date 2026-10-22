@@ -118,7 +118,13 @@ export default function ScribeProfileView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       setUser(session.user);
-      setEmail(session.user.email || '');
+      const rawEmail = session.user.email || '';
+      const isSynthetic =
+        rawEmail.toLowerCase().includes('@anulekh.app') ||
+        rawEmail.toLowerCase().includes('@anulekh.internal') ||
+        rawEmail.toLowerCase().startsWith('phone_') ||
+        rawEmail.toLowerCase().startsWith('user_');
+      setEmail(isSynthetic ? '' : rawEmail);
 
       // Device-local profile photo (never uploaded).
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
@@ -365,8 +371,10 @@ export default function ScribeProfileView() {
             </View>
             <TextInput
               value={email}
+              placeholder="Not provided"
+              placeholderTextColor="#94a3b8"
               editable={false}
-              style={{ backgroundColor: '#f1f5f9', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: '#94a3b8', fontWeight: '600' }}
+              style={{ backgroundColor: '#f1f5f9', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, color: email ? '#0f172a' : '#94a3b8', fontWeight: '600' }}
             />
           </View>
 

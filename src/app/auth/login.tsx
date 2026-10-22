@@ -226,24 +226,46 @@ export default function LoginScreen() {
   // Main login submit
   const handleLogin = async () => {
     if (loading) return;
-    if (!emailOrPhone.trim() || !password.trim()) {
+    const rawInput = emailOrPhone.trim();
+    const cleanPassword = password.trim();
+
+    if (!rawInput || !cleanPassword) {
       setErrorMessage('Please enter both email/phone and password.');
       return;
     }
     setLoading(true);
     setErrorMessage('');
     try {
-      const input = emailOrPhone.trim();
-      const isEmail = input.includes('@');
-      const cleanPhone = input.replace(/[^0-9]/g, '');
-      const formattedPhone =
-        cleanPhone.length === 10 ? `+91${cleanPhone}` : cleanPhone ? `+${cleanPhone}` : input;
+      const isEmail = rawInput.includes('@');
+      let identifier = rawInput;
+      let emailArg: string | undefined = undefined;
+      let phoneArg: string | undefined = undefined;
+
+      if (isEmail) {
+        const lowerEmail = rawInput.toLowerCase();
+        identifier = lowerEmail;
+        emailArg = lowerEmail;
+      } else {
+        const digitsOnly = rawInput.replace(/[^0-9]/g, '');
+        let clean10 = digitsOnly;
+        if (clean10.length === 11 && clean10.startsWith('0')) {
+          clean10 = clean10.slice(1);
+        } else if (clean10.length === 12 && clean10.startsWith('91')) {
+          clean10 = clean10.slice(2);
+        } else if (clean10.length > 10) {
+          clean10 = clean10.slice(-10);
+        }
+
+        const formattedPhone = clean10.length === 10 ? `+91${clean10}` : rawInput;
+        phoneArg = formattedPhone;
+        identifier = clean10.length === 10 ? clean10 : rawInput;
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
-        identifier: input,
-        email: isEmail ? input : undefined,
-        phone: !isEmail ? formattedPhone : undefined,
-        password: password.trim(),
+        identifier,
+        email: emailArg,
+        phone: phoneArg,
+        password: cleanPassword,
       });
       if (error) throw error;
 

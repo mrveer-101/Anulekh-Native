@@ -61,7 +61,13 @@ export default function VolunteerProfile() {
         return;
       }
       setUser(session.user);
-      setEmail(session.user.email || '');
+      const rawEmail = session.user.email || '';
+      const isSynthetic =
+        rawEmail.toLowerCase().includes('@anulekh.app') ||
+        rawEmail.toLowerCase().includes('@anulekh.internal') ||
+        rawEmail.toLowerCase().startsWith('phone_') ||
+        rawEmail.toLowerCase().startsWith('user_');
+      setEmail(isSynthetic ? '' : rawEmail);
 
       // 2. Fetch this user's profile row.
       const { data: profile, error } = await supabase
@@ -220,8 +226,10 @@ export default function VolunteerProfile() {
               <Text className="text-[10px] font-semibold text-slate-500 mb-1 ml-1">Email Address (Non-editable)</Text>
               <TextInput 
                 value={email}
+                placeholder="Not provided"
+                placeholderTextColor="#94a3b8"
                 editable={false}
-                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-400"
+                className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-500"
               />
             </View>
 

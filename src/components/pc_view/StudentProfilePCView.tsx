@@ -72,7 +72,13 @@ export default function StudentProfilePCView({
       if (!session) return;
 
       setUser(session.user);
-      setEmail(session.user.email || '');
+      const rawEmail = session.user.email || '';
+      const isSynthetic =
+        rawEmail.toLowerCase().includes('@anulekh.app') ||
+        rawEmail.toLowerCase().includes('@anulekh.internal') ||
+        rawEmail.toLowerCase().startsWith('phone_') ||
+        rawEmail.toLowerCase().startsWith('user_');
+      setEmail(isSynthetic ? '' : rawEmail);
 
       // Avatar is kept per user on this device only.
       const localPhoto = await AsyncStorage.getItem(`profile_photo_${session.user.id}`);
@@ -427,8 +433,10 @@ export default function StudentProfilePCView({
                 <Feather name="lock" size={16} color="#94a3b8" style={{ marginRight: 10 }} />
                 <TextInput
                   value={email}
+                  placeholder="Not provided"
+                  placeholderTextColor="#94a3b8"
                   editable={false}
-                  style={{ flex: 1, color: '#64748b', fontSize: 14, paddingVertical: 12, fontWeight: '600', fontFamily: 'Roboto' }}
+                  style={{ flex: 1, color: email ? '#0f172a' : '#64748b', fontSize: 14, paddingVertical: 12, fontWeight: '600', fontFamily: 'Roboto' }}
                 />
               </View>
             </View>
