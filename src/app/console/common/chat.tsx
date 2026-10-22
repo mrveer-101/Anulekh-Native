@@ -74,7 +74,8 @@ export default function ChatRoomScreen() {
   const insets = useSafeAreaInsets();
   // `t` translates UI strings into the user's chosen language.
   const { t } = useLanguage();
-  const params = useLocalSearchParams<{ requestId: string }>();
+  const params = useLocalSearchParams<{ requestId?: string; id?: string; request_id?: string; type?: string }>();
+  const activeRequestId = (params.requestId || params.id || params.request_id || '').toString();
   const scrollViewRef = useRef<ScrollView>(null);
   
   // Who is chatting about what: signed-in user + profile, the exam request, and the other party's display info.
@@ -87,6 +88,8 @@ export default function ChatRoomScreen() {
   // Passive online/offline status (defaults to offline without active polling)
   const [isOtherPartyOnline, setIsOtherPartyOnline] = useState<boolean>(false);
   
+  const targetRequestId = exam?.id ?? (activeRequestId ? parseInt(activeRequestId, 10) : null);
+
   // Message list (refreshed by polling) and the text currently in the composer.
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -130,10 +133,8 @@ export default function ChatRoomScreen() {
   // One-time setup per request: who am I, which request is this, and who is on the other side.
   useEffect(() => {
     /**
-     * Loads the session, the user's `profiles` row and the `exam_requests` row, then works out the
-     * other participant: for the student it is the assigned scribe (if any); for the scribe it is
-     * the student. The other party's profile supplies the display name, phone (for calling) and
-     * the details shown on the declaration letter. Redirects to `/auth/login` if signed out.
+     * Loads the session, the user's `profiles` row and the `exam_requests` (or `assignment_requests`) row,
+     * then works out the other participant. Redirects to `/auth/login` if signed out.
      */
     const initializeChat = async () => {
       try {
@@ -152,46 +153,84 @@ export default function ChatRoomScreen() {
           .single();
         setProfile(profileData);
 
-        // The request this chat belongs to.
-        const { data: examData } = await supabase
-          .from('exam_requests')
-          .select('*')
-          .eq('id', params.requestId)
-          .single();
-        setExam(examData);
+        if (!activeRequestId) {
+          setLoading(false);
+          return;
+        }
+
+        // The request this chat belongs to (try exam_requests first, fallback to assignment_requests).
+        let reqData: any = null;
+        const isAssignmentRequested = params.type === 'assignment';
+
+        if (isAssignmentRequested) {
+          const { data } = await supabase
+            .from('assignment_requests')
+            .select('*')
+            .eq('id', activeRequestId)
+            .single();
+          reqData = data;
+        } else {
+          const { data } = await supabase
+            .from('exam_requests')
+            .select('*')
+            .eq('id', activeRequestId)
+            .single();
+          reqData = data;
+          if (!reqData) {
+            const { data: asgData } = await supabase
+              .from('assignment_requests')
+              .select('*')
+              .eq('id', activeRequestId)
+              .single();
+            reqData = asgData;
+          }
+        }
+
+        if (reqData) {
+          if (!reqData.exam_date && reqData.deadline) {
+            reqData.exam_date = reqData.deadline;
+          }
+          if (!reqData.exam_type && reqData.assignment_title) {
+            reqData.exam_type = reqData.assignment_title;
+          }
+        }
+        setExam(reqData);
 
         // Resolve the other participant. The viewer is "the student" if they own the request.
-        if (examData) {
-          const isStudent = session.user.id === examData.student_id;
+        if (reqData) {
+          const isStudent = session.user.id === reqData.student_id;
           
           if (isStudent) {
             // Placeholder name until (and unless) the assigned scribe's profile loads.
-            setOtherPartyName(examData.scribe_id ? 'Scribe' : 'Volunteer');
+            setOtherPartyName(reqData.scribe_id ? 'Scribe' : 'Volunteer');
             setOtherPartyRole('Volunteer');
             
-            if (examData.scribe_id) {
+            if (reqData.scribe_id) {
               const { data: scribeProfile } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('id', examData.scribe_id)
+                .eq('id', reqData.scribe_id)
                 .single();
               if (scribeProfile) {
-                setOtherPartyName(scribeProfile.official_name || scribeProfile.full_name);
+                setOtherPartyName(scribeProfile.official_name || scribeProfile.full_name || 'Scribe');
                 setOtherPartyPhone(scribeProfile.phone || '');
                 setOtherProfileData(scribeProfile);
               }
             }
           } else {
             // Scribe viewing: the name comes straight from the request; the profile is only for phone/details.
-            setOtherPartyName(examData.student_name);
+            setOtherPartyName(reqData.student_name || 'Student');
             setOtherPartyRole('Student');
             
             const { data: studentProfile } = await supabase
               .from('profiles')
               .select('*')
-              .eq('id', examData.student_id)
+              .eq('id', reqData.student_id)
               .single();
             if (studentProfile) {
+              if (!reqData.student_name && (studentProfile.official_name || studentProfile.full_name)) {
+                setOtherPartyName(studentProfile.official_name || studentProfile.full_name);
+              }
               setOtherPartyPhone(studentProfile.phone || '');
               setOtherProfileData(studentProfile);
             }
@@ -205,16 +244,17 @@ export default function ChatRoomScreen() {
     };
 
     initializeChat();
-  }, [params.requestId]);
+  }, [activeRequestId]);
 
   /** Fetches every `chat_messages` row for this request, oldest first, and replaces `messages`. Errors are logged only. */
   const loadMessages = async () => {
-    if (!params.requestId) return;
+    const reqId = targetRequestId;
+    if (!reqId) return;
     try {
       const { data } = await supabase
         .from('chat_messages')
         .select('*')
-        .eq('request_id', params.requestId)
+        .eq('request_id', reqId)
         .order('created_at', { ascending: true });
       
       if (data) {
@@ -227,11 +267,11 @@ export default function ChatRoomScreen() {
 
   // Poll for new messages every 2 s while the screen is mounted (no push/realtime channel exists).
   useEffect(() => {
-    if (!params.requestId) return;
+    if (!targetRequestId) return;
     loadMessages();
     const interval = setInterval(loadMessages, 2000);
     return () => clearInterval(interval);
-  }, [params.requestId]);
+  }, [targetRequestId]);
 
   // Keep the newest message in view. Because each poll sets a new array, this also fires every 2 s.
   useEffect(() => {
@@ -242,10 +282,10 @@ export default function ChatRoomScreen() {
 
   /**
    * Sends the composer text as a plain text message: clears the input immediately (optimistic),
-   * inserts into `chat_messages`, then reloads. On failure the text is not restored.
+   * inserts into `chat_messages`, then reloads. On failure the text is restored.
    */
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !currentUser || !exam) return;
+    if (!newMessage.trim() || !currentUser || !targetRequestId) return;
 
     const msgText = newMessage.trim();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -255,16 +295,23 @@ export default function ChatRoomScreen() {
       const { error } = await supabase
         .from('chat_messages')
         .insert({
-          request_id: exam.id,
+          request_id: targetRequestId,
           sender_id: currentUser.id,
           message: msgText,
           created_at: new Date().toISOString()
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Failed to send message:', error);
+        Alert.alert('Send Failed', typeof error === 'string' ? error : (error as any).message || 'Could not send message.');
+        setNewMessage(msgText);
+        return;
+      }
       loadMessages();
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error sending message:', e);
+      Alert.alert('Send Failed', e?.message || 'Network error while sending message.');
+      setNewMessage(msgText);
     }
   };
 

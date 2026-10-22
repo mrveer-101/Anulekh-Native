@@ -789,7 +789,7 @@ export default function StudentPlanView() {
                     {/* Chat with the scribe (the chat route is always opened with type=exam) */}
                     <TouchableOpacity
                       onPress={() => {
-                        router.push(`/console/common/chat?id=${item.id}&type=exam` as any);
+                        router.push(`/console/common/chat?requestId=${item.id}&type=exam` as any);
                       }}
                       style={{ 
                         flex: 1, 

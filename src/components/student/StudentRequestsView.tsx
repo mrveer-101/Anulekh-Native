@@ -42,7 +42,6 @@ import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
-import { DeclarationModal } from '@/components/common/modals/DeclarationModal';
 
 /**
  * One `exam_requests` row as this screen uses it, plus two fields added client-side in fetchRequests:
@@ -125,10 +124,6 @@ export default function StudentRequestsView() {
   const [viewingScribe, setViewingScribe] = useState<any>(null);
   const [viewingReviews, setViewingReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
-
-  // Declaration Modal State
-  const [selectedExam, setSelectedExam] = useState<any>(null);
-  const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
 
   // Rating Modal State
   const [ratingExam, setRatingExam] = useState<any>(null);
@@ -1045,16 +1040,16 @@ export default function StudentRequestsView() {
             );
           };
 
-          // Un-match: reset the request to pending with no scribe, reject that scribe's application and
+          // Change Scribe: reset the request to pending with no scribe, reject that scribe's application and
           // notify them, so other scribes can apply again.
           const handleUnmatchScribe = () => {
             Alert.alert(
-              'Un-match Scribe',
-              `Are you sure you want to un-match ${item.scribeProfile?.full_name || 'this scribe'}? The request will return to pending status so other scribes can apply.`,
+              'Change Scribe',
+              `Are you sure you want to change ${item.scribeProfile?.full_name || 'this scribe'}? The request will return to pending status so other scribes can apply.`,
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
-                  text: 'Un-match Scribe',
+                  text: 'Change Scribe',
                   style: 'destructive',
                   onPress: async () => {
                     const oldScribeId = item.scribe_id;
@@ -1073,12 +1068,12 @@ export default function StudentRequestsView() {
                       await supabase.from('notifications').insert({
                         user_id: oldScribeId,
                         title: 'Match Cancelled',
-                        message: `The student has un-matched you for "${item.subject || item.exam_type}". The request is now open for new applications.`,
+                        message: `The student has changed the scribe for "${item.subject || item.exam_type}". The request is now open for new applications.`,
                         is_read: 0,
                         created_at: new Date().toISOString()
                       });
                     }
-                    Alert.alert('Scribe Un-matched', 'The request has been reset to pending.');
+                    Alert.alert('Scribe Changed', 'The request has been reset to pending.');
                     fetchRequests();
                   }
                 }
@@ -1326,7 +1321,7 @@ export default function StudentRequestsView() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Row 2: Mark Completed + View Details */}
+                    {/* Row 2: Mark Completed */}
                     <View style={{ flexDirection: 'row', gap: 10 }}>
                       <TouchableOpacity
                         onPress={() => openRatingModal(item)}
@@ -1344,27 +1339,9 @@ export default function StudentRequestsView() {
                           Mark Completed
                         </Text>
                       </TouchableOpacity>
-
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedExam(item);
-                          setIsDeclarationOpen(true);
-                        }}
-                        style={{
-                          flex: 1, paddingVertical: 11,
-                          borderRadius: 12, borderWidth: 1.5,
-                          borderColor: '#2563eb',
-                          alignItems: 'center', justifyContent: 'center',
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                          View Details
-                        </Text>
-                      </TouchableOpacity>
                     </View>
 
-                    {/* Row 3: Un-match Scribe + Cancel Request */}
+                    {/* Row 3: Change Scribe + Cancel Request */}
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                       <TouchableOpacity
                         onPress={handleUnmatchScribe}
@@ -1377,7 +1354,7 @@ export default function StudentRequestsView() {
                         activeOpacity={0.7}
                       >
                         <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ea580c' }}>
-                          Un-match Scribe
+                          Change Scribe
                         </Text>
                       </TouchableOpacity>
 
@@ -1450,15 +1427,6 @@ export default function StudentRequestsView() {
         // Past Scribes sub-tab: search + one card per scribe (components/student/PastScribesList)
         <PastScribesList scribes={pastScribes} onViewProfile={handleOpenScribeProfile} onInvite={openInviteModal} />
       )}
-
-      {/* FORMAL SCRIBE DECLARATION MODAL */}
-      <DeclarationModal
-        visible={isDeclarationOpen}
-        onClose={() => setIsDeclarationOpen(false)}
-        exam={selectedExam}
-        studentName={studentProfile?.full_name}
-        accentColor="#2563eb"
-      />
 
       {/* CALL BOTTOM SHEET MODAL */}
       <CallSheetModal

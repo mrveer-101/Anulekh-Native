@@ -47,9 +47,17 @@ import { clearScreenCache } from '@/core/screenCache';
  * - Web build served from localhost/127.0.0.1 -> a local backend on http://localhost:3000.
  * - Everywhere else -> EXPO_PUBLIC_API_URL if set at build time, otherwise the hosted Render instance.
  */
-export const API_URL = (Platform.OS === 'web' && typeof window !== 'undefined' && (window?.location?.hostname === 'localhost' || window?.location?.hostname === '127.0.0.1'))
-  ? 'http://localhost:3000'
-  : (process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com');
+export const API_URL = (() => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (window?.location?.hostname === 'localhost' || window?.location?.hostname === '127.0.0.1') {
+      return 'http://localhost:3000';
+    }
+    if (window?.location?.origin) {
+      return window.location.origin;
+    }
+  }
+  return process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
+})();
 
 // fetch() rejects with a generic "Network request failed" (or "Failed to fetch" on web)
 // when the backend host is unreachable — surface that as a clear connectivity message
