@@ -13,13 +13,14 @@
  * object from core/supabase.ts, a custom shim that sends `POST /api/query` to the Rust/Axum backend
  * (not real Supabase). Navigates to view_applications and common/chat.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, ScrollView, useWindowDimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
-import { parseExamDate, isExamPast } from '@/core/examDate';
+import { parseExamDate, isExamPast, isWithin24HoursOfExam } from '@/core/examDate';
+import { schedule24HourExamReminder } from '@/core/notificationWatcher';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, STUDENT_THEME as THEME } from '@/core/portalTheme';
 import { useInDesktopShell } from '@/components/ui/DesktopShell';
@@ -29,6 +30,7 @@ import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 import { RatingModal } from '@/components/common/modals/RatingModal';
 import { StudentRequestCard } from '@/components/student/StudentRequestCard';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 
 /**
  * One plan row: an `exam_requests` or `assignment_requests` row, tagged with `requestType` (which table
@@ -98,6 +100,7 @@ export default function StudentPlanView() {
   // Call Modal State
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
 
   /** Puts a snapshot (cached or freshly fetched) on screen. */
   const applySnapshot = (snap: StudentPlanSnapshot) => {
@@ -149,6 +152,11 @@ export default function StudentPlanView() {
       const snapshot: StudentPlanSnapshot = { profile, plans: enriched };
       applySnapshot(snapshot);
       writeScreenCache('student_plan', userId, snapshot);
+
+      // Auto-schedule 24-hour native phone reminders for upcoming exams
+      activePlans.forEach((plan: any) => {
+        schedule24HourExamReminder(plan);
+      });
     // Errors are only logged; whatever is on screen (e.g. the cached snapshot) stays.
     } catch (error: any) {
       console.error('Error fetching student plans:', error.message);
@@ -159,8 +167,12 @@ export default function StudentPlanView() {
     }
   };
 
-  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
-  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  // Preload schedule in background immediately on mount so Schedule tab opens instantly
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  // Refresh whenever the console is focused *and* this tab is visible
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -185,22 +197,18 @@ export default function StudentPlanView() {
 
   /**
    * Opens the call bottom sheet for a plan's scribe.
-   * For privacy the scribe's contact is only unlocked on the exam day: the date part of `exam_date`
-   * (before any "|" time suffix) must equal today's date (UTC, via toISOString), otherwise an alert
-   * explains when it unlocks.
+   * Opens the call bottom sheet for an exam's scribe. Scribe contact details unlock within 24 hours of the exam.
+   * If the exam is more than 24 hours away, displays the floating notification banner.
    */
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
-      Alert.alert("Contact Info Locked 🔒", "Contact details are only unlocked on the day of the exam for privacy protection.");
+      setCallBannerVisible(true);
       return;
     }
     
-    // Compare only the date part of exam_date with today's date.
-    const dateStr = exam.exam_date.split('|')[0].trim();
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    if (dateStr !== todayStr) {
-      Alert.alert("Contact Info Locked 🔒", `Scribe contact details are protected and will unlock on the exam day (${dateStr}).`);
+    // Check if within 24 hours of the scheduled exam
+    if (!isWithin24HoursOfExam(exam.exam_date)) {
+      setCallBannerVisible(true);
       return;
     }
 
@@ -765,6 +773,12 @@ export default function StudentPlanView() {
         onClose={() => setIsRatingOpen(false)}
         exam={ratingExam}
         onSuccess={fetchPlans}
+      />
+
+      {/* CALL RESTRICTION BANNER (Auto-dismisses with spring animation) */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
       />
 
       {/* CALL BOTTOM SHEET MODAL */}

@@ -14,8 +14,8 @@
  * Supabase). The profile photo is read from AsyncStorage (`profile_photo_<userId>`).
  * Navigates to complete_profile, request_form, view_applications, common/chat and common/support.
  */
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -32,6 +32,10 @@ import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 import { RatingModal } from '@/components/common/modals/RatingModal';
 import { StudentRequestCard } from '@/components/student/StudentRequestCard';
+import { isWithin24HoursOfExam, isExamPast, parseExamDate } from '@/core/examDate';
+import { openVoiceAssistant } from '@/components/common/UniversalVoiceAssistant';
+import { showInAppAlert } from '@/core/inAppAlert';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 
 /**
  * Returns the capitalised first word of a full name, for the greeting.
@@ -88,11 +92,23 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
   // Call Modal State
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
   // Profile photo from AsyncStorage; loaded but not currently rendered (the avatar shows an icon).
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
-  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  // Pull-to-refresh handler
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchSession();
+  };
+
+  // Preload home data immediately on initial mount
+  useEffect(() => {
+    fetchSession();
+  }, []);
+
+  // Refresh whenever the console is focused and this tab is visible
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -192,6 +208,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
     // Always clear the spinner, whether or not there was a cache or the fetch succeeded.
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
   /**
@@ -219,22 +236,44 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
   /**
    * Opens the call bottom sheet for an exam's scribe.
-   * For privacy the scribe's contact is only unlocked on the exam day: the date part of `exam_date`
-   * (before any "|" time suffix) must equal today's date (UTC, via toISOString), otherwise an alert
-   * explains when it unlocks.
+   * Opens the call bottom sheet for an exam's scribe. Scribe contact details unlock within 24 hours of the exam.
+   * If the exam is more than 24 hours away, displays the floating notification banner.
    */
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
-      Alert.alert("Contact Info Locked 🔒", "Contact details are only unlocked on the day of the exam for privacy protection.");
+      showInAppAlert({
+        title: 'Calling Restricted',
+        message: 'Call allowed 24hr before exam date. Direct phone calls unlock 24 hours prior to exam time.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      setCallBannerVisible(true);
       return;
     }
     
-    // Compare only the date part of exam_date with today's date.
-    const dateStr = exam.exam_date.split('|')[0].trim();
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    if (dateStr !== todayStr) {
-      Alert.alert("Contact Info Locked 🔒", `Scribe contact details are protected and will unlock on the exam day (${dateStr}).`);
+    // Check if exam is past
+    if (isExamPast(exam.exam_date)) {
+      showInAppAlert({
+        title: 'Calling Locked',
+        message: 'Calling is disabled now that the exam has ended.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      return;
+    }
+
+    // Check if within 24 hours of the scheduled exam
+    if (!isWithin24HoursOfExam(exam.exam_date)) {
+      showInAppAlert({
+        title: 'Calling Restricted',
+        message: 'Call allowed 24hr before exam date. Direct phone calls unlock 24 hours prior to exam time. Please use Chat to coordinate.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      setCallBannerVisible(true);
       return;
     }
 
@@ -433,7 +472,14 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
     <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
-    <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }}
+      contentContainerStyle={{ paddingBottom: 100 }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
+      }
+    >
       {/* Welcome & Profile Header Section (hidden when dark navy hero header is active) */}
       {!hideInlineHero && (
         <Animated.View entering={rise(0)}>
@@ -666,191 +712,202 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
         </View>
         </Animated.View>
 
-      {/* Upcoming Exam Schedule / Plan */}
-      <Animated.View entering={rise(3)}>
-      <View style={{ marginBottom: 20 }}>
-        {/* Section heading */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-          <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name="calendar" size={15} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-          </View>
-          <Text
+      {/* ── CREATE REQUEST & ASK AI ACTION BLOCK (Shifted above My Schedule) ── */}
+      <Animated.View entering={rise(3)} style={{ marginBottom: 18 }}>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (isVerified) {
+                router.push('/console/student/request_form' as any);
+              } else {
+                showInAppAlert({
+                  title: t('error') || 'Verification Required',
+                  message: t('verify_first_error') || 'Please complete and verify your profile first.',
+                  icon: 'alert-circle',
+                  variant: 'warning',
+                });
+              }
+            }}
             accessible={true}
-            accessibilityRole="header"
-            style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}
+            accessibilityRole="button"
+            accessibilityLabel="Create Request"
+            accessibilityHint="Opens booking form to request an exam scribe"
+            style={{ 
+              flex: 1.25,
+              backgroundColor: BLUE,
+              ...gradient(THEME.buttonGradient),
+              paddingVertical: 14, 
+              paddingHorizontal: 16,
+              borderRadius: 16, 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              flexDirection: 'row', 
+              gap: 8, 
+              shadowColor: BLUE,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.22,
+              shadowRadius: 10,
+              elevation: 4,
+            }}
+            activeOpacity={0.85}
           >
-            {t('my_schedule')}
-          </Text>
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="plus" size={16} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+            </View>
+            <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.2 }}>
+              Create Request
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              if (isVerified) {
+                openVoiceAssistant();
+              } else {
+                showInAppAlert({
+                  title: t('error') || 'Verification Required',
+                  message: t('verify_first_error') || 'Please complete and verify your profile first.',
+                  icon: 'alert-circle',
+                  variant: 'warning',
+                });
+              }
+            }}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Ask AI Assistant"
+            accessibilityHint="Opens conversational AI assistant to create exam request"
+            style={{ 
+              flex: 0.95,
+              backgroundColor: '#4f46e5',
+              paddingVertical: 14, 
+              paddingHorizontal: 14,
+              borderRadius: 16, 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              flexDirection: 'row', 
+              gap: 8, 
+              shadowColor: '#4f46e5',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.22,
+              shadowRadius: 10,
+              elevation: 4,
+            }}
+            activeOpacity={0.85}
+          >
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="mic" size={15} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+            </View>
+            <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.2 }}>
+              Ask AI
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+
+      {/* ── UPCOMING EXAM SCHEDULE (Shows only the next nearest or most recent request) ── */}
+      <Animated.View entering={rise(4)}>
+      <View style={{ marginBottom: 20 }}>
+        {/* Section heading with View All link */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={{ width: 30, height: 30, borderRadius: 10, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="calendar" size={15} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+            </View>
+            <Text
+              accessible={true}
+              accessibilityRole="header"
+              style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 14.5 }}
+            >
+              {t('my_schedule')}
+            </Text>
+          </View>
+
+          {confirmedPlans.length > 1 && (
+            <TouchableOpacity
+              onPress={() => router.push('/console/student?tab=schedule' as any)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4, paddingHorizontal: 6 }}
+            >
+              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>
+                View All ({confirmedPlans.length})
+              </Text>
+              <Feather name="chevron-right" size={13} color="#2563eb" />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* Empty state with a "Request scribe" button, otherwise one expandable card per exam */}
-        {confirmedPlans.length === 0 ? (
-          <View style={{
-            backgroundColor: '#ffffff',
-            padding: 24, borderRadius: 24,
-            borderWidth: 1.5, borderColor: THEME.cardBorder,
-            alignItems: 'center', justifyContent: 'center',
-            shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: 0.08, shadowRadius: 16, elevation: 2,
-          }}>
-            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="calendar" size={24} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
-            </View>
-            <Text style={{ fontFamily: 'Roboto', color: '#334155', fontSize: 13.5, fontWeight: '800', marginTop: 12, textAlign: 'center' }}>{t('no_upcoming_exams')}</Text>
-            <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, marginTop: 6, textAlign: 'center', paddingHorizontal: 16 }}>
-              {t('need_scribe_desc')}
-            </Text>
-            {/* Only verified students may open the request form */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity 
-                onPress={() => {
-                  if (isVerified) {
-                    router.push('/console/student/request_form' as any);
-                  } else {
-                    Alert.alert(t('error'), t('verify_first_error'));
-                  }
-                }}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('request_scribe')}, button`}
-                accessibilityHint="Opens exam scribe request booking form"
-                style={{
-                  backgroundColor: BLUE,
-                  ...gradient(THEME.buttonGradient),
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  paddingVertical: 12, paddingHorizontal: 20,
-                  borderRadius: 12,
-                  shadowColor: BLUE, shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.15, shadowRadius: 8, elevation: 3
-                }}
-              >
-                <Feather name="plus" size={15} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.2 }}>{t('request_scribe')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                onPress={() => {
-                  if (isVerified) {
-                    router.push('/console/student/request_form?mode=voice' as any);
-                  } else {
-                    Alert.alert(t('error'), t('verify_first_error'));
-                  }
-                }}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Voice Assistant Request"
-                accessibilityHint="Opens conversational voice assistant to create exam request"
-                style={{
-                  backgroundColor: '#4f46e5',
-                  flexDirection: 'row', alignItems: 'center', gap: 6,
-                  paddingVertical: 12, paddingHorizontal: 16,
-                  borderRadius: 12,
-                  shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.2, shadowRadius: 8, elevation: 3
-                }}
-              >
-                <Feather name="mic" size={15} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                <Text style={{ fontFamily: 'Roboto', color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 0.2 }}>Voice AI</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ) : (
-          <DesktopGrid>{confirmedPlans.map((exam, index) => {
-            const itemKey = `${exam.requestType || 'exam'}-${exam.id}`;
-            const isExpanded = expandedExamIds.has(itemKey);
-
+        {/* Empty state or single nearest/recent request */}
+        {(() => {
+          if (confirmedPlans.length === 0) {
             return (
-              <StudentRequestCard
-                key={itemKey}
-                item={exam}
-                index={index}
-                isExpanded={isExpanded}
-                singleRowCollapsed={true}
-                onToggleExpand={() => toggleExamCard(itemKey)}
-                onCall={openCallSheet}
-                onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}
-                onMarkCompleted={openRatingModal}
-                onChangeScribe={handleUnmatchScribe}
-                onCancelRequest={handleDelete}
-                onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
-              />
+              <View style={{
+                backgroundColor: '#ffffff',
+                padding: 24, borderRadius: 24,
+                borderWidth: 1.5, borderColor: THEME.cardBorder,
+                alignItems: 'center', justifyContent: 'center',
+                shadowColor: THEME.shadow, shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.08, shadowRadius: 16, elevation: 2,
+              }}>
+                <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: THEME.soft, ...gradient(THEME.heroGradient), borderWidth: 1, borderColor: THEME.softBorder, alignItems: 'center', justifyContent: 'center' }}>
+                  <Feather name="calendar" size={24} color={THEME.accentText} importantForAccessibility="no" accessibilityElementsHidden={true} />
+                </View>
+                <Text style={{ fontFamily: 'Roboto', color: '#334155', fontSize: 13.5, fontWeight: '800', marginTop: 12, textAlign: 'center' }}>{t('no_upcoming_exams')}</Text>
+                <Text style={{ fontFamily: 'Roboto', color: '#64748b', fontSize: 11, marginTop: 6, textAlign: 'center', paddingHorizontal: 16 }}>
+                  {t('need_scribe_desc')}
+                </Text>
+              </View>
             );
-          })}</DesktopGrid>
-        )}
+          }
 
-        {/* Persistent "New Request" action once at least one request already exists */}
-        {confirmedPlans.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
-            <TouchableOpacity
-              onPress={() => {
-                if (isVerified) {
-                  router.push('/console/student/request_form' as any);
-                } else {
-                  Alert.alert(t('error'), t('verify_first_error'));
-                }
-              }}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Request another scribe for an exam"
-              accessibilityHint="Opens booking form to request an exam scribe"
-              style={{ 
-                flex: 1,
-                backgroundColor: BLUE,
-                ...gradient(THEME.buttonGradient),
-                paddingVertical: 16, 
-                borderRadius: 16, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                flexDirection: 'row', 
-                gap: 8, 
-                shadowColor: BLUE,
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.25,
-                shadowRadius: 12,
-                elevation: 4,
-              }}
-              activeOpacity={0.85}
-            >
-              <Feather name="plus" size={18} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>{t('request_scribe')}</Text>
-            </TouchableOpacity>
+          // Pick the single next nearest upcoming request, or fall back to the most recent
+          const now = Date.now();
+          const fourHoursMs = 4 * 60 * 60 * 1000;
 
-            <TouchableOpacity
-              onPress={() => {
-                if (isVerified) {
-                  router.push('/console/student/request_form?mode=voice' as any);
-                } else {
-                  Alert.alert(t('error'), t('verify_first_error'));
-                }
-              }}
-              accessible={true}
-              accessibilityRole="button"
-              accessibilityLabel="Voice Assistant Request"
-              accessibilityHint="Opens conversational voice assistant to create exam request"
-              style={{ 
-                backgroundColor: '#4f46e5',
-                paddingVertical: 16, 
-                paddingHorizontal: 20,
-                borderRadius: 16, 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                flexDirection: 'row', 
-                gap: 8, 
-                shadowColor: '#4f46e5',
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: 0.25,
-                shadowRadius: 12,
-                elevation: 4,
-              }}
-              activeOpacity={0.85}
-            >
-              <Feather name="mic" size={18} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
-              <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.3 }}>Voice AI</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          const upcoming = confirmedPlans.filter((p) => {
+            const d = parseExamDate(p.exam_date);
+            return d && d.getTime() >= now - fourHoursMs;
+          });
+
+          let singlePlan: any = null;
+          if (upcoming.length > 0) {
+            upcoming.sort((a, b) => {
+              const da = parseExamDate(a.exam_date)?.getTime() || 0;
+              const db = parseExamDate(b.exam_date)?.getTime() || 0;
+              return da - db;
+            });
+            singlePlan = upcoming[0];
+          } else {
+            const sortedRecent = [...confirmedPlans].sort((a, b) => {
+              const da = parseExamDate(a.exam_date)?.getTime() || 0;
+              const db = parseExamDate(b.exam_date)?.getTime() || 0;
+              if (da && db) return db - da;
+              return (b.id || 0) - (a.id || 0);
+            });
+            singlePlan = sortedRecent[0];
+          }
+
+          if (!singlePlan) return null;
+
+          const itemKey = `${singlePlan.requestType || 'exam'}-${singlePlan.id}`;
+          const isExpanded = expandedExamIds.has(itemKey);
+
+          return (
+            <StudentRequestCard
+              key={itemKey}
+              item={singlePlan}
+              index={0}
+              isExpanded={isExpanded}
+              singleRowCollapsed={true}
+              onToggleExpand={() => toggleExamCard(itemKey)}
+              onCall={openCallSheet}
+              onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}
+              onMarkCompleted={openRatingModal}
+              onChangeScribe={handleUnmatchScribe}
+              onCancelRequest={handleDelete}
+              onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
+            />
+          );
+        })()}
       </View>
-
       </Animated.View>
 
       {/* 4. Need Help? Contact Support Card */}
@@ -911,6 +968,12 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
         onClose={() => setIsRatingOpen(false)}
         exam={ratingExam}
         onSuccess={fetchSession}
+      />
+
+      {/* CALL RESTRICTION BANNER (Auto-dismisses with spring animation) */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
       />
 
       {/* CALL BOTTOM SHEET MODAL */}

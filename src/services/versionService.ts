@@ -76,8 +76,8 @@ export const versionService = {
    * @returns `{ version, versionCode }` of the running build.
    */
   getCurrentVersion(): { version: string; versionCode: number } {
-    const version = Constants.expoConfig?.version || '1.1.0';
-    const versionCode = Constants.expoConfig?.android?.versionCode || 7;
+    const version = Constants.expoConfig?.version || '1.2.0';
+    const versionCode = Constants.expoConfig?.android?.versionCode || 8;
     return { version, versionCode };
   },
 

@@ -47,22 +47,18 @@ const defaultInputStyle = (TextInput as any).defaultProps.style;
 import '@/global.css';
 import { AnimatedSplashOverlay } from '@/components/ui/animated-icon';
 
-// Global Alert Polyfill for React Native Web
+import { showInAppAlert } from '@/core/inAppAlert';
+import { InAppAlertBlock } from '@/components/common/InAppAlertBlock';
+
+// Global In-App Alert Polyfill (replaces browser window.alert with in-app alert block modal)
 if (Platform.OS === 'web') {
-  // React Native Web's Alert.alert is a no-op, so show a blocking browser alert() instead. Since
-  // alert() has no buttons, after it is dismissed the first non-"Cancel" button's onPress (or the
-  // first button's) is invoked automatically — i.e. confirmation dialogs auto-confirm on web.
   Alert.alert = (title, message, buttons) => {
-    const msg = message ? `\n\n${message}` : '';
-    alert(`${title}${msg}`);
-    
-    if (buttons && buttons.length > 0) {
-      const primaryButton = buttons.find(b => b.text && b.text !== 'Cancel') || buttons[0];
-      if (primaryButton && primaryButton.onPress) {
-        primaryButton.onPress();
-      }
-    }
+    showInAppAlert(title, message, buttons);
   };
+  if (typeof window !== 'undefined') {
+    (window as any).Alert = Alert;
+    (window as any).showInAppAlert = showInAppAlert;
+  }
 
   // Inject the Google Roboto text font for web. Icon fonts come from src/vector-fonts-b64.css.
   if (typeof document !== 'undefined' && !document.getElementById('expo-vector-icons-web')) {
@@ -137,8 +133,12 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
   }
 }
 
-import { initializeNotificationChannels } from '@/core/notifications';
+import { initializeNotificationChannels, requestNotificationPermissions } from '@/core/notifications';
+import { startNotificationWatcher } from '@/core/notificationWatcher';
 import { useEffect } from 'react';
+import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
+import { UniversalVoiceAssistant, openVoiceAssistant } from '@/components/common/UniversalVoiceAssistant';
 
 import { AppUpdateModal } from '@/components/ui/AppUpdateModal';
 
@@ -194,9 +194,48 @@ export default function RootLayout() {
         }
   );
 
-  // Create the Android notification channel once at start-up (no-op on other platforms).
+  // Create Android notification channels, request permissions, and start auto-notification watcher
   useEffect(() => {
     initializeNotificationChannels().catch(console.warn);
+    requestNotificationPermissions().catch(console.warn);
+    startNotificationWatcher();
+
+    // Handle deep links from iOS Siri Shortcuts & App Intents (anulekh://create-request, anulekh://voice-assistant, etc.)
+    const handleDeepLink = (event: { url: string }) => {
+      try {
+        const parsed = Linking.parse(event.url);
+        const path = (parsed.path || parsed.hostname || '').toLowerCase();
+        console.log('🔗 Siri/App Deep Link Received:', event.url, 'path:', path);
+
+        if (path.includes('create-request') || path.includes('voice-wizard') || path.includes('book-scribe')) {
+          router.push('/console/student/request_form?mode=voice' as any);
+        } else if (path.includes('applications') || path.includes('check-scribes')) {
+          router.push('/console/student/view_applications' as any);
+        } else if (path.includes('chat')) {
+          const reqId = parsed.queryParams?.requestId;
+          if (reqId) {
+            router.push(`/console/common/chat?requestId=${reqId}` as any);
+          } else {
+            router.push('/console/common/chat' as any);
+          }
+        } else if (path.includes('voice-assistant') || path.includes('siri') || path.includes('ask-ai')) {
+          openVoiceAssistant();
+        }
+      } catch (err) {
+        console.warn('Error handling deep link:', err);
+      }
+    };
+
+    // Cold start from Siri
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
+
+    // Warm start from Siri
+    const sub = Linking.addEventListener('url', handleDeepLink);
+    return () => {
+      sub.remove();
+    };
   }, []);
 
   return (
@@ -214,6 +253,10 @@ export default function RootLayout() {
         />
         {/* Startup version check; shows an update prompt when the app is outdated */}
         <AppUpdateModal />
+        {/* App-wide in-app alert dialog block replacing browser window.alert */}
+        <InAppAlertBlock />
+        {/* Universal Hands-Free Siri & Voice Assistant Modal */}
+        <UniversalVoiceAssistant />
       </ThemeProvider>
     </GlobalErrorBoundary>
   );

@@ -38,6 +38,13 @@ import { FormSection, RequestHeader, RequestPage, RequestTabBar, RequestTypeChoo
 import VoiceExamWizard from '@/components/student/VoiceExamWizard';
 import { announceForAccessibility } from '@/core/a11y';
 import { useLanguage } from '@/core/translation';
+import {
+  searchCollegesAndPlaces,
+  getGoogleMapsUrl,
+  openGoogleMaps,
+  PlaceSearchResult,
+  POPULAR_EXAM_CENTERS,
+} from '@/core/maps';
 
 /** Base URL of the Rust/Axum backend; used here only for the hall-ticket AI parser endpoint. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://anulekh-axum.onrender.com';
@@ -119,15 +126,7 @@ const normalizeExamCategory = (type: string) => {
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-// Mock map locations for the Map Picker
-/** Hard-coded venues listed in the simulated map picker (there is no real map or places search). */
-const MOCK_LOCATIONS = [
-  { id: '1', name: 'St. Xavier\'s College', address: 'Mahapalika Marg, Dhobi Talao, Chhatrapati Shivaji Terminus Area, Fort, Mumbai, Maharashtra 400001' },
-  { id: '2', name: 'Mumbai University (Kalina Campus)', address: 'Vidya Nagari, Kalina, Santacruz East, Mumbai, Maharashtra 400098' },
-  { id: '3', name: 'National Library of India', address: 'Belvedere Rd, Block A, Alipore, Kolkata, West Bengal 700027' },
-  { id: '4', name: 'Delhi Public School (R.K. Puram)', address: 'Kaifi Azmi Marg, Sector 12, Rama Krishna Puram, New Delhi, Delhi 110022' },
-  { id: '5', name: 'Vyas Education Library', address: 'University Road, Jagnath Plot, Rajkot, Gujarat 360001' }
-];
+// Curated institutions and live search are loaded from @/core/maps
 
 /**
  * Request-a-scribe screen (default export for the route).
@@ -139,22 +138,24 @@ export default function ScribeRequestForm() {
   const { t } = useLanguage();
 
   // Edit mode is driven by the `id` query param (set by StudentRequestsView).
-  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ id?: string; mode?: string; voice?: string }>();
   const isEditing = !!params.id;
+
+  const isVoiceRequested = params.mode === 'voice' || params.voice === 'true';
 
   // Entry choice: ask the student whether to fill manually, auto-fill from an admit card, or use voice.
   // Editing an existing request skips straight to the form.
   const [entryMode, setEntryMode] = useState<'choice' | 'form' | 'voice'>(
-    isEditing ? 'form' : (params.mode === 'voice' ? 'voice' : (params.mode === 'form' ? 'form' : 'choice'))
+    isEditing ? 'form' : (isVoiceRequested ? 'voice' : (params.mode === 'form' ? 'form' : 'choice'))
   );
 
   useEffect(() => {
-    if (params.mode === 'voice') {
+    if (isVoiceRequested) {
       setEntryMode('voice');
     } else if (params.mode === 'form') {
       setEntryMode('form');
     }
-  }, [params.mode]);
+  }, [params.mode, params.voice]);
 
   // Submit spinner and the logged-in student's profile (its fields are copied into each request).
   const [loading, setLoading] = useState(false);
@@ -185,14 +186,18 @@ export default function ScribeRequestForm() {
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [selectedAmPm, setSelectedAmPm] = useState('AM');
 
-  // Map Picker State
+  // Map Picker State & Google Maps Place Search
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [examVenue, setExamVenue] = useState('');
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [venueSearchQuery, setVenueSearchQuery] = useState('');
+  const [venueSearchResults, setVenueSearchResults] = useState<PlaceSearchResult[]>(POPULAR_EXAM_CENTERS);
+  const [isSearchingVenues, setIsSearchingVenues] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
 
   // Bulk Exam Creation: additional subjects sharing the same profile/type/language.
   // Each entry becomes its own exam_requests row on submit so scribes can apply per-exam.
-  const [extraSubjects, setExtraSubjects] = useState<{ subject: string; examDate: string; examVenue: string }[]>([]);
+  const [extraSubjects, setExtraSubjects] = useState<{ subject: string; examDate: string; examVenue: string; google_maps_url?: string }[]>([]);
   // Tracks which extra-subject row the Date/Map pickers are editing (-1 = the primary subject above)
   const [activeExtraIndex, setActiveExtraIndex] = useState(-1);
 
@@ -226,6 +231,7 @@ export default function ScribeRequestForm() {
             setSubject(examData.subject || '');
             setExamDate(examData.exam_date || '');
             setExamVenue(examData.exam_venue || '');
+            setGoogleMapsUrl(examData.google_maps_url || '');
             // Parse Exam Category and specific Exam Type
             const fullType = examData.exam_type || 'College Exam';
             const match = fullType.match(/^([^(]+)(?:\(([^)]+)\))?/);
@@ -295,13 +301,63 @@ export default function ScribeRequestForm() {
   };
 
   /** Sets one field of the extra-exam row at `index`. */
-  const updateExtraSubject = (index: number, field: 'subject' | 'examDate' | 'examVenue', value: string) => {
+  const updateExtraSubject = (index: number, field: 'subject' | 'examDate' | 'examVenue' | 'google_maps_url', value: string) => {
     setExtraSubjects(prev => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
   };
 
   /** Removes the extra-exam row at `index`. */
   const removeExtraSubject = (index: number) => {
     setExtraSubjects(prev => prev.filter((_, i) => i !== index));
+  };
+
+  /** Real-time place / college search via OpenStreetMap & Google Maps directory */
+  const handleSearchVenue = async (text: string) => {
+    setVenueSearchQuery(text);
+    if (!text.trim()) {
+      setVenueSearchResults(POPULAR_EXAM_CENTERS);
+      return;
+    }
+    setIsSearchingVenues(true);
+    try {
+      const results = await searchCollegesAndPlaces(text);
+      setVenueSearchResults(results);
+    } catch {
+      // Keep existing results on search network error
+    } finally {
+      setIsSearchingVenues(false);
+    }
+  };
+
+  /** Selects a real college/exam center from Google Maps search results */
+  const handleSelectVenue = (place: PlaceSearchResult) => {
+    const formattedVenue = `${place.name}, ${place.address}`;
+    const mapsLink = place.mapsUrl || getGoogleMapsUrl(formattedVenue, place.lat, place.lon);
+
+    if (activeExtraIndex === -1) {
+      setExamVenue(formattedVenue);
+      setGoogleMapsUrl(mapsLink);
+    } else {
+      updateExtraSubject(activeExtraIndex, 'examVenue', formattedVenue);
+      updateExtraSubject(activeExtraIndex, 'google_maps_url', mapsLink);
+    }
+    setShowMapPicker(false);
+    announceForAccessibility(`Exam center selected: ${place.name}`);
+  };
+
+  /** Selects a typed custom venue address and generates a universal Google Maps navigation link */
+  const handleSelectCustomVenue = (customText: string) => {
+    const trimmed = customText.trim();
+    if (!trimmed) return;
+    const mapsLink = getGoogleMapsUrl(trimmed);
+    if (activeExtraIndex === -1) {
+      setExamVenue(trimmed);
+      setGoogleMapsUrl(mapsLink);
+    } else {
+      updateExtraSubject(activeExtraIndex, 'examVenue', trimmed);
+      updateExtraSubject(activeExtraIndex, 'google_maps_url', mapsLink);
+    }
+    setShowMapPicker(false);
+    announceForAccessibility(`Custom venue selected: ${trimmed}`);
   };
 
   /**
@@ -343,12 +399,15 @@ export default function ScribeRequestForm() {
         ].filter(p => !!p && p !== 'undefined' && p !== 'Unnamed Road');
 
         const addressString = parts.join(', ');
+        const mapsUrl = getGoogleMapsUrl(addressString, latitude, longitude);
         
         // Write into the primary venue or the extra-exam row.
         if (extraIndex === -1) {
           setExamVenue(addressString);
+          setGoogleMapsUrl(mapsUrl);
         } else {
           updateExtraSubject(extraIndex, 'examVenue', addressString);
+          updateExtraSubject(extraIndex, 'google_maps_url', mapsUrl);
         }
       } else {
         Alert.alert('Error', 'Unable to resolve your geocoded address.');
@@ -678,6 +737,7 @@ export default function ScribeRequestForm() {
         subject: finalSubject.trim(),
         exam_date: finalExamDate.trim(),
         exam_venue: finalVenue.trim(),
+        google_maps_url: googleMapsUrl || getGoogleMapsUrl(finalVenue),
       };
 
       // Edit: update the existing row in place.
@@ -698,6 +758,7 @@ export default function ScribeRequestForm() {
             subject: row.subject.trim(),
             exam_date: row.examDate.trim(),
             exam_venue: row.examVenue.trim(),
+            google_maps_url: row.google_maps_url || getGoogleMapsUrl(row.examVenue),
           })),
         ];
 
@@ -981,8 +1042,13 @@ export default function ScribeRequestForm() {
                 <View className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between focus-within:border-blue-500 focus-within:bg-white">
                   <TextInput
                     value={examVenue}
-                    onChangeText={setExamVenue}
-                    placeholder="Enter exam venue address"
+                    onChangeText={(val) => {
+                      setExamVenue(val);
+                      if (!googleMapsUrl || !val.includes(examVenue.slice(0, 10))) {
+                        setGoogleMapsUrl(getGoogleMapsUrl(val));
+                      }
+                    }}
+                    placeholder="Enter exam venue or search college..."
                     multiline={true}
                     numberOfLines={2}
                     accessible={true}
@@ -990,7 +1056,7 @@ export default function ScribeRequestForm() {
                     accessibilityHint="Enter examination center location address"
                     className="flex-1 text-sm text-slate-800 mr-2 py-1"
                   />
-                  {/* GPS auto-detect and simulated map picker buttons */}
+                  {/* GPS auto-detect and Google Maps place search modal buttons */}
                   <View className="flex-row gap-2">
                     <TouchableOpacity
                       onPress={() => handleGetCurrentLocation(-1)}
@@ -1008,17 +1074,42 @@ export default function ScribeRequestForm() {
                       )}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => { setActiveExtraIndex(-1); setShowMapPicker(true); }}
+                      onPress={() => {
+                        setActiveExtraIndex(-1);
+                        setVenueSearchQuery(examVenue);
+                        setShowMapPicker(true);
+                      }}
                       accessible={true}
                       accessibilityRole="button"
-                      accessibilityLabel="Pick Exam Venue on Map"
-                      accessibilityHint="Opens interactive map to choose nearby exam center"
+                      accessibilityLabel="Search College / Center on Google Maps"
+                      accessibilityHint="Opens Google Maps place search to select institution"
                       className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
                     >
-                      <Feather name="map" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
+                      <Feather name="map-pin" size={16} color="#2563eb" importantForAccessibility="no" accessibilityElementsHidden={true} />
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {/* Google Maps link badge & preview */}
+                {examVenue ? (
+                  <View className="mt-2 flex-row items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl">
+                    <View className="flex-row items-center gap-2 flex-1 mr-2">
+                      <View className="w-5 h-5 rounded-full bg-emerald-500/20 items-center justify-center">
+                        <Feather name="map-pin" size={11} color="#059669" />
+                      </View>
+                      <Text className="text-xs font-semibold text-emerald-950 flex-1" numberOfLines={1}>
+                        Google Maps link attached for scribe
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => openGoogleMaps(googleMapsUrl || examVenue)}
+                      className="flex-row items-center gap-1 bg-white border border-emerald-300 px-2.5 py-1 rounded-lg shadow-sm"
+                    >
+                      <Feather name="navigation" size={11} color="#059669" />
+                      <Text className="text-[11px] font-bold text-emerald-700">Open ↗</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
 
               {/* Admit Card Upload + AI Auto-Fill */}
@@ -1117,8 +1208,11 @@ export default function ScribeRequestForm() {
                     <View className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 flex-row items-center justify-between">
                       <TextInput
                         value={row.examVenue}
-                        onChangeText={(text) => updateExtraSubject(index, 'examVenue', text)}
-                        placeholder="Exam venue address"
+                        onChangeText={(text) => {
+                          updateExtraSubject(index, 'examVenue', text);
+                          updateExtraSubject(index, 'google_maps_url', getGoogleMapsUrl(text));
+                        }}
+                        placeholder="Exam venue or college name..."
                         multiline={true}
                         numberOfLines={2}
                         className="flex-1 text-sm text-slate-800 mr-2 py-1"
@@ -1136,13 +1230,33 @@ export default function ScribeRequestForm() {
                           )}
                         </TouchableOpacity>
                         <TouchableOpacity
-                          onPress={() => { setActiveExtraIndex(index); setShowMapPicker(true); }}
+                          onPress={() => {
+                            setActiveExtraIndex(index);
+                            setVenueSearchQuery(row.examVenue);
+                            setShowMapPicker(true);
+                          }}
                           className="p-2 bg-blue-50 rounded-lg active:bg-blue-100"
                         >
-                          <Feather name="map" size={16} color="#2563eb" />
+                          <Feather name="map-pin" size={16} color="#2563eb" />
                         </TouchableOpacity>
                       </View>
                     </View>
+
+                    {/* Google Maps link preview for extra subject */}
+                    {row.examVenue ? (
+                      <View className="mt-1 flex-row items-center justify-between bg-emerald-50/80 border border-emerald-200 px-2.5 py-1.5 rounded-lg">
+                        <Text className="text-[11px] font-semibold text-emerald-950 flex-1" numberOfLines={1}>
+                          📍 Maps link attached
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => openGoogleMaps(row.google_maps_url || row.examVenue)}
+                          className="flex-row items-center gap-1 bg-white border border-emerald-300 px-2 py-0.5 rounded shadow-sm"
+                        >
+                          <Feather name="navigation" size={10} color="#059669" />
+                          <Text className="text-[10px] font-bold text-emerald-700">Open ↗</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
               ))}
@@ -1276,7 +1390,7 @@ export default function ScribeRequestForm() {
         </View>
       </Modal>
 
-      {/* 2. MAP PICKER MODAL (Simulated) */}
+      {/* 2. GOOGLE MAPS VENUE & COLLEGE SEARCH MODAL */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -1284,78 +1398,158 @@ export default function ScribeRequestForm() {
         onRequestClose={() => setShowMapPicker(false)}
         accessibilityViewIsModal={true}
       >
-        <View className="flex-1 bg-slate-950/60 justify-center items-center px-6">
-          <View className="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl border border-slate-100">
+        <View className="flex-1 bg-slate-950/60 justify-center items-center px-4 py-8">
+          <View className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-slate-100 flex-1 max-h-[580px]">
             
-            {/* Map Header */}
+            {/* Modal Header */}
             <View className="px-5 py-4 border-b border-slate-100 flex-row items-center justify-between bg-white">
-              <Text
-                accessible={true}
-                accessibilityRole="header"
-                className="text-sm font-bold text-slate-800"
-              >
-                Select Exam Venue
-              </Text>
+              <View className="flex-row items-center gap-2.5">
+                <View className="w-8 h-8 rounded-xl bg-blue-500/10 items-center justify-center">
+                  <Feather name="map-pin" size={16} color="#2563eb" />
+                </View>
+                <View>
+                  <Text
+                    accessible={true}
+                    accessibilityRole="header"
+                    className="text-sm font-bold text-slate-800"
+                  >
+                    Find College on Google Maps
+                  </Text>
+                  <Text className="text-[10px] text-slate-400">
+                    Search colleges, universities & exam venues
+                  </Text>
+                </View>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowMapPicker(false)}
                 accessible={true}
                 accessibilityRole="button"
-                accessibilityLabel="Close Venue Picker"
-                className="p-1"
+                accessibilityLabel="Close Venue Search"
+                className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center active:bg-slate-200"
               >
-                <Feather name="x" size={18} color="#64748b" importantForAccessibility="no" accessibilityElementsHidden={true} />
+                <Feather name="x" size={16} color="#64748b" />
               </TouchableOpacity>
             </View>
 
-            {/* Simulated Interactive Map UI */}
-            <View className="h-60 bg-sky-100 items-center justify-center relative">
-              
-              {/* Vector Grid/Roads Simulator */}
-              <View className="absolute inset-0 opacity-20 bg-slate-955/10" style={{ borderWidth: 1, borderColor: '#64748b' }}>
-                <View className="w-full h-0.5 bg-slate-500 absolute top-20" />
-                <View className="w-full h-0.5 bg-slate-500 absolute top-40" />
-                <View className="h-full w-0.5 bg-slate-500 absolute left-28" />
-                <View className="h-full w-0.5 bg-slate-500 absolute left-56" />
+            {/* Search Input Bar */}
+            <View className="p-4 bg-slate-50 border-b border-slate-100">
+              <View className="bg-white border border-slate-200 rounded-xl px-3 py-2 flex-row items-center">
+                <Feather name="search" size={15} color="#64748b" style={{ marginRight: 8 }} />
+                <TextInput
+                  value={venueSearchQuery}
+                  onChangeText={handleSearchVenue}
+                  placeholder="Type college name, university, city..."
+                  className="flex-1 text-xs text-slate-800 py-1"
+                  autoFocus={true}
+                  returnKeyType="search"
+                />
+                {venueSearchQuery ? (
+                  <TouchableOpacity onPress={() => handleSearchVenue('')} className="p-1">
+                    <Feather name="x" size={14} color="#94a3b8" />
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
-              {/* Pulse circle in center */}
-              <View className="w-12 h-12 rounded-full bg-blue-500/20 items-center justify-center animate-ping">
-                <View className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white shadow-md" />
-              </View>
-
-              <Text className="absolute bottom-3 bg-slate-900/80 text-white text-[9px] font-bold px-3 py-1.5 rounded-full tracking-wider">
-                📍 Tap a location pin below to select
-              </Text>
+              {/* GPS Quick Action */}
+              <TouchableOpacity
+                onPress={() => {
+                  handleGetCurrentLocation(activeExtraIndex);
+                  setShowMapPicker(false);
+                }}
+                disabled={isLocating}
+                className="mt-2.5 flex-row items-center justify-center gap-2 bg-blue-50/80 border border-blue-200/80 rounded-xl py-2 active:bg-blue-100"
+              >
+                {isLocating ? (
+                  <ActivityIndicator size="small" color="#2563eb" style={{ width: 14, height: 14 }} />
+                ) : (
+                  <Feather name="crosshair" size={13} color="#2563eb" />
+                )}
+                <Text className="text-xs font-bold text-blue-700">
+                  Use My Current GPS Location
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* List of nearby institutions */}
-            <View className="p-4 bg-slate-50">
-              <Text className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider">Nearby Exam Centers</Text>
+            {/* Live Search Status or Custom Choice */}
+            {isSearchingVenues && (
+              <View className="py-3 px-4 bg-blue-50/40 flex-row items-center justify-center gap-2 border-b border-blue-100">
+                <ActivityIndicator size="small" color="#2563eb" />
+                <Text className="text-[11px] font-semibold text-blue-600">
+                  Searching Google Maps directory...
+                </Text>
+              </View>
+            )}
+
+            {/* Custom Venue Option if student typed text */}
+            {venueSearchQuery.trim().length > 2 && (
+              <TouchableOpacity
+                onPress={() => handleSelectCustomVenue(venueSearchQuery)}
+                className="mx-4 my-2.5 p-3 rounded-2xl bg-amber-50/60 border border-amber-200/80 flex-row items-center justify-between active:bg-amber-100/60"
+              >
+                <View className="flex-1 mr-2">
+                  <Text className="text-[10px] font-bold text-amber-800 uppercase tracking-wider">
+                    Use Custom Location
+                  </Text>
+                  <Text className="text-xs font-bold text-slate-800 mt-0.5" numberOfLines={1}>
+                    "{venueSearchQuery}"
+                  </Text>
+                  <Text className="text-[10px] text-slate-500 mt-0.5">
+                    Will link to a universal Google Maps search for this venue
+                  </Text>
+                </View>
+                <View className="bg-amber-500 px-2.5 py-1.5 rounded-lg">
+                  <Text className="text-[10px] font-bold text-white">Select</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* Results / Suggestions List */}
+            <View className="flex-1 px-4 py-2">
+              <Text className="text-[10px] font-bold text-slate-400 uppercase mb-2 tracking-wider">
+                {venueSearchQuery.trim() ? 'Search Results' : 'Suggested Exam Centers & Colleges'}
+              </Text>
               
-              <ScrollView className="max-h-48">
-                {MOCK_LOCATIONS.map((loc) => (
+              <ScrollView className="flex-1">
+                {venueSearchResults.map((loc) => (
                   <TouchableOpacity
                     key={loc.id}
-                    onPress={() => {
-                      // Fill the primary venue or the extra-exam row that opened the picker, then announce it.
-                      const value = loc.name + ', ' + loc.address;
-                      if (activeExtraIndex === -1) {
-                        setExamVenue(value);
-                      } else {
-                        updateExtraSubject(activeExtraIndex, 'examVenue', value);
-                      }
-                      setShowMapPicker(false);
-                      announceForAccessibility(`Venue selected: ${loc.name}`);
-                    }}
+                    onPress={() => handleSelectVenue(loc)}
                     accessible={true}
                     accessibilityRole="button"
                     accessibilityLabel={`${loc.name}, ${loc.address}`}
-                    className="flex-row items-start p-2.5 mb-2 bg-white rounded-xl border border-slate-100 active:bg-blue-50/20"
+                    className="p-3 mb-2 bg-white rounded-2xl border border-slate-200/80 active:border-blue-500 active:bg-blue-50/20 shadow-sm"
                   >
-                    <Feather name="map-pin" size={14} color="#2563eb" className="mr-2.5 mt-0.5" importantForAccessibility="no" accessibilityElementsHidden={true} />
-                    <View className="flex-1">
-                      <Text className="text-xs font-bold text-slate-800">{loc.name}</Text>
-                      <Text className="text-[10px] text-slate-400 mt-0.5" numberOfLines={2}>{loc.address}</Text>
+                    <View className="flex-row items-start justify-between">
+                      <View className="flex-1 mr-2">
+                        <View className="flex-row items-center gap-1.5 mb-1">
+                          <Feather name="map-pin" size={13} color="#2563eb" />
+                          <Text className="text-xs font-bold text-slate-800 flex-1" numberOfLines={1}>
+                            {loc.name}
+                          </Text>
+                        </View>
+                        <Text className="text-[11px] text-slate-500 mt-0.5 line-clamp-2" numberOfLines={2}>
+                          {loc.address}
+                        </Text>
+                      </View>
+                      {loc.category && (
+                        <View className="bg-blue-50 px-2 py-0.5 rounded-md self-start border border-blue-100">
+                          <Text className="text-[9px] font-bold text-blue-600">{loc.category}</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    <View className="flex-row items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
+                      <TouchableOpacity
+                        onPress={() => openGoogleMaps(loc.mapsUrl || loc.name + ', ' + loc.address)}
+                        className="flex-row items-center gap-1"
+                      >
+                        <Feather name="navigation" size={11} color="#059669" />
+                        <Text className="text-[10px] font-bold text-emerald-700">Preview on Maps ↗</Text>
+                      </TouchableOpacity>
+
+                      <View className="bg-blue-600 px-3 py-1 rounded-lg">
+                        <Text className="text-[10px] font-bold text-white">Select Center</Text>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 ))}

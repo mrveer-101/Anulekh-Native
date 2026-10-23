@@ -76,6 +76,8 @@ export function isExamToday(examDate?: string | null): boolean {
 }
 
 // True when the exam's date/time is already in the past.
+// For exams with a specified start time, standard exam duration is 3-4 hours;
+// we treat 4 hours after the scheduled start time as the exam conclusion cutoff.
 // When the exam has no parseable time we treat "end of that day" as the cutoff.
 export function isExamPast(examDate?: string | null): boolean {
   const d = parseExamDate(examDate);
@@ -86,7 +88,9 @@ export function isExamPast(examDate?: string | null): boolean {
     const endOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59);
     return now.getTime() > endOfDay.getTime();
   }
-  return now.getTime() > d.getTime();
+  // 4 hours buffer for exam duration (e.g. 10:00 AM exam ends at 2:00 PM)
+  const examEndTime = new Date(d.getTime() + 4 * 60 * 60 * 1000);
+  return now.getTime() > examEndTime.getTime();
 }
 
 // Hours remaining until the exam (may be negative if past). null when unparseable.
@@ -113,6 +117,18 @@ export function canScribeWithdraw(examDate?: string | null): { allowed: boolean;
     };
   }
   return { allowed: true, hoursRemaining: Math.round(hours) };
+}
+
+/**
+ * Checks whether the current time is within 24 hours of the exam,
+ * or on the day of the exam. Returns true when direct calling is unlocked.
+ */
+export function isWithin24HoursOfExam(examDate?: string | null): boolean {
+  if (!examDate) return true; // Fail open if no date specified
+  if (isExamToday(examDate)) return true;
+  const hours = hoursUntilExam(examDate);
+  if (hours === null) return true;
+  return hours <= 24 && hours >= -4;
 }
 
 /**

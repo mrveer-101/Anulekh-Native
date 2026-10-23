@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, TextInput, Alert, Platform, Modal } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
@@ -11,6 +11,7 @@ import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
 import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
+import { openGoogleMaps } from '@/core/maps';
 
 // Hides the browser's default focus ring on web; the search box's border shows focus instead.
 const WEB_NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
@@ -27,6 +28,7 @@ interface ExamRequest {
   is_prebooking?: string;
   is_emergency?: string;
   private_scribe_id?: string;
+  google_maps_url?: string;
 }
 
 // Helper to parse search queries for date matching
@@ -219,8 +221,12 @@ export default function ScribeExploreView() {
     });
   };
 
-  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
-  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  // Preload explore opportunities in background immediately on mount
+  useEffect(() => {
+    fetchSession();
+  }, []);
+
+  // Refresh whenever the console is focused and this tab is visible
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -747,11 +753,34 @@ export default function ScribeExploreView() {
               </View>
 
               {/* 3. Location */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                  {t('location')}: {exam.exam_venue}
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                  <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                    {t('location')}: {exam.exam_venue}
+                  </Text>
+                </View>
+                {exam.exam_venue ? (
+                  <TouchableOpacity
+                    onPress={() => openGoogleMaps(exam.google_maps_url || exam.exam_venue)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      backgroundColor: '#eff6ff',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2.5,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: '#bfdbfe',
+                    }}
+                  >
+                    <Feather name="navigation" size={10} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>
+                      Maps ↗
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               {/* 4. Student profile */}

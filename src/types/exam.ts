@@ -42,6 +42,7 @@ export interface ExamRequest {
   subject?: string;
   exam_date?: string;
   exam_venue?: string;
+  google_maps_url?: string;
   // Optional UI extra, not an `exam_requests` column (no current code populates it).
   applicationCount?: number;
   // User id of the assigned scribe once the request is matched.
@@ -73,6 +74,7 @@ export interface CreateExamRequestInput {
   subject?: string;
   exam_date: string;
   exam_venue: string;
+  google_maps_url?: string;
   id_proof?: string;
   is_emergency?: boolean | string;
   private_scribe_id?: string;

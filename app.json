@@ -2,7 +2,7 @@
   "expo": {
     "name": "Anulekh",
     "slug": "anulekh",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": ["nativemobile", "anulekh"],
@@ -10,7 +10,7 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.celestialsteam.anulekh",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "supportsTablet": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "versionCode": 7,
+      "versionCode": 8,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -112,6 +112,7 @@
       "expo-audio",
       "expo-asset",
       "./plugins/withAndroidShortcuts.js",
+      "./plugins/withIOSSiriShortcuts.js",
       [
         "expo-speech-recognition",
         {

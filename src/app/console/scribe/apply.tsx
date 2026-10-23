@@ -27,6 +27,7 @@ import { Feather } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import PolicyModal from '@/components/modals/PolicyModal';
 import { useLanguage } from '@/core/translation';
+import { openGoogleMaps } from '@/core/maps';
 
 /**
  * Request details page where a scribe applies to (or responds to an invitation for) an exam or
@@ -398,6 +399,15 @@ export default function ScribeApplyDetailsPage() {
                   <View className="flex-1">
                     <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t('exam_venue_address')}</Text>
                     <Text className="text-sm font-semibold text-slate-700 mt-0.5">{exam.exam_venue || 'Venue not specified'}</Text>
+                    {exam.exam_venue ? (
+                      <TouchableOpacity
+                        onPress={() => openGoogleMaps(exam.google_maps_url || exam.exam_venue)}
+                        className="mt-2 flex-row items-center self-start gap-1.5 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl active:bg-emerald-100"
+                      >
+                        <Feather name="navigation" size={12} color="#059669" />
+                        <Text className="text-xs font-bold text-emerald-700">Open in Google Maps ↗</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
  

@@ -30,6 +30,9 @@ import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 import { DeclarationModal } from '@/components/common/modals/DeclarationModal';
+import { isWithin24HoursOfExam } from '@/core/examDate';
+import { openGoogleMaps } from '@/core/maps';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 
 /**
  * Scribe Plan & Schedule tab (see file header). Takes no props; reads the signed-in scribe from
@@ -56,6 +59,7 @@ export default function ScribePlanView() {
   // Call Modal State
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
 
   // Load plans once on mount (refreshing is manual via pull-to-refresh).
   useEffect(() => {
@@ -132,6 +136,14 @@ export default function ScribePlanView() {
   };
 
   const openCallSheet = (exam: any) => {
+    if (!exam || !exam.exam_date) {
+      setCallBannerVisible(true);
+      return;
+    }
+    if (!isWithin24HoursOfExam(exam.exam_date)) {
+      setCallBannerVisible(true);
+      return;
+    }
     setCallExam(exam);
     setIsCallOpen(true);
   };
@@ -513,11 +525,34 @@ export default function ScribePlanView() {
                     {exam.is_assignment ? 'Deadline' : t('exam_date')}: {exam.exam_date || t('date_not_specified')}
                   </Text>
                 </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Feather name={exam.is_assignment ? 'info' : 'map-pin'} size={12} color="#64748b" style={{ marginRight: 8 }} />
-                  <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
-                    {exam.is_assignment ? 'Instructions' : t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                    <Feather name={exam.is_assignment ? 'info' : 'map-pin'} size={12} color="#64748b" style={{ marginRight: 8 }} />
+                    <Text style={{ fontFamily: 'Roboto', color: '#475569', fontSize: 12 }} numberOfLines={1}>
+                      {exam.is_assignment ? 'Instructions' : t('exam_venue')}: {exam.exam_venue || t('venue_not_specified')}
+                    </Text>
+                  </View>
+                  {!exam.is_assignment && exam.exam_venue ? (
+                    <TouchableOpacity
+                      onPress={() => openGoogleMaps(exam.google_maps_url || exam.exam_venue)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                        backgroundColor: '#eff6ff',
+                        paddingHorizontal: 7,
+                        paddingVertical: 2.5,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: '#bfdbfe',
+                      }}
+                    >
+                      <Feather name="navigation" size={10} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>
+                        Maps ↗
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
                 {!exam.is_assignment && (
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -532,25 +567,56 @@ export default function ScribePlanView() {
               {/* Matched Coordination Controls */}
               <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {/* Call Button */}
+                  {/* Chat Button: 67% left, blue background, white icon and text */}
+                  <TouchableOpacity 
+                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${exam.is_assignment ? 'assignment' : 'exam'}` as any)}
+                    style={{
+                      flex: 2,
+                      backgroundColor: '#2563eb',
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.18,
+                      shadowRadius: 6,
+                      elevation: 2,
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="message-square" size={13} color="#ffffff" />
+                    <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '800', fontSize: 12 }}>
+                      {t('chat')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Call Button: 33% end of row */}
                   {!exam.is_assignment && (
                     <TouchableOpacity 
                       onPress={() => openCallSheet(exam)}
-                      style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#eff6ff',
+                        borderWidth: 1.5,
+                        borderColor: '#bfdbfe',
+                        paddingVertical: 11,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.85}
                     >
-                      <Feather name="phone" size={12} color="#334155" />
-                      <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                      <Feather name="phone" size={13} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>
+                        {t('call')}
+                      </Text>
                     </TouchableOpacity>
                   )}
-
-                  {/* Chat Button */}
-                  <TouchableOpacity 
-                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${exam.is_assignment ? 'assignment' : 'exam'}` as any)}
-                    style={{ flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="message-square" size={12} color="#334155" />
-                    <Text style={{ fontFamily: 'Roboto', color: '#334155', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                  </TouchableOpacity>
                 </View>
 
                 {/* View Declaration Button */}
@@ -571,6 +637,12 @@ export default function ScribePlanView() {
           ))
         )}
       </ScrollView>
+
+      {/* CALL RESTRICTION BANNER (Auto-dismisses with spring animation) */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
+      />
 
       {/* SCRIBE DECLARATION MODAL */}
       <DeclarationModal

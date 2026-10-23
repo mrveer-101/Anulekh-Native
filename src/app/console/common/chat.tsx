@@ -31,13 +31,16 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
-import { isExamToday, isExamPast } from '@/core/examDate';
+import { isExamToday, isExamPast, isWithin24HoursOfExam } from '@/core/examDate';
+import { showInAppAlert } from '@/core/inAppAlert';
+import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { storageService, UploadKind } from '@/services/storageService';
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import { ChatDoodlePattern } from '@/components/ui/ChatDoodlePattern';
+import { sendActionNotification, setActiveChatRequestId } from '@/core/notificationWatcher';
 
 /**
  * A row of the `chat_messages` table.
@@ -126,6 +129,7 @@ export default function ChatRoomScreen() {
   const [otherProfileData, setOtherProfileData] = useState<any>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeclarationOpen, setIsDeclarationOpen] = useState(false);
+  const [isCallModalOpen, setIsCallModalOpen] = useState(false);
   const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState(false);
   // File being sent, shown above the composer: progress, or an error with Retry.
   const [upload, setUpload] = useState<{ label: string; progress: number; error: string | null; retry: () => void } | null>(null);
@@ -268,9 +272,13 @@ export default function ChatRoomScreen() {
   // Poll for new messages every 2 s while the screen is mounted (no push/realtime channel exists).
   useEffect(() => {
     if (!targetRequestId) return;
+    setActiveChatRequestId(targetRequestId);
     loadMessages();
     const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      setActiveChatRequestId(null);
+    };
   }, [targetRequestId]);
 
   // Keep the newest message in view. Because each poll sets a new array, this also fires every 2 s.
@@ -308,6 +316,19 @@ export default function ChatRoomScreen() {
         return;
       }
       loadMessages();
+
+      // Auto-notify the recipient user with a system status bar notification
+      const recipientId = exam ? (currentUser.id === exam.student_id ? exam.scribe_id : exam.student_id) : null;
+      if (recipientId) {
+        const senderName = profile?.official_name || profile?.full_name || currentUser.official_name || currentUser.full_name || (profile?.role === 'scribe' ? 'Scribe' : 'Student');
+        const roleLabel = profile?.role === 'scribe' ? 'Scribe' : 'Student';
+        sendActionNotification({
+          recipientUserId: recipientId,
+          title: `💬 ${senderName} (${roleLabel})`,
+          message: msgText,
+          requestId: targetRequestId,
+        });
+      }
     } catch (e: any) {
       console.error('Error sending message:', e);
       Alert.alert('Send Failed', e?.message || 'Network error while sending message.');
@@ -363,6 +384,19 @@ export default function ChatRoomScreen() {
     }
     setUpload(null);
     loadMessages();
+
+    // Auto-notify the recipient user with media notification
+    const recipientId = exam ? (currentUser.id === exam.student_id ? exam.scribe_id : exam.student_id) : null;
+    if (recipientId) {
+      const senderName = profile?.official_name || profile?.full_name || currentUser.official_name || currentUser.full_name || (profile?.role === 'scribe' ? 'Scribe' : 'Student');
+      const roleLabel = profile?.role === 'scribe' ? 'Scribe' : 'Student';
+      sendActionNotification({
+        recipientUserId: recipientId,
+        title: `💬 ${senderName} (${roleLabel})`,
+        message: item.messageType === 'voice' ? '🎤 Voice Note' : '📷 Photo',
+        requestId: exam.id,
+      });
+    }
   };
 
   /**
@@ -488,11 +522,45 @@ export default function ChatRoomScreen() {
   // Role of the viewer (from their profile) picks the colour theme and which portal's tabs to show.
   const isStudent = profile?.role === 'student';
 
-  // Time-Restricted Calling: the call button only works on the day of the exam and
-  // is disabled once the exam has ended. Fails open if the date can't be parsed.
-  const examToday = isExamToday(exam?.exam_date);
+  // Time-Restricted Calling: the call button works within 24 hours of scheduled exam date/time
+  // and is locked once the exam has ended.
+  const isWithin24h = isWithin24HoursOfExam(exam?.exam_date);
   const examEnded = isExamPast(exam?.exam_date);
-  const canCall = examToday && !examEnded;
+  const canCall = isWithin24h && !examEnded;
+
+  const handleCallPress = () => {
+    if (examEnded) {
+      showInAppAlert({
+        title: 'Calling Locked',
+        message: 'Calling is disabled now that the exam has ended.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: themeColor,
+      });
+      return;
+    }
+    if (!isWithin24h) {
+      showInAppAlert({
+        title: 'Calling Restricted',
+        message: 'Call allowed 24hr before exam date. Direct phone calls unlock 24 hours prior to exam time.',
+        icon: 'phone-off',
+        variant: 'warning',
+        accentColor: themeColor,
+      });
+      return;
+    }
+    if (!otherPartyPhone && !exam?.phone && !exam?.scribeProfile?.phone) {
+      showInAppAlert({
+        title: t('error') || 'Unavailable',
+        message: t('phone_not_available') || 'Phone number not available for this contact.',
+        icon: 'alert-circle',
+        variant: 'error',
+        accentColor: themeColor,
+      });
+      return;
+    }
+    setIsCallModalOpen(true);
+  };
 
   // Exact Brand Palette from Reference (Bright Blue & Orange Chat UI):
   // Bright White: #FFFFFF, Vibrant Blue: #1676D2, Bright Orange: #F07820, Cool White: #F3F8FC
@@ -585,41 +653,35 @@ export default function ChatRoomScreen() {
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {/* Call Icon Button — only available on the day of the exam (hidden otherwise) */}
-          {examToday ? (
-            canCall ? (
-              <TouchableOpacity
-                onPress={() => {
-                  if (otherPartyPhone) {
-                    Linking.openURL(`tel:${otherPartyPhone}`).catch(() => {
-                      Alert.alert(t('error'), t('call_not_supported'));
-                    });
-                  } else {
-                    Alert.alert(t('error'), t('phone_not_available'));
-                  }
-                }}
-                style={{
-                  width: 40, height: 40, borderRadius: 14,
-                  backgroundColor: isStudent ? '#E3F2FD' : 'rgba(255,255,255,0.2)',
-                  borderWidth: 1, borderColor: isStudent ? 'rgba(22,118,210,0.15)' : 'transparent',
-                  alignItems: 'center', justifyContent: 'center'
-                }}
-              >
-                <Feather name="phone" size={18} color={isStudent ? '#1676D2' : 'white'} />
-              </TouchableOpacity>
-            ) : (
-              // Exam day but already ended → locked
-              <TouchableOpacity
-                onPress={() => Alert.alert('Calling Locked', 'Calling is disabled now that the exam has ended.')}
-                style={{
-                  width: 40, height: 40, borderRadius: 14,
-                  backgroundColor: isStudent ? '#F1F5F9' : 'rgba(255,255,255,0.1)',
-                  alignItems: 'center', justifyContent: 'center', opacity: 0.6
-                }}
-              >
-                <Feather name="phone-off" size={18} color={isStudent ? '#94A3B8' : 'white'} />
-              </TouchableOpacity>
-            )
+          {/* Call Icon Button */}
+          {exam?.scribe_id || isStudent ? (
+            <TouchableOpacity
+              onPress={handleCallPress}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={canCall ? 'Call Contact' : 'Calling Locked'}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 14,
+                backgroundColor: canCall
+                  ? (isStudent ? '#E3F2FD' : 'rgba(255,255,255,0.2)')
+                  : (isStudent ? '#F1F5F9' : 'rgba(255,255,255,0.1)'),
+                borderWidth: 1,
+                borderColor: canCall
+                  ? (isStudent ? 'rgba(22,118,210,0.15)' : 'transparent')
+                  : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: canCall ? 1 : 0.65,
+              }}
+            >
+              <Feather
+                name={canCall ? 'phone' : 'phone-off'}
+                size={18}
+                color={canCall ? (isStudent ? '#1676D2' : 'white') : (isStudent ? '#94A3B8' : 'rgba(255,255,255,0.6)')}
+              />
+            </TouchableOpacity>
           ) : null}
 
           {/* Docs Icon Button (View Declaration) */}
@@ -1428,6 +1490,18 @@ export default function ChatRoomScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ── CALL SHEET MODAL ── */}
+      <CallSheetModal
+        visible={isCallModalOpen}
+        onClose={() => setIsCallModalOpen(false)}
+        exam={{
+          ...exam,
+          phone: otherPartyPhone || exam?.phone,
+          scribeProfile: otherProfileData?.role === 'scribe' ? otherProfileData : exam?.scribeProfile,
+        }}
+        accentColor={themeColor}
+      />
     </SafeAreaView>
   );
 }

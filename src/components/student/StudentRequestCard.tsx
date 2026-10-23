@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Alert, Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { openGoogleMaps } from '@/core/maps';
 
 export interface StudentRequestCardProps {
   item: any;
@@ -304,6 +305,29 @@ export function StudentRequestCard({
                 <Text style={{ fontFamily: 'Roboto', fontSize: 12, color: '#64748b', marginTop: 2 }} numberOfLines={2}>
                   {item.exam_venue || 'Exam Center / Venue not specified'}
                 </Text>
+                {item.exam_venue ? (
+                  <TouchableOpacity
+                    onPress={() => openGoogleMaps(item.google_maps_url || item.exam_venue)}
+                    style={{
+                      marginTop: 6,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: '#eff6ff',
+                      borderWidth: 1,
+                      borderColor: '#bfdbfe',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      alignSelf: 'flex-start',
+                    }}
+                  >
+                    <Feather name="navigation" size={11} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 11, fontWeight: '700', color: '#1d4ed8' }}>
+                      Open in Google Maps ↗
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
 
@@ -417,39 +441,56 @@ export function StudentRequestCard({
             ) : isMatched ? (
               /* Matched actions (Uniform Grid) */
               <View style={{ gap: 10, marginTop: 4 }}>
-                {/* Row 1: Call Scribe + Chat */}
-                <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* Row 1: Chat (67% Blue, White icon/text) + Call (33% end of the row) */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {/* Chat Button: One row button as Chat, blue background, white icon and text */}
                   <TouchableOpacity
-                    onPress={handleDefaultCall}
+                    testID={`btn-chat-${item.id}`}
+                    onPress={handleDefaultChat}
                     style={{
-                      flex: 1, backgroundColor: '#2563eb',
-                      borderRadius: 12, paddingVertical: 11,
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      shadowColor: '#2563eb', shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
+                      flex: 2,
+                      backgroundColor: '#2563eb',
+                      borderRadius: 14,
+                      paddingVertical: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.18,
+                      shadowRadius: 8,
+                      elevation: 3,
                     }}
                     activeOpacity={0.85}
                   >
-                    <Feather name="phone-call" size={15} color="#fff" />
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#fff' }}>
-                      Call Scribe
+                    <Feather name="message-square" size={15} color="#ffffff" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13.5, fontWeight: '800', color: '#ffffff' }}>
+                      Chat
                     </Text>
                   </TouchableOpacity>
 
+                  {/* Call Button: 33% end of the row in the same row of chat and call */}
                   <TouchableOpacity
-                    onPress={handleDefaultChat}
+                    testID={`btn-call-${item.id}`}
+                    onPress={handleDefaultCall}
                     style={{
-                      flex: 1, paddingVertical: 11,
-                      borderRadius: 12, borderWidth: 1.5,
-                      borderColor: '#bfdbfe',
+                      flex: 1,
                       backgroundColor: '#eff6ff',
-                      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: '#bfdbfe',
+                      paddingVertical: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
-                    <Feather name="message-square" size={15} color="#2563eb" />
+                    <Feather name="phone-call" size={14} color="#2563eb" />
                     <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                      Chat
+                      Call
                     </Text>
                   </TouchableOpacity>
                 </View>

@@ -173,7 +173,7 @@ export async function triggerLocalNotification({
         data,
         vibrate: channelId === 'anulekh-sos' ? [0, 500, 250, 500] : [0, 250, 250, 250],
       },
-      trigger: null, // Instant trigger
+      trigger: Platform.OS === 'android' ? ({ channelId } as any) : null,
     });
   } catch (err) {
     console.warn('Error displaying native notification:', err);

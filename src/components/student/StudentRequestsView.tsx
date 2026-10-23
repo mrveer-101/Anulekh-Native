@@ -26,13 +26,14 @@
  * Styling is inline (no StyleSheet). The page gradient, colour orb, top panel and empty-state colours
  * come from STUDENT_THEME and `gradient()` in core/portalTheme.ts; cards use fixed status colours.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, ScrollView, Linking, TextInput, Platform } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
-import { hoursUntilExam } from '@/core/examDate';
+import { hoursUntilExam, isWithin24HoursOfExam, isExamPast } from '@/core/examDate';
+import { showInAppAlert } from '@/core/inAppAlert';
 import ScribesDirectoryModal from './ScribesDirectoryModal';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, STUDENT_THEME as THEME } from '@/core/portalTheme';
@@ -42,8 +43,10 @@ import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import { getProfilesByIds } from '@/core/profileLookup';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 import { RatingModal } from '@/components/common/modals/RatingModal';
 import { StudentRequestCard } from '@/components/student/StudentRequestCard';
+import { openGoogleMaps } from '@/core/maps';
 
 /**
  * One `exam_requests` row as this screen uses it, plus two fields added client-side in fetchRequests:
@@ -135,6 +138,7 @@ export default function StudentRequestsView() {
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
 
   // Expanded Cards State
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
@@ -245,8 +249,12 @@ export default function StudentRequestsView() {
     }
   };
 
-  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
-  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  // Preload requests data in background immediately on mount so switching to Requests is instant
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  // Refresh whenever this tab is focused
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -266,21 +274,44 @@ export default function StudentRequestsView() {
   };
 
   /**
-   * Opens the call bottom sheet for a matched exam. Scribe contact details unlock only on the exam day
-   * (the date part of `exam_date`, before any "|", must equal today's UTC date).
+   * Opens the call bottom sheet for a matched exam. Scribe contact details unlock within 24 hours of the exam.
+   * If the exam is more than 24 hours away, displays the floating notification banner.
    */
   const openCallSheet = (exam: any) => {
     if (!exam || !exam.exam_date) {
-      Alert.alert("Calling Unavailable", "Calling is only permitted on the day of the exam.");
+      showInAppAlert({
+        title: 'Calling Restricted',
+        message: 'Call allowed 24hr before exam date. Direct phone calls unlock 24 hours prior to exam time.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      setCallBannerVisible(true);
       return;
     }
     
-    // Check if the exam date is today
-    const dateStr = exam.exam_date.split('|')[0].trim(); // Get YYYY-MM-DD
-    const todayStr = new Date().toISOString().split('T')[0];
-    
-    if (dateStr !== todayStr) {
-      Alert.alert("Contact Info Locked 🔒", `Scribe contact details are protected and will unlock on the exam day (${dateStr}).`);
+    // Check if exam is past
+    if (isExamPast(exam.exam_date)) {
+      showInAppAlert({
+        title: 'Calling Locked',
+        message: 'Calling is disabled now that the exam has ended.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      return;
+    }
+
+    // Check if within 24 hours of the scheduled exam
+    if (!isWithin24HoursOfExam(exam.exam_date)) {
+      showInAppAlert({
+        title: 'Calling Restricted',
+        message: 'Call allowed 24hr before exam date. Direct phone calls unlock 24 hours prior to exam time. Please use Chat to coordinate.',
+        icon: 'phone-off',
+        variant: 'lock',
+        accentColor: '#1676D2',
+      });
+      setCallBannerVisible(true);
       return;
     }
 
@@ -1061,6 +1092,13 @@ export default function StudentRequestsView() {
         onClose={closeCallSheet}
         exam={callExam}
         accentColor="#2563eb"
+      />
+
+      {/* 24-Hour Call Restriction Notification Banner */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
+        message="Call allowed 24hr before exam date"
       />
 
       {/* ═══════════════════════════════════════════════════

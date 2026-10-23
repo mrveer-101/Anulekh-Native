@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl, Alert, Modal, Linking } from 'react-native';
 import { Feather, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
@@ -11,6 +11,9 @@ import { DesktopGrid, useInDesktopShell } from '@/components/ui/DesktopShell';
 import { useTabActive } from '@/components/ui/TabPane';
 import { readScreenCache, writeScreenCache } from '@/core/screenCache';
 import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
+import { isWithin24HoursOfExam } from '@/core/examDate';
+import { openGoogleMaps } from '@/core/maps';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 import Animated, {
   Easing,
   FadeIn,
@@ -123,6 +126,7 @@ export default function ScribeHomeView() {
   // Calling States
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
   const [agreedGuidelines, setAgreedGuidelines] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
   const [pendingTargetAction, setPendingTargetAction] = useState<{ exam: any; isInvite: boolean } | null>(null);
@@ -147,12 +151,27 @@ export default function ScribeHomeView() {
 
   const openCallSheet = (exam: any) => {
     if (!exam) return;
+    if (exam.exam_date && !isWithin24HoursOfExam(exam.exam_date)) {
+      setCallBannerVisible(true);
+      return;
+    }
     setCallExam(exam);
     setIsCallOpen(true);
   };
 
-  // Refresh whenever the console is focused *and* this tab is the visible one (switching back to the tab
-  // flips isActive and triggers a quiet background refresh; hidden tabs don't fetch).
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchSession();
+  };
+
+  // Preload volunteer dashboard in background immediately on mount
+  useEffect(() => {
+    fetchSession();
+  }, []);
+
+  // Refresh whenever the console is focused and this tab is the visible one
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -324,6 +343,7 @@ export default function ScribeHomeView() {
       console.log('Error fetching volunteer session:', err.message);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -531,7 +551,14 @@ export default function ScribeHomeView() {
       <View style={inShell ? { flex: 1 } : [{ flex: 1, backgroundColor: THEME.page }, gradient(THEME.pageGradient)]}>
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
-      <ScrollView style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#059669']} />
+        }
+      >
       {/* Welcome & Profile Header Section */}
       <Animated.View entering={rise(0)}>
       <View style={{
@@ -1065,11 +1092,34 @@ export default function ScribeHomeView() {
                       </View>
 
                       {/* 3. Location */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
-                        <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                          {t('location_prefix')}{exam.exam_venue || t('venue_not_specified')}
-                        </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                          <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                          <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                            {t('location_prefix')}{exam.exam_venue || t('venue_not_specified')}
+                          </Text>
+                        </View>
+                        {exam.exam_venue ? (
+                          <TouchableOpacity
+                            onPress={() => openGoogleMaps(exam.google_maps_url || exam.exam_venue)}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                              backgroundColor: '#eff6ff',
+                              paddingHorizontal: 7,
+                              paddingVertical: 2.5,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: '#bfdbfe',
+                            }}
+                          >
+                            <Feather name="navigation" size={10} color="#2563eb" />
+                            <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>
+                              Maps ↗
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
                       </View>
 
                       {/* 4. Student profile */}
@@ -1091,22 +1141,49 @@ export default function ScribeHomeView() {
 
                     {/* Chat & Call Action buttons */}
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                      {/* Call */}
-                      <TouchableOpacity 
-                        onPress={() => openCallSheet(exam)}
-                        style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                      >
-                        <Feather name="phone" size={13} color={THEME.accentText} />
-                        <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
-                      </TouchableOpacity>
-
-                      {/* Chat */}
+                      {/* Chat: Left 67%, blue background, white icon and text */}
                       <TouchableOpacity 
                         onPress={() => router.push(`/console/common/chat?requestId=${exam.id}` as any)}
-                        style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                        style={{
+                          flex: 2,
+                          backgroundColor: '#2563eb',
+                          paddingVertical: 11,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6,
+                          shadowColor: '#2563eb',
+                          shadowOffset: { width: 0, height: 4 },
+                          shadowOpacity: 0.18,
+                          shadowRadius: 6,
+                          elevation: 2,
+                        }}
+                        activeOpacity={0.85}
                       >
-                        <Feather name="message-square" size={13} color={THEME.accentText} />
-                        <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                        <Feather name="message-square" size={13} color="#ffffff" />
+                        <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                      </TouchableOpacity>
+
+                      {/* Call: Right 33% end of row */}
+                      <TouchableOpacity 
+                        onPress={() => openCallSheet(exam)}
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#eff6ff',
+                          borderWidth: 1.5,
+                          borderColor: '#bfdbfe',
+                          paddingVertical: 11,
+                          borderRadius: 12,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6,
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Feather name="phone" size={13} color="#2563eb" />
+                        <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1430,6 +1507,12 @@ export default function ScribeHomeView() {
       </TouchableOpacity>
 
       </Animated.View>
+
+      {/* CALL RESTRICTION BANNER (Auto-dismisses with spring animation) */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
+      />
 
       {/* Call Modal Sheet */}
       <CallSheetModal

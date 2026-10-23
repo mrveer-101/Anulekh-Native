@@ -17,13 +17,15 @@
  *
  * Styling is inline (no StyleSheet) using SCRIBE_THEME tokens and gradient() from core/portalTheme.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Modal, Linking, TextInput } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/core/supabase';
 import { useLanguage } from '@/core/translation';
-import { canScribeWithdraw } from '@/core/examDate';
+import { canScribeWithdraw, isWithin24HoursOfExam } from '@/core/examDate';
+import { openGoogleMaps } from '@/core/maps';
+import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { gradient, SCRIBE_THEME as THEME } from '@/core/portalTheme';
 import { useDesktopColumns, useInDesktopShell } from '@/components/ui/DesktopShell';
@@ -60,6 +62,7 @@ interface EnrichedApplication extends Application {
     status?: string;
     is_emergency?: string;
     student_id?: string;
+    google_maps_url?: string;
   };
 }
 
@@ -168,9 +171,14 @@ export default function ScribeCommitmentsView() {
   const [callExam, setCallExam] = useState<any>(null);
   const [isCallOpen, setIsCallOpen] = useState(false);
   const [showMaskedNumber, setShowMaskedNumber] = useState(false);
+  const [callBannerVisible, setCallBannerVisible] = useState(false);
 
-  // Refresh whenever the console is focused *and* this tab is visible: switching back to the tab flips
-  // isActive and triggers a quiet background refresh, while hidden tabs don't fetch at all.
+  // Preload commitments in background immediately on mount
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
+  // Refresh whenever the console is focused and this tab is visible
   useFocusEffect(
     useCallback(() => {
       if (!isActive) return;
@@ -322,9 +330,13 @@ export default function ScribeCommitmentsView() {
     }
   };
 
-  /** Opens the call bottom sheet for a confirmed exam's student. */
+  /** Opens the call bottom sheet for a confirmed exam's student. Direct calls unlock within 24 hours of exam. */
   const openCallSheet = (exam: any) => {
     if (!exam) return;
+    if (exam.exam_date && !isWithin24HoursOfExam(exam.exam_date)) {
+      setCallBannerVisible(true);
+      return;
+    }
     setCallExam(exam);
     setShowMaskedNumber(true);
     setIsCallOpen(true);
@@ -595,11 +607,34 @@ export default function ScribeCommitmentsView() {
               </View>
 
               {/* 3. Location */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
-                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
-                  Location: {exam.exam_venue || t('venue_not_specified')}
-                </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                  <Feather name="map-pin" size={12} color="#64748b" style={{ width: 14 }} />
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                    Location: {exam.exam_venue || t('venue_not_specified')}
+                  </Text>
+                </View>
+                {exam.exam_venue ? (
+                  <TouchableOpacity
+                    onPress={() => openGoogleMaps(exam.google_maps_url || exam.exam_venue)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      backgroundColor: '#eff6ff',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2.5,
+                      borderRadius: 6,
+                      borderWidth: 1,
+                      borderColor: '#bfdbfe',
+                    }}
+                  >
+                    <Feather name="navigation" size={10} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '700', color: '#2563eb' }}>
+                      Maps ↗
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
 
               {/* 4. Student profile */}
@@ -623,25 +658,52 @@ export default function ScribeCommitmentsView() {
             {type === 'confirmed' && (
               <View style={{ gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {/* Call */}
+                  {/* Chat: Left 67%, blue background, white icon/text */}
+                  <TouchableOpacity 
+                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
+                    style={{
+                      flex: 2,
+                      backgroundColor: '#2563eb',
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexDirection: 'row',
+                      gap: 6,
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: 0.18,
+                      shadowRadius: 6,
+                      elevation: 2,
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="message-square" size={13} color="#ffffff" />
+                    <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
+                  </TouchableOpacity>
+
+                  {/* Call: Right 33% */}
                   {app.type !== 'assignment' && (
                     <TouchableOpacity 
                       onPress={() => openCallSheet(exam)}
-                      style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#eff6ff',
+                        borderWidth: 1.5,
+                        borderColor: '#bfdbfe',
+                        paddingVertical: 11,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.85}
                     >
-                      <Feather name="phone" size={13} color={THEME.accentText} />
-                      <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
+                      <Feather name="phone" size={13} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', color: '#2563eb', fontWeight: '800', fontSize: 12 }}>{t('call')}</Text>
                     </TouchableOpacity>
                   )}
-
-                  {/* Chat */}
-                  <TouchableOpacity 
-                    onPress={() => router.push(`/console/common/chat?requestId=${exam.id}&type=${app.type || 'exam'}` as any)}
-                    style={{ flex: 1, backgroundColor: THEME.soft, borderWidth: 1, borderColor: THEME.softBorder, paddingVertical: 10, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
-                  >
-                    <Feather name="message-square" size={13} color={THEME.accentText} />
-                    <Text style={{ fontFamily: 'Roboto', color: THEME.accentText, fontWeight: '800', fontSize: 12 }}>{t('chat')}</Text>
-                  </TouchableOpacity>
                 </View>
 
                 {/* View Declaration */}
@@ -1103,6 +1165,12 @@ export default function ScribeCommitmentsView() {
         scribeName={scribeProfile?.full_name}
         scribeOccupation={scribeProfile?.occupation}
         accentColor="#059669"
+      />
+
+      {/* CALL RESTRICTION BANNER (Auto-dismisses with spring animation) */}
+      <CallRestrictionBanner
+        visible={callBannerVisible}
+        onDismiss={() => setCallBannerVisible(false)}
       />
 
       {/* CALL BOTTOM SHEET MODAL */}
