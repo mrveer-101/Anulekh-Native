@@ -366,13 +366,13 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
   // SOS Emergency Scribe Broadcast
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
-  // Which exam cards are expanded (collapsed by default)
-  const [expandedExamIds, setExpandedExamIds] = useState<Set<string>>(new Set());
+  // Which exam cards are collapsed on Home (expanded by default so user sees scribe details & actions)
+  const [collapsedExamKeys, setCollapsedExamKeys] = useState<Set<string>>(new Set());
 
   /** Expands or collapses one exam card in the schedule. */
   const toggleExamCard = (idOrKey: string | number) => {
     const key = String(idOrKey);
-    setExpandedExamIds(prev => {
+    setCollapsedExamKeys(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -473,7 +473,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
     <ScrollView
-      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }}
+      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 16, paddingVertical: 12 }}
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -888,7 +888,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
           if (!singlePlan) return null;
 
           const itemKey = `${singlePlan.requestType || 'exam'}-${singlePlan.id}`;
-          const isExpanded = expandedExamIds.has(itemKey);
+          const isExpanded = !collapsedExamKeys.has(itemKey);
 
           return (
             <StudentRequestCard
@@ -896,7 +896,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
               item={singlePlan}
               index={0}
               isExpanded={isExpanded}
-              singleRowCollapsed={true}
+              singleRowCollapsed={false}
               onToggleExpand={() => toggleExamCard(itemKey)}
               onCall={openCallSheet}
               onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}

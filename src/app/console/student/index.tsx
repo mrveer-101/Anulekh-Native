@@ -106,9 +106,7 @@ export default function StudentDashboard() {
   const [profile, setProfile]       = useState<any>(null);
   const [activeTab, setActiveTab]   = useState<Tab>('home');
   const [unreadNotifs, setUnread]   = useState(0);
-  const [showWelcome, setShowWelcome] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
-  const welcomeOpacity = React.useRef(new Animated.Value(0)).current;
 
   // ── ALL EFFECTS (after all state) ───────────────────────────────────────
   // Mount guard: sync real window width after hydration to avoid SSR mismatch
@@ -173,13 +171,6 @@ export default function StudentDashboard() {
       if (localPhoto) {
         setProfilePhoto(localPhoto);
       }
-
-      // 5. Show the welcome toast only once per device (flag is not per-user).
-      const shown = await AsyncStorage.getItem('welcome_toast_shown');
-      if (!shown) {
-        setShowWelcome(true);
-        await AsyncStorage.setItem('welcome_toast_shown', 'true');
-      }
     } catch {
       router.replace('/landing');
     } finally {
@@ -195,16 +186,6 @@ export default function StudentDashboard() {
       setActiveTab(params.tab as Tab);
     }
   }, [params.tab]);
-
-  // Welcome toast animation: fade in (0.4s), hold (2.6s), fade out (0.6s), then unmount.
-  useEffect(() => {
-    if (!showWelcome) return;
-    Animated.sequence([
-      Animated.timing(welcomeOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.delay(2600),
-      Animated.timing(welcomeOpacity, { toValue: 0, duration: 600, useNativeDriver: true }),
-    ]).start(() => setShowWelcome(false));
-  }, [showWelcome]);
 
   // Re-read the cached avatar whenever the screen regains focus or the tab changes,
   // so a photo changed in Profile/Settings shows up in the header immediately.
@@ -372,34 +353,6 @@ export default function StudentDashboard() {
           })}
         </View>
       </SafeAreaView>
-
-      {/* ── WELCOME TOAST ── */}
-      {showWelcome && (
-        <Animated.View style={{
-          position: 'absolute', top: 100, left: 20, right: 20, zIndex: 999,
-          opacity: welcomeOpacity,
-        }}>
-          <View style={{
-            backgroundColor: SURFACE, borderWidth: 1, borderColor: ACCENT_BD,
-            borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12,
-            shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 },
-            shadowOpacity: 0.18, shadowRadius: 18, elevation: 8,
-          }}>
-            <View style={{
-              width: 40, height: 40, borderRadius: 12,
-              backgroundColor: ACCENT_BG, alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Feather name="check-circle" size={20} color={ACCENT} />
-            </View>
-            <View>
-              <Text style={{ color: TEXT, fontWeight: '800', fontSize: 15 }}>
-                Welcome, {profile?.full_name?.split(' ')[0] ?? 'there'}! 👋
-              </Text>
-              <Text style={{ color: MUTED, fontSize: 12, marginTop: 2 }}>Your dashboard is ready</Text>
-            </View>
-          </View>
-        </Animated.View>
-      )}
 
     </View>
   );

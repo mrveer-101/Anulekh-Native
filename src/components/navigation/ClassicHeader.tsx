@@ -10,7 +10,7 @@
  * - Circular profile button with avatar photo or user initials and theme status dot
  * - Edge-to-edge flat layout with hairline bottom border and subtle elevation shadow
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -54,6 +54,11 @@ export function ClassicHeader({
 }: ClassicHeaderProps) {
   const { t } = useLanguage();
   const isScribe = role === 'scribe';
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [profilePhoto]);
 
   // Title Case subtitle: only the first letter of each word is capital, not all
   const subtitleText = isScribe ? 'Scribe Portal' : (t('student_portal') || 'Student Portal');
@@ -239,8 +244,12 @@ export function ClassicHeader({
               position: 'relative',
             }}
           >
-            {profilePhoto ? (
-              <Image source={{ uri: profilePhoto }} style={{ width: '100%', height: '100%', borderRadius: 12 }} />
+            {profilePhoto && typeof profilePhoto === 'string' && profilePhoto.trim().length > 0 && !imgError ? (
+              <Image
+                source={{ uri: profilePhoto }}
+                style={{ width: '100%', height: '100%', borderRadius: 12 }}
+                onError={() => setImgError(true)}
+              />
             ) : (
               <View
                 style={{
