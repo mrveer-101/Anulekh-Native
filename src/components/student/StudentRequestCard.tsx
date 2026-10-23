@@ -9,6 +9,7 @@ export interface StudentRequestCardProps {
   index?: number;
   isExpanded: boolean;
   onToggleExpand: () => void;
+  singleRowCollapsed?: boolean;
   onCall?: (item: any) => void;
   onChat?: (item: any) => void;
   onMarkCompleted?: (item: any) => void;
@@ -24,6 +25,7 @@ export function StudentRequestCard({
   index = 0,
   isExpanded,
   onToggleExpand,
+  singleRowCollapsed = false,
   onCall,
   onChat,
   onMarkCompleted,
@@ -82,6 +84,19 @@ export function StudentRequestCard({
     }
   };
 
+  const formatDisplayDate = (raw?: string) => {
+    if (!raw) return 'Scheduled';
+    const parts = raw.split('|');
+    const datePart = parts[0].trim();
+    const timePart = parts[1] ? parts[1].trim() : '';
+    const d = new Date(datePart);
+    if (!isNaN(d.getTime())) {
+      const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      return timePart ? `${formatted}, ${timePart}` : formatted;
+    }
+    return datePart || raw;
+  };
+
   const rise = FadeInDown.delay(Math.min(index, 6) * 70).duration(420);
 
   return (
@@ -98,76 +113,179 @@ export function StudentRequestCard({
       marginBottom: 12,
       overflow: 'hidden',
     }}>
-      {/* ── Top section: Title & Subtitle on Left, Status Badge on Right ── */}
-      <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.85} style={{ padding: 16, paddingBottom: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <View style={{ flex: 1, marginRight: 10 }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }}>
-              {item.subject || item.assignment_title || 'Exam'}
-            </Text>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 3 }}>
-              Level: {item.exam_type || item.academic_level || 'General'} {item.created_at ? `| Confirmed ${new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-            </Text>
-          </View>
-
-          {/* Status Badge */}
-          <View style={{
-            paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
-            backgroundColor: statusColor.bg,
-            borderWidth: 1, borderColor: statusColor.border
-          }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              {isEmergency && <Feather name="alert-triangle" size={9} color={statusColor.text} />}
-              {!isEmergency && (isMatched || isCompleted) && <Feather name="check-circle" size={9} color={statusColor.text} />}
-              <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 }}>
-                {statusLabel}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Summary Row: Divider + Date on Left + "Details v" Pill Button on Right ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 6 }} />
-              <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                {item.exam_date ? item.exam_date.split(' ')[0] : (item.deadline ? item.deadline.split(' ')[0] : 'Scheduled')}
-              </Text>
-            </View>
-
-            {/* Applications Badge (if present) */}
-            {item.applicationCount !== undefined && item.applicationCount > 0 && !isMatched && (
-              <TouchableOpacity
-                onPress={() => onViewApplications ? onViewApplications(item) : router.push(`/console/student/view_applications?id=${item.id}` as any)}
-                style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}
+      {singleRowCollapsed ? (
+        /* ── Compact One-Row Header (Home Tab) ── */
+        <TouchableOpacity
+          onPress={onToggleExpand}
+          activeOpacity={0.85}
+          style={{
+            paddingHorizontal: 16,
+            paddingVertical: 14,
+            backgroundColor: isEmergency ? '#fffdfd' : '#ffffff',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Left: Exam Name */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+              {isEmergency && (
+                <Feather name="alert-triangle" size={15} color="#dc2626" style={{ marginRight: 6 }} />
+              )}
+              <Text
+                style={{
+                  fontFamily: 'Roboto',
+                  fontSize: 15,
+                  fontWeight: '800',
+                  color: '#0f172a',
+                  letterSpacing: -0.2,
+                }}
+                numberOfLines={1}
               >
-                <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>
-                  {item.applicationCount} {item.applicationCount === 1 ? 'Applicant' : 'Applicants'}
+                {item.subject || item.assignment_title || 'Exam'}
+              </Text>
+            </View>
+
+            {/* Right: When it is (Date/Time) + Expand Chevron */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                backgroundColor: '#f8fafc',
+                paddingHorizontal: 9,
+                paddingVertical: 4.5,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+              }}>
+                <Feather name="calendar" size={12} color="#f97316" />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                  {formatDisplayDate(item.exam_date || item.deadline)}
                 </Text>
-              </TouchableOpacity>
-            )}
+              </View>
+
+              <View style={{
+                width: 26,
+                height: 26,
+                borderRadius: 13,
+                backgroundColor: isExpanded ? 'rgba(37,99,235,0.1)' : '#f1f5f9',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <Feather
+                  name={isExpanded ? "chevron-up" : "chevron-down"}
+                  size={15}
+                  color={isExpanded ? "#2563eb" : "#64748b"}
+                />
+              </View>
+            </View>
           </View>
 
-          {/* "Details v" / "Collapse ^" Pill Button */}
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            backgroundColor: isExpanded ? 'rgba(37,99,235,0.14)' : 'rgba(37,99,235,0.08)',
-            borderWidth: 1,
-            borderColor: isExpanded ? 'rgba(37,99,235,0.3)' : 'rgba(37,99,235,0.2)',
-            paddingHorizontal: 11,
-            paddingVertical: 5,
-            borderRadius: 12,
-            gap: 5
-          }}>
-            <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '800', color: '#2563eb' }}>
-              {isExpanded ? 'Collapse' : 'Details'}
-            </Text>
-            <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color="#2563eb" />
+          {/* When expanded in singleRow mode, show meta row with Level & Status pill */}
+          {isExpanded && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 10,
+              paddingTop: 10,
+              borderTopWidth: 1,
+              borderTopColor: '#f1f5f9',
+            }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b' }}>
+                Level: {item.exam_type || item.academic_level || 'General'}
+              </Text>
+
+              <View style={{
+                paddingVertical: 2.5,
+                paddingHorizontal: 8,
+                borderRadius: 999,
+                backgroundColor: statusColor.bg,
+                borderWidth: 1,
+                borderColor: statusColor.border,
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {isEmergency && <Feather name="alert-triangle" size={9} color={statusColor.text} />}
+                  {!isEmergency && (isMatched || isCompleted) && <Feather name="check-circle" size={9} color={statusColor.text} />}
+                  <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 }}>
+                    {statusLabel}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </TouchableOpacity>
+      ) : (
+        /* ── Top section: Title & Subtitle on Left, Status Badge on Right ── */
+        <TouchableOpacity onPress={onToggleExpand} activeOpacity={0.85} style={{ padding: 16, paddingBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 16, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2 }}>
+                {item.subject || item.assignment_title || 'Exam'}
+              </Text>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                Level: {item.exam_type || item.academic_level || 'General'} {item.created_at ? `| Confirmed ${new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+              </Text>
+            </View>
+
+            {/* Status Badge */}
+            <View style={{
+              paddingVertical: 3.5, paddingHorizontal: 9, borderRadius: 999,
+              backgroundColor: statusColor.bg,
+              borderWidth: 1, borderColor: statusColor.border
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {isEmergency && <Feather name="alert-triangle" size={9} color={statusColor.text} />}
+                {!isEmergency && (isMatched || isCompleted) && <Feather name="check-circle" size={9} color={statusColor.text} />}
+                <Text style={{ fontFamily: 'Roboto', color: statusColor.text, fontSize: 9.5, fontWeight: '800', letterSpacing: 0.4 }}>
+                  {statusLabel}
+                </Text>
+              </View>
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
+
+          {/* ── Summary Row: Divider + Date on Left + "Details v" Pill Button on Right ── */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Feather name="calendar" size={13} color="#f97316" style={{ marginRight: 6 }} />
+                <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                  {item.exam_date ? item.exam_date.split(' ')[0] : (item.deadline ? item.deadline.split(' ')[0] : 'Scheduled')}
+                </Text>
+              </View>
+
+              {/* Applications Badge (if present) */}
+              {item.applicationCount !== undefined && item.applicationCount > 0 && !isMatched && (
+                <TouchableOpacity
+                  onPress={() => onViewApplications ? onViewApplications(item) : router.push(`/console/student/view_applications?id=${item.id}` as any)}
+                  style={{ backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 }}
+                >
+                  <Text style={{ fontFamily: 'Roboto', fontSize: 10, fontWeight: '800', color: '#2563eb' }}>
+                    {item.applicationCount} {item.applicationCount === 1 ? 'Applicant' : 'Applicants'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* "Details v" / "Collapse ^" Pill Button */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isExpanded ? 'rgba(37,99,235,0.14)' : 'rgba(37,99,235,0.08)',
+              borderWidth: 1,
+              borderColor: isExpanded ? 'rgba(37,99,235,0.3)' : 'rgba(37,99,235,0.2)',
+              paddingHorizontal: 11,
+              paddingVertical: 5,
+              borderRadius: 12,
+              gap: 5
+            }}>
+              <Text style={{ fontFamily: 'Roboto', fontSize: 11.5, fontWeight: '800', color: '#2563eb' }}>
+                {isExpanded ? 'Collapse' : 'Details'}
+              </Text>
+              <Feather name={isExpanded ? "chevron-up" : "chevron-down"} size={14} color="#2563eb" />
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
 
       {/* ── Expanded Content ── */}
       {isExpanded && (

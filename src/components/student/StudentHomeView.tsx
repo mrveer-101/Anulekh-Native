@@ -328,13 +328,14 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
   // SOS Emergency Scribe Broadcast
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
   // Which exam cards are expanded (collapsed by default)
-  const [expandedExamIds, setExpandedExamIds] = useState<Set<number>>(new Set());
+  const [expandedExamIds, setExpandedExamIds] = useState<Set<string>>(new Set());
 
   /** Expands or collapses one exam card in the schedule. */
-  const toggleExamCard = (id: number) => {
+  const toggleExamCard = (idOrKey: string | number) => {
+    const key = String(idOrKey);
     setExpandedExamIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      if (next.has(key)) next.delete(key); else next.add(key);
       return next;
     });
   };
@@ -756,7 +757,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
         ) : (
           <DesktopGrid>{confirmedPlans.map((exam, index) => {
             const itemKey = `${exam.requestType || 'exam'}-${exam.id}`;
-            const isExpanded = expandedExamIds.has(exam.id);
+            const isExpanded = expandedExamIds.has(itemKey);
 
             return (
               <StudentRequestCard
@@ -764,7 +765,8 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
                 item={exam}
                 index={index}
                 isExpanded={isExpanded}
-                onToggleExpand={() => toggleExamCard(exam.id)}
+                singleRowCollapsed={true}
+                onToggleExpand={() => toggleExamCard(itemKey)}
                 onCall={openCallSheet}
                 onChat={(target) => router.push(`/console/common/chat?requestId=${target.id}&type=${target.requestType || 'exam'}` as any)}
                 onMarkCompleted={openRatingModal}
