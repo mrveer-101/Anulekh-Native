@@ -15,7 +15,7 @@
  * that talks to the Rust/Axum backend, not the real Supabase SDK.
  */
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Redirect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -46,7 +46,21 @@ export default function AppEntry() {
    */
   const checkSession = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let { data: { session } } = await supabase.auth.getSession();
+
+      // On web app: if no session exists yet, default to test student so the web app opens directly to the Home dashboard
+      if (!session && Platform.OS === 'web') {
+        const defaultSession = {
+          user: {
+            id: 'std_test_id',
+            email: 'student@test.com',
+            role: 'student',
+          },
+        };
+        await AsyncStorage.setItem('local_db_session', JSON.stringify(defaultSession));
+        session = defaultSession as any;
+      }
+
       if (session) {
         // Fetch only the fields needed to decide role and verification state.
         const [{ data: profile }, skippedFlag] = await Promise.all([

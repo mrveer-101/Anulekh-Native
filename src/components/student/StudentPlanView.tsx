@@ -752,7 +752,7 @@ export default function StudentPlanView() {
           style={{ flex: 1 }}
           data={filteredPlans}
           keyExtractor={(item) => `${item.requestType || 'exam'}-${item.id}`}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 100 }}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
           }

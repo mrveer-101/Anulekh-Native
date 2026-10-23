@@ -473,7 +473,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
     <ScrollView
-      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }}
+      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 12, paddingVertical: 12 }}
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       refreshControl={

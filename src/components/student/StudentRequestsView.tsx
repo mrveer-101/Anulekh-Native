@@ -727,7 +727,7 @@ export default function StudentRequestsView() {
       {/* Top Filter & Action Panel */}
       <Animated.View entering={rise(0)} style={{
         backgroundColor: '#ffffff',
-        marginHorizontal: inShell ? 0 : 24,
+        marginHorizontal: inShell ? 0 : 12,
         marginTop: 16,
         marginBottom: 12,
         borderRadius: 24,
@@ -875,7 +875,7 @@ export default function StudentRequestsView() {
         style={{ flex: 1 }}
         data={activeTab === 'requests' ? requests : assignmentRequests}
         keyExtractor={(item) => item.id.toString()}
-        contentContainerStyle={{ padding: inShell ? 0 : 24, paddingTop: 8, paddingBottom: 100 }}
+        contentContainerStyle={{ padding: inShell ? 0 : 12, paddingTop: 8, paddingBottom: 100 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2563eb']} />
         }

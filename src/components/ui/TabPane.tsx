@@ -36,8 +36,8 @@ export const useTabActive = () => useContext(TabActiveContext);
  * @param props.children The tab's screen content.
  * @returns `null` until the tab has been visited, otherwise a flex-1 View providing TabActiveContext.
  */
-export function TabPane({ active, children, preload = true }: { active: boolean; children: React.ReactNode; preload?: boolean }) {
-  // Mount immediately in background if preload is true, so all screens load their data upfront
+export function TabPane({ active, children, preload = false }: { active: boolean; children: React.ReactNode; preload?: boolean }) {
+  // Mount lazily when active (or if explicitly preloaded) to avoid startup conflicts
   const [visited, setVisited] = useState(active || preload);
   if (active && !visited) setVisited(true);
   if (!visited) return null;

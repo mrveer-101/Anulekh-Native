@@ -200,42 +200,44 @@ export default function RootLayout() {
     requestNotificationPermissions().catch(console.warn);
     startNotificationWatcher();
 
-    // Handle deep links from iOS Siri Shortcuts & App Intents (anulekh://create-request, anulekh://voice-assistant, etc.)
-    const handleDeepLink = (event: { url: string }) => {
-      try {
-        const parsed = Linking.parse(event.url);
-        const path = (parsed.path || parsed.hostname || '').toLowerCase();
-        console.log('🔗 Siri/App Deep Link Received:', event.url, 'path:', path);
+    // Handle deep links from iOS Siri Shortcuts & App Intents on native mobile only
+    if (Platform.OS !== 'web') {
+      const handleDeepLink = (event: { url: string }) => {
+        try {
+          const parsed = Linking.parse(event.url);
+          const path = (parsed.path || parsed.hostname || '').toLowerCase();
+          console.log('🔗 Siri/App Deep Link Received:', event.url, 'path:', path);
 
-        if (path.includes('create-request') || path.includes('voice-wizard') || path.includes('book-scribe')) {
-          router.push('/console/student/request_form?mode=voice' as any);
-        } else if (path.includes('applications') || path.includes('check-scribes')) {
-          router.push('/console/student/view_applications' as any);
-        } else if (path.includes('chat')) {
-          const reqId = parsed.queryParams?.requestId;
-          if (reqId) {
-            router.push(`/console/common/chat?requestId=${reqId}` as any);
-          } else {
-            router.push('/console/common/chat' as any);
+          if (path.includes('create-request') || path.includes('voice-wizard') || path.includes('book-scribe')) {
+            router.push('/console/student/request_form?mode=voice' as any);
+          } else if (path.includes('applications') || path.includes('check-scribes')) {
+            router.push('/console/student/view_applications' as any);
+          } else if (path.includes('chat')) {
+            const reqId = parsed.queryParams?.requestId;
+            if (reqId) {
+              router.push(`/console/common/chat?requestId=${reqId}` as any);
+            } else {
+              router.push('/console/common/chat' as any);
+            }
+          } else if (path.includes('voice-assistant') || path.includes('siri') || path.includes('ask-ai')) {
+            openVoiceAssistant();
           }
-        } else if (path.includes('voice-assistant') || path.includes('siri') || path.includes('ask-ai')) {
-          openVoiceAssistant();
+        } catch (err) {
+          console.warn('Error handling deep link:', err);
         }
-      } catch (err) {
-        console.warn('Error handling deep link:', err);
-      }
-    };
+      };
 
-    // Cold start from Siri
-    Linking.getInitialURL().then((url) => {
-      if (url) handleDeepLink({ url });
-    });
+      // Cold start from Siri
+      Linking.getInitialURL().then((url) => {
+        if (url) handleDeepLink({ url });
+      });
 
-    // Warm start from Siri
-    const sub = Linking.addEventListener('url', handleDeepLink);
-    return () => {
-      sub.remove();
-    };
+      // Warm start from Siri
+      const sub = Linking.addEventListener('url', handleDeepLink);
+      return () => {
+        sub.remove();
+      };
+    }
   }, []);
 
   return (
