@@ -366,13 +366,13 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
   // SOS Emergency Scribe Broadcast
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
-  // Which exam cards are collapsed on Home (expanded by default so user sees scribe details & actions)
-  const [collapsedExamKeys, setCollapsedExamKeys] = useState<Set<string>>(new Set());
+  // Which exam cards are expanded (collapsed by default)
+  const [expandedExamIds, setExpandedExamIds] = useState<Set<string>>(new Set());
 
   /** Expands or collapses one exam card in the schedule. */
   const toggleExamCard = (idOrKey: string | number) => {
     const key = String(idOrKey);
-    setCollapsedExamKeys(prev => {
+    setExpandedExamIds(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -473,7 +473,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
       {/* Soft colour orb for depth behind the cards */}
       {!inShell && <View pointerEvents="none" style={{ position: 'absolute', top: -70, right: -80, width: 240, height: 240, borderRadius: 120, backgroundColor: THEME.orb }} />}
     <ScrollView
-      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 16, paddingVertical: 12 }}
+      style={{ flex: 1, paddingHorizontal: inShell ? 0 : 24, paddingVertical: 12 }}
       contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
       refreshControl={
@@ -733,11 +733,11 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
             accessibilityLabel="Create Request"
             accessibilityHint="Opens booking form to request an exam scribe"
             style={{ 
-              flex: 1.25,
+              flex: 1.4,
               backgroundColor: BLUE,
               ...gradient(THEME.buttonGradient),
               paddingVertical: 14, 
-              paddingHorizontal: 16,
+              paddingHorizontal: 12,
               borderRadius: 16, 
               alignItems: 'center', 
               justifyContent: 'center', 
@@ -751,10 +751,13 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
             }}
             activeOpacity={0.85}
           >
-            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="plus" size={16} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="plus" size={15} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </View>
-            <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.2 }}>
+            <Text 
+              numberOfLines={1}
+              style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 13.5, letterSpacing: 0.2 }}
+            >
               Create Request
             </Text>
           </TouchableOpacity>
@@ -777,15 +780,15 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
             accessibilityLabel="Ask AI Assistant"
             accessibilityHint="Opens conversational AI assistant to create exam request"
             style={{ 
-              flex: 0.95,
+              flex: 0.8,
               backgroundColor: '#4f46e5',
               paddingVertical: 14, 
-              paddingHorizontal: 14,
+              paddingHorizontal: 10,
               borderRadius: 16, 
               alignItems: 'center', 
               justifyContent: 'center', 
               flexDirection: 'row', 
-              gap: 8, 
+              gap: 7, 
               shadowColor: '#4f46e5',
               shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.22,
@@ -794,10 +797,13 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
             }}
             activeOpacity={0.85}
           >
-            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-              <Feather name="mic" size={15} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
+            <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="mic" size={14} color="#ffffff" importantForAccessibility="no" accessibilityElementsHidden={true} />
             </View>
-            <Text style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 14, letterSpacing: 0.2 }}>
+            <Text 
+              numberOfLines={1}
+              style={{ fontFamily: 'Roboto', color: '#ffffff', fontWeight: '900', fontSize: 13.5, letterSpacing: 0.2 }}
+            >
               Ask AI
             </Text>
           </TouchableOpacity>
@@ -888,7 +894,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
           if (!singlePlan) return null;
 
           const itemKey = `${singlePlan.requestType || 'exam'}-${singlePlan.id}`;
-          const isExpanded = !collapsedExamKeys.has(itemKey);
+          const isExpanded = expandedExamIds.has(itemKey);
 
           return (
             <StudentRequestCard
