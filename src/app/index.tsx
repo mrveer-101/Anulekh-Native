@@ -81,9 +81,9 @@ export default function AppEntry() {
         if (!isApproved) {
           setDestination(isScribe ? '/console/scribe/complete_profile' : '/console/student/complete_profile');
         } else if (isScribe) {
-          setDestination('/console/scribe');
+          setDestination('/console/scribe?tab=home');
         } else {
-          setDestination('/console/student');
+          setDestination('/console/student?tab=home');
         }
       } else {
         setDestination('/landing');

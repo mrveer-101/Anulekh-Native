@@ -14,7 +14,7 @@
  * student console (`/console/student`) and selects a tab via the `tab` param.
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
@@ -263,6 +263,72 @@ export default function MyRequests() {
                     </Text>
                   </View>
                 </View>
+
+                {role === 'student' && item.status !== 'completed' && item.status !== 'cancelled' && (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderColor: '#f1f5f9' }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        Alert.alert(
+                          'Cancel & Delete Exam Request',
+                          'Are you sure you want to cancel and delete this exam request? This action cannot be undone.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete Request',
+                              style: 'destructive',
+                              onPress: async () => {
+                                await supabase.from('exam_requests').delete().eq('id', item.id);
+                                fetchRequests();
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: '#fca5a5',
+                        backgroundColor: '#fff7f7',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="trash-2" size={14} color="#ef4444" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#ef4444' }}>
+                        Delete Request
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        router.push(`/console/student/request_form?id=${item.id}` as any);
+                      }}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: '#bfdbfe',
+                        backgroundColor: '#eff6ff',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="edit-2" size={14} color="#2563eb" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#2563eb' }}>
+                        Edit Request
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             );
           }}

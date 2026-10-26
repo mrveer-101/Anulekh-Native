@@ -548,7 +548,7 @@ export default function ConsoleStudentPC({
               <DesktopShellProvider>
                 {children ? children : (
                   <>
-                    <TabPane active={activeTab === 'home'}><StudentHomeView /></TabPane>
+                    <TabPane active={activeTab === 'home'} preload={true}><StudentHomeView /></TabPane>
                     <TabPane active={activeTab === 'requests'}><StudentRequestsView /></TabPane>
                     <TabPane active={activeTab === 'plan'}><StudentPlanView /></TabPane>
                     <TabPane active={activeTab === 'profile'}><StudentProfilePCView userProfile={userProfile} onRefresh={onRefresh} /></TabPane>

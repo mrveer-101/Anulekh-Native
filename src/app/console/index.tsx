@@ -43,9 +43,9 @@ export default function ConsoleIndex() {
 
         // Anything that isn't explicitly 'scribe' (including a missing profile) lands in the student portal.
         if (profile?.role === 'scribe') {
-          router.replace('/console/scribe');
+          router.replace('/console/scribe?tab=home');
         } else {
-          router.replace('/console/student');
+          router.replace('/console/student?tab=home');
         }
       } catch {
         // Network/backend failure: fall back to the landing page rather than hanging on the spinner.

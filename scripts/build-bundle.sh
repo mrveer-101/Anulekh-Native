@@ -41,10 +41,14 @@ AAB_DEST="$OUTPUT_DIR/Anulekh-release.aab"
 # 3. Output confirmation
 if [ -f "$AAB_SRC" ]; then
   cp "$AAB_SRC" "$AAB_DEST"
+  if [ -d "$APP_DIR/dist" ]; then
+    cp "$AAB_SRC" "$APP_DIR/dist/$(basename "$AAB_DEST")"
+  fi
   echo "=========================================="
   echo " AAB Bundle Build SUCCESSFUL!"
   echo " Output AAB: $AAB_DEST"
   echo " File Size: $(du -h "$AAB_DEST" | cut -f1)"
+  echo " Web Download: https://systematic-tri-roots-southampton.trycloudflare.com/$(basename "$AAB_DEST")"
   echo " Ready for Google Play Console upload!"
   echo "=========================================="
 else

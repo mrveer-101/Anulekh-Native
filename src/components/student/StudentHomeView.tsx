@@ -366,13 +366,13 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
   // SOS Emergency Scribe Broadcast
   const [sosSendingId, setSosSendingId] = useState<number | null>(null);
-  // Which exam cards are expanded (collapsed by default)
-  const [expandedExamIds, setExpandedExamIds] = useState<Set<string>>(new Set());
+  // Which exam cards are collapsed (expanded by default for the single upcoming plan)
+  const [collapsedExamIds, setCollapsedExamIds] = useState<Set<string>>(new Set());
 
   /** Expands or collapses one exam card in the schedule. */
   const toggleExamCard = (idOrKey: string | number) => {
     const key = String(idOrKey);
-    setExpandedExamIds(prev => {
+    setCollapsedExamIds(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       return next;
@@ -830,7 +830,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
 
           {confirmedPlans.length > 1 && (
             <TouchableOpacity
-              onPress={() => router.push('/console/student?tab=schedule' as any)}
+              onPress={() => router.push('/console/student?tab=plan' as any)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 4, paddingHorizontal: 6 }}
             >
               <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '700', color: '#2563eb' }}>
@@ -894,7 +894,7 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
           if (!singlePlan) return null;
 
           const itemKey = `${singlePlan.requestType || 'exam'}-${singlePlan.id}`;
-          const isExpanded = expandedExamIds.has(itemKey);
+          const isExpanded = !collapsedExamIds.has(itemKey);
 
           return (
             <StudentRequestCard
@@ -909,7 +909,8 @@ export default function StudentHomeView({ hideInlineHero = false }: { hideInline
               onMarkCompleted={openRatingModal}
               onChangeScribe={handleUnmatchScribe}
               onCancelRequest={handleDelete}
-              onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
+              onEditRequest={(target) => router.push(((target.requestType === 'assignment' || target.is_assignment) ? `/console/student/assignment_form?id=${target.id}` : `/console/student/request_form?id=${target.id}`) as any)}
+              onViewApplications={(target) => router.push(`/console/student/view_applications?id=${target.id}&examId=${target.id}` as any)}
             />
           );
         })()}

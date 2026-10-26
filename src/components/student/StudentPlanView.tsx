@@ -706,7 +706,8 @@ export default function StudentPlanView() {
         onMarkCompleted={openRatingModal}
         onChangeScribe={handleUnmatchScribe}
         onCancelRequest={handleDelete}
-        onViewApplications={(target) => router.push(`/console/student/view_applications?examId=${target.id}` as any)}
+        onEditRequest={(target) => router.push(((target.requestType === 'assignment' || target.is_assignment) ? `/console/student/assignment_form?id=${target.id}` : `/console/student/request_form?id=${target.id}`) as any)}
+        onViewApplications={(target) => router.push(`/console/student/view_applications?id=${target.id}&examId=${target.id}` as any)}
       />
     );
   };

@@ -19,7 +19,7 @@ export type VoiceActionResult = {
   success: boolean;
   message: string;
   spokenResponse: string;
-  actionType: 'check_scribes' | 'accept_scribe' | 'send_message' | 'create_request' | 'sos' | 'unknown';
+  actionType: 'check_scribes' | 'accept_scribe' | 'send_message' | 'create_request' | 'edit_request' | 'delete_request' | 'sos' | 'unknown';
   data?: any;
 };
 
@@ -370,6 +370,95 @@ export async function voiceTriggerEmergencySOS(): Promise<VoiceActionResult> {
 }
 
 /**
+ * 5. Create Request via voice
+ */
+export async function voiceCreateRequest(): Promise<VoiceActionResult> {
+  const msg = 'Opening exam scribe request form.';
+  speakAloud(msg);
+  router.push('/console/student/request_form?mode=voice' as any);
+  return {
+    success: true,
+    message: msg,
+    spokenResponse: msg,
+    actionType: 'create_request',
+  };
+}
+
+/**
+ * 6. Edit Request via voice
+ */
+export async function voiceEditRequest(): Promise<VoiceActionResult> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      const msg = 'Please log in to edit your requests.';
+      speakAloud(msg);
+      return { success: false, message: msg, spokenResponse: msg, actionType: 'edit_request' };
+    }
+
+    const { data: exams, error } = await supabase
+      .from('exam_requests')
+      .select('*')
+      .eq('student_id', session.user.id)
+      .neq('status', 'cancelled')
+      .neq('status', 'completed')
+      .order('id', { ascending: false });
+
+    if (error || !exams || exams.length === 0) {
+      const msg = "You don't have any active exam requests to edit right now. Would you like to create a new one?";
+      speakAloud(msg);
+      return { success: false, message: msg, spokenResponse: msg, actionType: 'edit_request' };
+    }
+
+    if (exams.length === 1) {
+      const exam = exams[0];
+      const msg = `Opening your exam request for ${exam.subject || 'your exam'} to edit.`;
+      speakAloud(msg);
+      router.push(`/console/student/request_form?id=${exam.id}` as any);
+      return { success: true, message: msg, spokenResponse: msg, actionType: 'edit_request', data: exam };
+    }
+
+    // Multiple requests: navigate to requests tab and prompt
+    const msg = `You have ${exams.length} active requests. Opening your requests tab so you can pick which one to edit.`;
+    speakAloud(msg);
+    router.push('/console/student?tab=requests' as any);
+    return { success: true, message: msg, spokenResponse: msg, actionType: 'edit_request', data: exams };
+  } catch (err: any) {
+    const errorMsg = 'Could not load your requests to edit.';
+    speakAloud(errorMsg);
+    return { success: false, message: err?.message || errorMsg, spokenResponse: errorMsg, actionType: 'edit_request' };
+  }
+}
+
+/**
+ * 7. Delete Request via voice
+ */
+export async function voiceDeleteRequest(): Promise<VoiceActionResult> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      const msg = 'Please log in to manage your requests.';
+      speakAloud(msg);
+      return { success: false, message: msg, spokenResponse: msg, actionType: 'delete_request' };
+    }
+
+    const msg = 'Opening your requests list. You can tap the Delete button on any request card to remove it.';
+    speakAloud(msg);
+    router.push('/console/student?tab=requests' as any);
+    return {
+      success: true,
+      message: msg,
+      spokenResponse: msg,
+      actionType: 'delete_request',
+    };
+  } catch (err: any) {
+    const errorMsg = 'Could not open requests to delete.';
+    speakAloud(errorMsg);
+    return { success: false, message: err?.message || errorMsg, spokenResponse: errorMsg, actionType: 'delete_request' };
+  }
+}
+
+/**
  * Main Natural Voice Command Dispatcher
  * Parses a spoken sentence and routes to the appropriate handler.
  */
@@ -381,37 +470,56 @@ export async function parseAndExecuteVoiceCommand(rawTranscript: string): Promis
   if (
     t.includes('create request') ||
     t.includes('create exam') ||
+    t.includes('new request') ||
+    t.includes('add request') ||
     t.includes('book scribe') ||
     t.includes('book a scribe') ||
     t.includes('find scribe') ||
-    t.includes('find a scribe') ||
-    t.includes('new request')
+    t.includes('find a scribe')
   ) {
-    const msg = 'Opening voice exam creator.';
-    speakAloud(msg);
-    router.push('/console/student/request_form?mode=voice' as any);
-    return {
-      success: true,
-      message: msg,
-      spokenResponse: msg,
-      actionType: 'create_request',
-    };
+    return voiceCreateRequest();
   }
 
-  // 2. Inquire about scribe applications
+  // 2. Edit Request
   if (
-    t.includes('who applied') ||
+    t.includes('edit request') ||
+    t.includes('edit exam') ||
+    t.includes('update request') ||
+    t.includes('modify request') ||
+    t.includes('change request') ||
+    t.includes('change exam')
+  ) {
+    return voiceEditRequest();
+  }
+
+  // 3. Delete Request
+  if (
+    t.includes('delete request') ||
+    t.includes('delete exam') ||
+    t.includes('cancel request') ||
+    t.includes('remove request') ||
+    t.includes('remove exam')
+  ) {
+    return voiceDeleteRequest();
+  }
+
+  // 4. Inquire about scribe applications
+  if (
     t.includes('check scribe') ||
     t.includes('check scribes') ||
+    t.includes('scribe application') ||
+    t.includes('scribe applications') ||
+    t.includes('who applied') ||
     t.includes('show application') ||
     t.includes('show applications') ||
-    t.includes('scribe application') ||
+    t.includes('view application') ||
+    t.includes('view applications') ||
     t.includes('view applicant')
   ) {
     return voiceCheckScribeApplications();
   }
 
-  // 3. Accept Scribe
+  // 5. Accept Scribe
   if (t.includes('accept') || t.includes('confirm scribe') || t.includes('hire')) {
     // Extract name after "accept" or "confirm"
     let candidateName = '';
@@ -427,7 +535,7 @@ export async function parseAndExecuteVoiceCommand(rawTranscript: string): Promis
     return voiceAcceptScribe(candidateName);
   }
 
-  // 4. Send Message / Chat with scribe
+  // 6. Send Message / Chat with scribe
   if (t.includes('message') || t.includes('tell scribe') || t.includes('send message') || t.includes('chat with scribe')) {
     // Extract message body
     let messageBody = '';
@@ -447,13 +555,13 @@ export async function parseAndExecuteVoiceCommand(rawTranscript: string): Promis
     return voiceSendMessageToScribe(messageBody);
   }
 
-  // 5. Emergency SOS
+  // 7. Emergency SOS
   if (t.includes('emergency') || t.includes('trigger sos') || t.includes('sos alert') || t.includes('need urgent scribe')) {
     return voiceTriggerEmergencySOS();
   }
 
-  // 6. Fallback Help
-  const help = 'I can help you create an exam request, check who applied, accept a scribe, or send a message to your scribe. What would you like to do?';
+  // 8. Fallback Help
+  const help = 'Hi! What would you like to do? You can Create Request, Edit Request, Delete Request, or Check Scribe Applications.';
   speakAloud(help);
   return {
     success: false,

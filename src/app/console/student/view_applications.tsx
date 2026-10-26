@@ -66,7 +66,8 @@ export default function ViewApplicationsPage() {
   // Inside the desktop page frame the phone header bar and tab bar are hidden (the frame has its own brand bar).
   const inDesktopFrame = useInDesktopFrame();
   // Route params: `id` is the request id; `type=assignment` switches to assignment_requests.
-  const params = useLocalSearchParams<{ id: string; type?: string }>();
+  const params = useLocalSearchParams<{ id?: string; examId?: string; request_id?: string; type?: string }>();
+  const targetRequestId = params.id || params.examId || params.request_id;
   
   // Page loading flag, id of the application being accepted/rejected, the request row and its pending applications.
   const [loading, setLoading] = useState(true);
@@ -119,7 +120,7 @@ export default function ViewApplicationsPage() {
   // Load the request and its applications on mount and whenever the request id changes.
   useEffect(() => {
     fetchApplications();
-  }, [params.id]);
+  }, [targetRequestId]);
 
   /**
    * Loads the request row, then its pending `scribe_applications`, and enriches each with the scribe's
@@ -131,11 +132,32 @@ export default function ViewApplicationsPage() {
       const type = (params.type as string) === 'assignment' ? 'assignment' : 'exam';
       const table = type === 'assignment' ? 'assignment_requests' : 'exam_requests';
       
+      let effectiveId = targetRequestId;
+      if (!effectiveId) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) {
+          const { data: latestReqs } = await supabase
+            .from(table)
+            .select('id')
+            .eq('student_id', session.user.id)
+            .order('id', { ascending: false })
+            .limit(1);
+          if (latestReqs && latestReqs.length > 0) {
+            effectiveId = String(latestReqs[0].id);
+          }
+        }
+      }
+
+      if (!effectiveId) {
+        setLoading(false);
+        return;
+      }
+
       // Load the request itself (its subject is shown in the title bar and it is used when accepting).
       const { data: requestData } = await supabase
         .from(table)
         .select('*')
-        .eq('id', params.id)
+        .eq('id', effectiveId)
         .single();
       
       setExam(requestData);

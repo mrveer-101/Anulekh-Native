@@ -63,6 +63,29 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 /** Every screen the dashboard can show; also the accepted values of the `?tab=` route param. */
 type Tab = 'home' | 'requests' | 'plan' | 'profile' | 'settings' | 'notifications';
 
+/** Strict whitelist and aliases to prevent invalid tab params from causing blank screens. */
+const VALID_TABS: Record<string, Tab> = {
+  home: 'home',
+  requests: 'requests',
+  plan: 'plan',
+  schedule: 'plan', // Map 'schedule' alias to 'plan'
+  settings: 'settings',
+  account: 'settings', // Map 'account' alias to 'settings'
+  profile: 'profile',
+  notifications: 'notifications',
+};
+
+/** Normalizes and validates any tab param, strictly defaulting to 'home' on empty or invalid values. */
+function resolveTab(rawTab?: string | string[]): Tab {
+  if (typeof rawTab === 'string') {
+    const key = rawTab.trim().toLowerCase();
+    if (key && VALID_TABS[key]) {
+      return VALID_TABS[key];
+    }
+  }
+  return 'home';
+}
+
 /**
  * Buttons shown in the mobile bottom tab bar, in display order.
  * The 'settings' tab is labelled "Account" (translated via `nav_account`).
@@ -104,7 +127,7 @@ export default function StudentDashboard() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
-  const [activeTab, setActiveTab]   = useState<Tab>('home');
+  const [activeTab, setActiveTab]   = useState<Tab>(() => resolveTab(params.tab));
   const [unreadNotifs, setUnread]   = useState(0);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
@@ -189,9 +212,7 @@ export default function StudentDashboard() {
   useEffect(() => { fetchSession(); }, []);
 
   useEffect(() => {
-    if (params.tab) {
-      setActiveTab(params.tab as Tab);
-    }
+    setActiveTab(resolveTab(params.tab));
   }, [params.tab]);
 
   // Re-read the cached avatar whenever the screen regains focus or the tab changes,
@@ -226,6 +247,8 @@ export default function StudentDashboard() {
         onRefresh={fetchSession}
         unreadCount={unreadNotifs}
         onNotificationsOpened={() => setUnread(0)}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(resolveTab(tab))}
       />
     );
   }
@@ -249,7 +272,7 @@ export default function StudentDashboard() {
 
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-        <TabPane active={activeTab === 'home'}>
+        <TabPane active={activeTab === 'home'} preload={true}>
           <StudentHomeView />
         </TabPane>
         <TabPane active={activeTab === 'requests'}><StudentRequestsView /></TabPane>

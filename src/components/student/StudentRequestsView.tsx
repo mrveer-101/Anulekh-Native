@@ -46,6 +46,7 @@ import { CallSheetModal } from '@/components/common/modals/CallSheetModal';
 import { CallRestrictionBanner } from '@/components/common/CallRestrictionBanner';
 import { RatingModal } from '@/components/common/modals/RatingModal';
 import { StudentRequestCard } from '@/components/student/StudentRequestCard';
+import { openVoiceAssistant } from '@/components/common/UniversalVoiceAssistant';
 import { openGoogleMaps } from '@/core/maps';
 
 /**
@@ -392,7 +393,7 @@ export default function StudentRequestsView() {
    */
   const renderAssignmentCard = (item: any, index = 0) => {
     const isMatched = item.status === 'matched';
-    const isExpanded = expandedCards[item.id] || false;
+    const isExpanded = expandedCards[item.id] !== undefined ? expandedCards[item.id] : (index === 0);
 
     // Badge text and colours for each status.
     const statusLabel = (() => {
@@ -665,39 +666,51 @@ export default function StudentRequestsView() {
                   </Text>
                 </TouchableOpacity>
 
-                {/* Edit (reopens assignment_form with this id) + Delete */}
+                {/* 50-50 Delete Request + Edit Request */}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={handleDelete}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: '#fca5a5',
+                      backgroundColor: '#fff7f7',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="trash-2" size={14} color="#ef4444" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                      Delete Request
+                    </Text>
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     onPress={() => {
                       router.push(`/console/student/assignment_form?id=${item.id}` as any);
                     }}
                     style={{
-                      flex: 1, paddingVertical: 11,
-                      borderRadius: 12, borderWidth: 1.5,
-                      borderColor: '#2563eb',
-                      backgroundColor: '#fff',
-                      alignItems: 'center', justifyContent: 'center',
+                      flex: 1,
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: '#bfdbfe',
+                      backgroundColor: '#eff6ff',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
                     }}
                     activeOpacity={0.7}
                   >
+                    <Feather name="edit-2" size={14} color="#2563eb" />
                     <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
-                      Edit Details
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={handleDelete}
-                    style={{
-                      flex: 1, paddingVertical: 11,
-                      borderRadius: 12, borderWidth: 1.5,
-                      borderColor: '#fca5a5',
-                      backgroundColor: '#fff7f7',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
-                      Delete
+                      Edit Request
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -741,7 +754,7 @@ export default function StudentRequestsView() {
         elevation: 4,
       }}>
         {/* Row 1: 2 equal-width 50/50 action buttons */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           {/* Find Scribes: opens the scribe directory without a pre-selected request */}
           <TouchableOpacity
             onPress={() => setShowScribeDirectory(true)}
@@ -796,6 +809,37 @@ export default function StudentRequestsView() {
             <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#fff' }}>{t('new_request')}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Row 2: Ask AI Voice Assistant Button */}
+        <TouchableOpacity
+          onPress={() => openVoiceAssistant()}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel="Ask AI Assistant"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            backgroundColor: '#4f46e5',
+            paddingVertical: 9,
+            borderRadius: 14,
+            marginBottom: 12,
+            shadowColor: '#4f46e5',
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.2,
+            shadowRadius: 6,
+            elevation: 3,
+          }}
+          activeOpacity={0.85}
+        >
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="mic" size={12} color="#ffffff" />
+          </View>
+          <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#ffffff', letterSpacing: 0.2 }}>
+            Ask AI (Create, Edit, Delete, Check Scribes)
+          </Text>
+        </TouchableOpacity>
 
         {/* Tab Switcher Slider */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1064,13 +1108,14 @@ export default function StudentRequestsView() {
               key={item.id}
               item={item}
               index={index}
-              isExpanded={expandedCards[item.id] || false}
+              isExpanded={expandedCards[item.id] !== undefined ? expandedCards[item.id] : (index === 0)}
               onToggleExpand={() => toggleCard(item.id)}
               onCall={() => openCallSheet(item)}
               onChat={() => router.push(`/console/common/chat?requestId=${item.id}&type=${item.requestType || 'exam'}` as any)}
               onMarkCompleted={() => openRatingModal(item)}
               onChangeScribe={handleUnmatchScribe}
               onCancelRequest={handleDelete}
+              onEditRequest={(target) => router.push(`/console/student/request_form?id=${target.id}` as any)}
               onViewApplications={() => router.push(`/console/student/view_applications?id=${item.id}` as any)}
               onInviteScribes={() => {
                 setPreSelectedScribeReq({ id: item.id, type: 'exam', subject: item.subject });

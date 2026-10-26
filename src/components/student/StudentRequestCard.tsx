@@ -16,6 +16,7 @@ export interface StudentRequestCardProps {
   onMarkCompleted?: (item: any) => void;
   onChangeScribe?: (item: any) => void;
   onCancelRequest?: (item: any) => void;
+  onEditRequest?: (item: any) => void;
   onViewApplications?: (item: any) => void;
   onInviteScribes?: (item: any) => void;
   onSOS?: (item: any) => void;
@@ -32,6 +33,7 @@ export function StudentRequestCard({
   onMarkCompleted,
   onChangeScribe,
   onCancelRequest,
+  onEditRequest,
   onViewApplications,
   onInviteScribes,
   onSOS,
@@ -82,6 +84,19 @@ export function StudentRequestCard({
       onCall(item);
     } else {
       Alert.alert("Call Scribe", "Calling is available on the day of the exam.");
+    }
+  };
+
+  const handleDefaultEdit = () => {
+    if (onEditRequest) {
+      onEditRequest(item);
+    } else {
+      const isAssignment = item.requestType === 'assignment' || !!item.is_assignment;
+      if (isAssignment) {
+        router.push(`/console/student/assignment_form?id=${item.id}` as any);
+      } else {
+        router.push(`/console/student/request_form?id=${item.id}` as any);
+      }
     }
   };
 
@@ -421,22 +436,56 @@ export function StudentRequestCard({
                   </TouchableOpacity>
                 )}
 
-                {onCancelRequest && (
+                {/* 50-50 Delete Request + Edit Request */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {onCancelRequest && (
+                    <TouchableOpacity
+                      testID={`btn-delete-${item.id}`}
+                      onPress={() => onCancelRequest(item)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 12,
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: '#fca5a5',
+                        backgroundColor: '#fff7f7',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="trash-2" size={14} color="#ef4444" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
+                        Delete Request
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
                   <TouchableOpacity
-                    onPress={() => onCancelRequest(item)}
+                    testID={`btn-edit-${item.id}`}
+                    onPress={handleDefaultEdit}
                     style={{
+                      flex: 1,
                       paddingVertical: 12,
-                      borderRadius: 14, borderWidth: 1.5,
-                      borderColor: '#fca5a5', backgroundColor: '#fff7f7',
-                      alignItems: 'center', justifyContent: 'center',
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: '#bfdbfe',
+                      backgroundColor: '#eff6ff',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#ef4444' }}>
-                      Cancel Request
+                    <Feather name="edit-2" size={14} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 13, fontWeight: '800', color: '#2563eb' }}>
+                      Edit Request
                     </Text>
                   </TouchableOpacity>
-                )}
+                </View>
               </View>
             ) : isMatched ? (
               /* Matched actions (Uniform Grid) */
@@ -517,41 +566,79 @@ export function StudentRequestCard({
                   </View>
                 )}
 
-                {/* Row 3: Change Scribe + Cancel Request */}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                  {onChangeScribe && (
+                {/* Row 3: Change Scribe */}
+                {onChangeScribe && (
+                  <TouchableOpacity
+                    onPress={() => onChangeScribe(item)}
+                    style={{
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: '#fed7aa',
+                      backgroundColor: '#fff7ed',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="user-x" size={14} color="#ea580c" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#ea580c' }}>
+                      Change Scribe
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Row 4: 50-50 Delete Request + Edit Request */}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 2 }}>
+                  {onCancelRequest && (
                     <TouchableOpacity
-                      onPress={() => onChangeScribe(item)}
+                      testID={`btn-delete-matched-${item.id}`}
+                      onPress={() => onCancelRequest(item)}
                       style={{
-                        flex: 1, paddingVertical: 10,
-                        borderRadius: 12, borderWidth: 1.5,
-                        borderColor: '#f97316', backgroundColor: '#fff7ed',
-                        alignItems: 'center', justifyContent: 'center',
+                        flex: 1,
+                        paddingVertical: 11,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: '#fca5a5',
+                        backgroundColor: '#fff7f7',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
                       }}
                       activeOpacity={0.7}
                     >
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ea580c' }}>
-                        Change Scribe
+                      <Feather name="trash-2" size={14} color="#ef4444" />
+                      <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#ef4444' }}>
+                        Delete Request
                       </Text>
                     </TouchableOpacity>
                   )}
 
-                  {onCancelRequest && (
-                    <TouchableOpacity
-                      onPress={() => onCancelRequest(item)}
-                      style={{
-                        flex: 1, paddingVertical: 10,
-                        borderRadius: 12, borderWidth: 1.5,
-                        borderColor: '#fca5a5', backgroundColor: '#fff7f7',
-                        alignItems: 'center', justifyContent: 'center',
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={{ fontFamily: 'Roboto', fontSize: 12, fontWeight: '800', color: '#ef4444' }}>
-                        Cancel Request
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity
+                    testID={`btn-edit-matched-${item.id}`}
+                    onPress={handleDefaultEdit}
+                    style={{
+                      flex: 1,
+                      paddingVertical: 11,
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: '#bfdbfe',
+                      backgroundColor: '#eff6ff',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="edit-2" size={14} color="#2563eb" />
+                    <Text style={{ fontFamily: 'Roboto', fontSize: 12.5, fontWeight: '800', color: '#2563eb' }}>
+                      Edit Request
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             ) : (

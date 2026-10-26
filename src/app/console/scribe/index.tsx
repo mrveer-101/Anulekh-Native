@@ -60,6 +60,31 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
  */
 type Tab = 'home' | 'commitments' | 'plan' | 'profile' | 'settings' | 'notifications' | 'explore';
 
+/** Strict whitelist and aliases to prevent invalid tab params from causing blank screens. */
+const VALID_SCRIBE_TABS: Record<string, Tab> = {
+  home: 'home',
+  explore: 'explore',
+  search: 'explore',
+  commitments: 'commitments',
+  schedule: 'commitments',
+  plan: 'commitments',
+  settings: 'settings',
+  account: 'settings',
+  profile: 'profile',
+  notifications: 'notifications',
+};
+
+/** Normalizes and validates any tab param, strictly defaulting to 'home' on empty or invalid values. */
+function resolveScribeTab(rawTab?: string | string[]): Tab {
+  if (typeof rawTab === 'string') {
+    const key = rawTab.trim().toLowerCase();
+    if (key && VALID_SCRIBE_TABS[key]) {
+      return VALID_SCRIBE_TABS[key];
+    }
+  }
+  return 'home';
+}
+
 /**
  * Bottom-bar tabs in display order, with Ionicons names for the selected /
  * unselected state. `label` is an English fallback; the bar actually shows a
@@ -97,7 +122,7 @@ export default function ScribeDashboard() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const [loading, setLoading]       = useState(true);
   const [profile, setProfile]       = useState<any>(null);
-  const [activeTab, setActiveTab]   = useState<Tab>('home');
+  const [activeTab, setActiveTab]   = useState<Tab>(() => resolveScribeTab(params.tab));
   const [unreadNotifs, setUnread]   = useState(0);
   const [showWelcome, setShowWelcome] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
@@ -178,11 +203,9 @@ export default function ScribeDashboard() {
   // Initial data load on mount.
   useEffect(() => { fetchSession(); }, []);
 
-  // Deep-link support: `?tab=<id>` selects a tab (value is cast, not validated).
+  // Deep-link support: `?tab=<id>` selects a tab (safely validated with fallback).
   useEffect(() => {
-    if (params.tab) {
-      setActiveTab(params.tab as Tab);
-    }
+    setActiveTab(resolveScribeTab(params.tab));
   }, [params.tab]);
 
   // Welcome toast animation: fade in (0.4s), hold (2.6s), fade out (0.6s), then unmount.
@@ -226,6 +249,8 @@ export default function ScribeDashboard() {
         onRefresh={fetchSession}
         unreadCount={unreadNotifs}
         onNotificationsOpened={() => setUnread(0)}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(resolveScribeTab(tab))}
       />
     );
   }
@@ -250,7 +275,7 @@ export default function ScribeDashboard() {
       {/* ── CONTENT ── */}
       <View style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
         {/* Each tab mounts on first visit and then stays alive (hidden) — see TabPane */}
-        <TabPane active={activeTab === 'home'}><ScribeHomeView /></TabPane>
+        <TabPane active={activeTab === 'home'} preload={true}><ScribeHomeView /></TabPane>
         <TabPane active={activeTab === 'explore'}><ScribeExploreView /></TabPane>
         <TabPane active={activeTab === 'commitments'}><ScribeCommitmentsView /></TabPane>
         <TabPane active={activeTab === 'settings'}><SharedSettingsView /></TabPane>

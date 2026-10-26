@@ -516,7 +516,7 @@ export default function ConsoleScribePC({
               {/* Tab View Content */}
               {/* Each view is kept mounted after its first visit (TabPane keep-alive) and fetches its own data. */}
               <DesktopShellProvider>
-                <TabPane active={activeTab === 'home'}><ScribeHomeView /></TabPane>
+                <TabPane active={activeTab === 'home'} preload={true}><ScribeHomeView /></TabPane>
                 <TabPane active={activeTab === 'explore'}><ScribeExploreView /></TabPane>
                 <TabPane active={activeTab === 'commitments'}><ScribeCommitmentsView /></TabPane>
                 <TabPane active={activeTab === 'plan'}><ScribePlanView /></TabPane>

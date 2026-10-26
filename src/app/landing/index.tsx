@@ -85,7 +85,7 @@ export default function LandingScreen() {
       if (!session) return;
       const { data: profile } = await supabase
         .from('profiles').select('role').eq('id', session.user.id).single();
-      router.replace((profile?.role === 'scribe' ? '/console/scribe' : '/console/student') as any);
+      router.replace((profile?.role === 'scribe' ? '/console/scribe?tab=home' : '/console/student?tab=home') as any);
     } catch {}
   };
 
