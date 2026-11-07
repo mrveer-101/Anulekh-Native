@@ -30,7 +30,12 @@ if [ ! -d "$APP_DIR/android" ]; then
   npx expo prebuild --platform android --no-install
 fi
 
-# 2. Build AAB Bundle with Gradle
+# 2. Ensure release keystore is present
+if [ -f "$APP_DIR/../Creds/anulekh_release.jks" ] && [ ! -f "$APP_DIR/android/app/anulekh_release.jks" ]; then
+  cp "$APP_DIR/../Creds/anulekh_release.jks" "$APP_DIR/android/app/anulekh_release.jks"
+fi
+
+# 3. Build AAB Bundle with Gradle
 cd "$APP_DIR/android"
 echo "Compiling Release AAB (bundleRelease)..."
 ./gradlew bundleRelease
@@ -48,7 +53,7 @@ if [ -f "$AAB_SRC" ]; then
   echo " AAB Bundle Build SUCCESSFUL!"
   echo " Output AAB: $AAB_DEST"
   echo " File Size: $(du -h "$AAB_DEST" | cut -f1)"
-  echo " Web Download: https://systematic-tri-roots-southampton.trycloudflare.com/$(basename "$AAB_DEST")"
+  echo " Web Download: https://floppy-automobile-indication-approaches.trycloudflare.com/$(basename "$AAB_DEST")"
   echo " Ready for Google Play Console upload!"
   echo "=========================================="
 else

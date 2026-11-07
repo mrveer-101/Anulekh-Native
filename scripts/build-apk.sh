@@ -31,7 +31,12 @@ if [ ! -d "$APP_DIR/android" ]; then
   npx expo prebuild --platform android --no-install
 fi
 
-# 2. Build APK with Gradle
+# 2. Ensure release keystore is present
+if [ -f "$APP_DIR/../Creds/anulekh_release.jks" ] && [ ! -f "$APP_DIR/android/app/anulekh_release.jks" ]; then
+  cp "$APP_DIR/../Creds/anulekh_release.jks" "$APP_DIR/android/app/anulekh_release.jks"
+fi
+
+# 3. Build APK with Gradle
 cd "$APP_DIR/android"
 if [ "$MODE" == "debug" ]; then
   echo "Compiling Debug APK..."
@@ -55,7 +60,7 @@ if [ -f "$APK_SRC" ]; then
   echo " Build SUCCESSFUL!"
   echo " Output APK: $APK_DEST"
   echo " File Size: $(du -h "$APK_DEST" | cut -f1)"
-  echo " Web Download: https://systematic-tri-roots-southampton.trycloudflare.com/$(basename "$APK_DEST")"
+  echo " Web Download: https://floppy-automobile-indication-approaches.trycloudflare.com/$(basename "$APK_DEST")"
   echo "=========================================="
 else
   echo "Error: Output APK not found at $APK_SRC"
